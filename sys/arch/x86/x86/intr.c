@@ -251,14 +251,12 @@ intr_calculatemasks(struct cpu_info *ci)
 	unusedirqs = 0xffffffff;
 	for (irq = 0; irq < MAX_INTR_SOURCES; irq++) {
 		int levels = 0;
-		struct intrsource *isrc;
 
-		isrc = ci->ci_percpu_intrs[irq].pi_isource;
-		if (isrc == NULL) {
+		if (ci->ci_isources[irq] == NULL) {
 			intrlevel[irq] = 0;
 			continue;
 		}
-		for (q = isrc->is_handlers; q; q = q->ih_next)
+		for (q = ci->ci_isources[irq]->is_handlers; q; q = q->ih_next)
 			levels |= 1 << q->ih_level;
 		intrlevel[irq] = levels;
 		if (levels)
@@ -280,20 +278,18 @@ intr_calculatemasks(struct cpu_info *ci)
 	for (irq = 0; irq < MAX_INTR_SOURCES; irq++) {
 		int maxlevel = IPL_NONE;
 		int minlevel = IPL_HIGH;
-		struct intrsource *isrc;
 
-		isrc = ci->ci_percpu_intrs[irq].pi_isource;
-		if (isrc == NULL)
+		if (ci->ci_isources[irq] == NULL)
 			continue;
-		for (q = isrc->is_handlers; q;
+		for (q = ci->ci_isources[irq]->is_handlers; q;
 		     q = q->ih_next) {
 			if (q->ih_level < minlevel)
 				minlevel = q->ih_level;
 			if (q->ih_level > maxlevel)
 				maxlevel = q->ih_level;
 		}
-		isrc->is_maxlevel = maxlevel;
-		isrc->is_minlevel = minlevel;
+		ci->ci_isources[irq]->is_maxlevel = maxlevel;
+		ci->ci_isources[irq]->is_minlevel = minlevel;
 	}
 
 	for (level = 0; level < NIPL; level++)
@@ -437,7 +433,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		 * Now look for a free slot.
 		 */
 		for (i = 0; i < MAX_INTR_SOURCES ; i++) {
-			if (ci->ci_percpu_intrs[i].pi_isource == NULL) {
+			if (ci->ci_isources[i] == NULL) {
 				slot = i;
 				break;
 			}
@@ -447,7 +443,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		}
 	}
 
-	isp = ci->ci_percpu_intrs[slot].pi_isource;
+	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
 		isp = kmem_zalloc(sizeof(*isp), KM_SLEEP);
 		if (isp == NULL) {
@@ -457,7 +453,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		    "pin %d", pin);
 		evcnt_attach_dynamic(&isp->is_evcnt, EVCNT_TYPE_INTR, NULL,
 		    pic->pic_name, isp->is_evname);
-		ci->ci_percpu_intrs[slot].pi_isource = isp;
+		ci->ci_isources[slot] = isp;
 	}
 
 	*index = slot;
@@ -481,7 +477,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 	/* First check if this pin is already used by an interrupt vector. */
 	for (CPU_INFO_FOREACH(cii, ci)) {
 		for (slot = 0 ; slot < MAX_INTR_SOURCES ; slot++) {
-			if ((isp = ci->ci_percpu_intrs[slot].pi_isource) == NULL) {
+			if ((isp = ci->ci_isources[slot]) == NULL) {
 				continue;
 			}
 			if (isp->is_pic == pic &&
@@ -562,13 +558,12 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 		idtvec = idt_vec_alloc(APIC_LEVEL(level), IDT_INTR_HIGH);
 	}
 	if (idtvec == 0) {
-		evcnt_detach(&ci->ci_percpu_intrs[slot].pi_isource->is_evcnt);
-		kmem_free(ci->ci_percpu_intrs[slot].pi_isource,
-			  sizeof(*(ci->ci_percpu_intrs[slot].pi_isource)));
-		ci->ci_percpu_intrs[slot].pi_isource = NULL;
+		evcnt_detach(&ci->ci_isources[slot]->is_evcnt);
+		kmem_free(ci->ci_isources[slot], sizeof(*(ci->ci_isources[slot])));
+		ci->ci_isources[slot] = NULL;
 		return EBUSY;
 	}
-	ci->ci_percpu_intrs[slot].pi_isource->is_idtvec = idtvec;
+	ci->ci_isources[slot]->is_idtvec = idtvec;
 	*idt_slot = idtvec;
 	*index = slot;
 	*cip = ci;
@@ -580,14 +575,14 @@ intr_source_free(struct cpu_info *ci, int slot, struct pic *pic, int idtvec)
 {
 	struct intrsource *isp;
 
-	isp = ci->ci_percpu_intrs[slot].pi_isource;
+	isp = ci->ci_isources[slot];
 
 	if (isp->is_handlers != NULL)
 		return;
-	ci->ci_percpu_intrs[slot].pi_isource = NULL;
+	ci->ci_isources[slot] = NULL;
 	evcnt_detach(&isp->is_evcnt);
 	kmem_free(isp, sizeof(*isp));
-	ci->ci_percpu_intrs[slot].pi_isource = NULL;
+	ci->ci_isources[slot] = NULL;
 	if (pic != &i8259_pic)
 		idt_vec_free(idtvec);
 }
@@ -653,7 +648,7 @@ intr_establish_xcall(void *arg1, void *arg2)
 	KASSERT(ih->ih_cpu == curcpu() || !mp_online);
 
 	ci = ih->ih_cpu;
-	source = ci->ci_percpu_intrs[ih->ih_slot].pi_isource;
+	source = ci->ci_isources[ih->ih_slot];
 	idt_vec = (int)(intptr_t)arg2;
 
 	/* Disable interrupts locally. */
@@ -721,7 +716,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 		return NULL;
 	}
 
-	source = ci->ci_percpu_intrs[slot].pi_isource;
+	source = ci->ci_isources[slot];
 
 	if (source->is_handlers != NULL &&
 	    source->is_pic->pic_type != pic->pic_type) {
@@ -775,7 +770,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	 * This is O(N^2), but we want to preserve the order, and N is
 	 * generally small.
 	 */
-	for (p = &ci->ci_percpu_intrs[slot].pi_isource->is_handlers;
+	for (p = &ci->ci_isources[slot]->is_handlers;
 	     (q = *p) != NULL && q->ih_level > level;
 	     p = &q->ih_next) {
 		/* nothing */;
@@ -850,8 +845,8 @@ intr_disestablish_xcall(void *arg1, void *arg2)
 	psl = x86_read_psl();
 	x86_disable_intr();
 
-	pic = ci->ci_percpu_intrs[ih->ih_slot].pi_isource->is_pic;
-	source = ci->ci_percpu_intrs[ih->ih_slot].pi_isource;
+	pic = ci->ci_isources[ih->ih_slot]->is_pic;
+	source = ci->ci_isources[ih->ih_slot];
 	idtvec = source->is_idtvec;
 
 	(*pic->pic_hwmask)(pic, ih->ih_pin);	
@@ -1006,7 +1001,7 @@ cpu_intr_init(struct cpu_info *ci)
 	fake_timer_intrhand.ih_level = IPL_CLOCK;
 	isp->is_handlers = &fake_timer_intrhand;
 	isp->is_pic = &local_pic;
-	ci->ci_percpu_intrs[LIR_TIMER].pi_isource = isp;
+	ci->ci_isources[LIR_TIMER] = isp;
 	evcnt_attach_dynamic(&isp->is_evcnt,
 	    first ? EVCNT_TYPE_INTR : EVCNT_TYPE_MISC, NULL,
 	    device_xname(ci->ci_dev), "timer");
@@ -1020,7 +1015,7 @@ cpu_intr_init(struct cpu_info *ci)
 	fake_ipi_intrhand.ih_level = IPL_HIGH;
 	isp->is_handlers = &fake_ipi_intrhand;
 	isp->is_pic = &local_pic;
-	ci->ci_percpu_intrs[LIR_IPI].pi_isource = isp;
+	ci->ci_isources[LIR_IPI] = isp;
 
 	for (i = 0; i < X86_NIPI; i++)
 		evcnt_attach_dynamic(&ci->ci_ipi_events[i], EVCNT_TYPE_MISC,
@@ -1035,7 +1030,7 @@ cpu_intr_init(struct cpu_info *ci)
 	fake_preempt_intrhand.ih_level = IPL_PREEMPT;
 	isp->is_handlers = &fake_preempt_intrhand;
 	isp->is_pic = &softintr_pic;
-	ci->ci_percpu_intrs[SIR_PREEMPT].pi_isource = isp;
+	ci->ci_isources[SIR_PREEMPT] = isp;
 
 	intr_calculatemasks(ci);
 
@@ -1091,7 +1086,7 @@ intr_printconfig(void)
 			(*pr)("IPL %d mask %lx unmask %lx\n", i,
 			    (u_long)ci->ci_imask[i], (u_long)ci->ci_iunmask[i]);
 		for (i = 0; i < MAX_INTR_SOURCES; i++) {
-			isp = ci->ci_percpu_intrs[i].pi_isource;
+			isp = ci->ci_isources[i];
 			if (isp == NULL)
 				continue;
 			(*pr)("%s source %d is pin %d from pic %s type %d maxlevel %d\n",
@@ -1156,11 +1151,11 @@ softint_init_md(lwp_t *l, u_int level, uintptr_t *machdep)
 		panic("softint_init_md");
 	}
 
-	KASSERT(ci->ci_percpu_intrs[sir].pi_isource == NULL);
+	KASSERT(ci->ci_isources[sir] == NULL);
 
 	*machdep = (1 << sir);
-	ci->ci_percpu_intrs[sir].pi_isource = isp;
-	ci->ci_percpu_intrs[sir].pi_isource->is_lwp = l;
+	ci->ci_isources[sir] = isp;
+	ci->ci_isources[sir]->is_lwp = l;
 
 	intr_calculatemasks(ci);
 }
@@ -1182,7 +1177,7 @@ intr_redistribute_xc_t(void *arg1, void *arg2)
 	x86_disable_intr();
 
 	/* Hook it in and re-calculate masks. */
-	ci->ci_percpu_intrs[slot].pi_isource = isp;
+	ci->ci_isources[slot] = isp;
 	intr_calculatemasks(curcpu());
 
 	/* Re-enable interrupts locally. */
@@ -1236,7 +1231,7 @@ intr_redistribute_xc_s2(void *arg1, void *arg2)
 	x86_disable_intr();
 
 	/* Patch out the source and re-calculate masks. */
-	ci->ci_percpu_intrs[slot].pi_isource = NULL;
+	ci->ci_isources[slot] = NULL;
 	intr_calculatemasks(ci);
 
 	/* Re-enable interrupts locally. */
@@ -1257,7 +1252,7 @@ intr_redistribute(struct cpu_info *oci)
 
 	/* Look for an interrupt source that we can migrate. */
 	for (oslot = 0; oslot < MAX_INTR_SOURCES; oslot++) {
-		if ((isp = oci->ci_percpu_intrs[oslot].pi_isource) == NULL) {
+		if ((isp = oci->ci_isources[oslot]) == NULL) {
 			continue;
 		}
 		if (isp->is_pic->pic_type == PIC_IOAPIC) {
@@ -1283,7 +1278,7 @@ intr_redistribute(struct cpu_info *oci)
 		return false;
 	}
 	for (nslot = 0; nslot < MAX_INTR_SOURCES; nslot++) {
-		if (nci->ci_percpu_intrs[nslot].pi_isource == NULL) {
+		if (nci->ci_isources[nslot] == NULL) {
 			break;
 		}
 	}
@@ -1296,7 +1291,7 @@ intr_redistribute(struct cpu_info *oci)
 			}
 			KASSERT(nci != oci);
 			for (nslot = 0; nslot < MAX_INTR_SOURCES; nslot++) {
-				if (nci->ci_percpu_intrs[nslot].pi_isource == NULL) {
+				if (nci->ci_isources[nslot] == NULL) {
 					break;
 				}
 			}

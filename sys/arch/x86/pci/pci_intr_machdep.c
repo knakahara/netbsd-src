@@ -392,7 +392,7 @@ pci_msi_establish(struct pci_attach_args *pa, int level,
 	msih->co = co;
 
 	ci = ih->ih_cpu;
-	is = ci->ci_percpu_intrs[ih->ih_slot].pi_isource;
+	is = ci->ci_isources[ih->ih_slot];
 	reg = pci_conf_read(pa->pa_pc, pa->pa_tag, co + PCI_MSI_CTL);
 	pci_conf_write(pa->pa_pc, pa->pa_tag, co + PCI_MSI_MADDR64_LO,
 		       LAPIC_MSIADDR_BASE |

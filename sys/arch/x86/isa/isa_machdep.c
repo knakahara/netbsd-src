@@ -143,7 +143,7 @@ isa_intr_alloc(isa_chipset_tag_t ic, int mask, int type, int *irq)
 	for (i = 0; i < NUM_LEGACY_IRQS; i++) {
 		if (LEGAL_IRQ(i) == 0 || (mask & (1<<i)) == 0)
 			continue;
-		isp = ci->ci_percpu_intrs[i].pi_isource;
+		isp = ci->ci_isources[i];
 		if (isp == NULL) {
 			/* if nothing's using the irq, just return it */
 			*irq = i;

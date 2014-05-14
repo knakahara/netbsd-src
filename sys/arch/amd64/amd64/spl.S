@@ -291,8 +291,7 @@ IDTVEC(spllower)
 	jz	2f
 	bsrl	%eax,%eax
 	btrl	%eax,CPUVAR(IPENDING)
-	imull	$PERCPU_INTR_SIZE,%eax
-	movq	CPUVAR(ISOURCES)(%rax),%rax
+	movq	CPUVAR(ISOURCES)(,%rax,8),%rax
 	jmp	*IS_RECURSE(%rax)
 2:
 	movl	%ebx,CPUVAR(ILEVEL)
@@ -321,8 +320,7 @@ IDTVEC(doreti)
 	jz	2f
 	bsrl    %eax,%eax               # slow, but not worth optimizing
 	btrl    %eax,CPUVAR(IPENDING)
-	imull	$PERCPU_INTR_SIZE,%eax
-	movq	CPUVAR(ISOURCES)(%rax),%rax
+	movq	CPUVAR(ISOURCES)(,%rax, 8),%rax
 	jmp	*IS_RESUME(%rax)
 2:	/* Check for ASTs on exit to user mode. */
 	movl	%ebx,CPUVAR(ILEVEL)
