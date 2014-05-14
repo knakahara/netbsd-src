@@ -236,14 +236,14 @@ IDTVEC(recurse_ ## name ## num)						;\
 IDTVEC(resume_ ## name ## num)						\
 	movq	$IREENT_MAGIC,TF_ERR(%rsp)				;\
 	movl	%ebx,%r13d						;\
-	movq	CPUVAR(ISOURCES) + (num) * 8, %r14			;\
+	movq	CPUVAR(ISOURCES) + (num) * PERCPU_INTR_SIZE, %r14	;\
 	movl	IS_MAXLEVEL(%r14),%ebx					;\
 	jmp	1f							;\
 IDTVEC(intr_ ## name ## num)						;\
 	pushq	$0			/* dummy error code */		;\
 	pushq	$T_ASTFLT		/* trap # for doing ASTs */	;\
 	INTRENTRY							;\
-	movq	CPUVAR(ISOURCES) + (num) * 8, %r14			;\
+	movq	CPUVAR(ISOURCES) + (num) * PERCPU_INTR_SIZE, %r14	;\
 	mask(num)			/* mask it in hardware */	;\
 	early_ack(num)			/* and allow other intrs */	;\
 	testq	%r14,%r14						;\

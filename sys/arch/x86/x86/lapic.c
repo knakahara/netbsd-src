@@ -312,7 +312,7 @@ lapic_clockintr(void *arg, struct intrframe *frame)
 	struct cpu_info *ci = curcpu();
 
 	ci->ci_lapic_counter += lapic_tval;
-	ci->ci_isources[LIR_TIMER]->is_evcnt.ev_count++;
+	ci->ci_percpu_intrs[LIR_TIMER].pi_isource->is_evcnt.ev_count++;
 	hardclock((struct clockframe *)frame);
 }
 

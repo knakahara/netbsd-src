@@ -128,7 +128,7 @@ struct cpu_info {
 	struct iplsource  *ci_isources[NIPL];
 	u_long ci_evtmask[NR_EVENT_CHANNELS]; /* events allowed on this CPU */
 #else
-	struct intrsource *ci_isources[MAX_INTR_SOURCES];
+	struct percpu_intr ci_percpu_intrs[MAX_INTR_SOURCES];
 #endif
 	volatile int	ci_mtx_count;	/* Negative count of spin mutexes */
 	volatile int	ci_mtx_oldspl;	/* Old SPL at this ci_idepth */

@@ -71,6 +71,11 @@ struct intrstub {
 	void *ist_resume;
 };
 
+struct percpu_intr {
+	struct intrsource *pi_isource;	/* must set at the head */
+	struct evcnt is_evcnt;		/* per cpu interrupt counter */
+};
+
 struct intrsource {
 	int is_maxlevel;		/* max. IPL for this source */
 	int is_pin;			/* IRQ for legacy; pin for IO APIC,
