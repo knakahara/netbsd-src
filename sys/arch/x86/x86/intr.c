@@ -188,6 +188,8 @@ struct pic softintr_pic = {
 	.pic_lock = __SIMPLELOCK_UNLOCKED,
 };
 
+static struct intrsource *io_interrupt_sources[NUM_IO_INTS];
+
 #if NIOAPIC > 0 || NACPICA > 0
 static int intr_scan_bus(int, int, int *);
 #if NPCI > 0
@@ -413,6 +415,43 @@ intr_scan_bus(int bus, int pin, int *handle)
 }
 #endif
 
+static struct intrsource *
+intr_allocate_io_intrsource(int irq)
+{
+	struct intrsource *isp;
+
+	if (irq > NUM_IO_INTS)
+		return NULL;
+
+	if (io_interrupt_sources[irq] != NULL)
+		return NULL;
+
+	isp = kmem_zalloc(sizeof(*isp), KM_SLEEP);
+	if (isp == NULL) {
+		return NULL;
+	}
+
+	/* XXXX need lock */
+	io_interrupt_sources[irq] = isp;
+
+	return isp;
+}
+
+static void
+intr_free_io_intrsource(int irq)
+{
+	if (irq > NUM_IO_INTS)
+		return;
+
+	if (io_interrupt_sources[irq] == NULL)
+		return;
+
+	kmem_free(io_interrupt_sources[irq], sizeof(*io_interrupt_sources[irq]));
+	io_interrupt_sources[irq] = NULL;
+	return;
+}
+
+
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		       int *index)
@@ -445,7 +484,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
-		isp = kmem_zalloc(sizeof(*isp), KM_SLEEP);
+		isp = intr_allocate_io_intrsource(pin);
 		if (isp == NULL) {
 			return ENOMEM;
 		}
@@ -559,7 +598,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 	}
 	if (idtvec == 0) {
 		evcnt_detach(&ci->ci_isources[slot]->is_evcnt);
-		kmem_free(ci->ci_isources[slot], sizeof(*(ci->ci_isources[slot])));
+		intr_free_io_intrsource(pin);
 		ci->ci_isources[slot] = NULL;
 		return EBUSY;
 	}
@@ -574,14 +613,16 @@ static void
 intr_source_free(struct cpu_info *ci, int slot, struct pic *pic, int idtvec)
 {
 	struct intrsource *isp;
+	int pin;
 
 	isp = ci->ci_isources[slot];
+	pin = isp->is_pin;
 
 	if (isp->is_handlers != NULL)
 		return;
 	ci->ci_isources[slot] = NULL;
 	evcnt_detach(&isp->is_evcnt);
-	kmem_free(isp, sizeof(*isp));
+	intr_free_io_intrsource(pin);
 	ci->ci_isources[slot] = NULL;
 	if (pic != &i8259_pic)
 		idt_vec_free(idtvec);

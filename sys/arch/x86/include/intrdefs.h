@@ -56,6 +56,10 @@
 #define IDT_INTR_LOW	(0x20 + NUM_LEGACY_IRQS)
 #define IDT_INTR_HIGH	0xef
 
+#define FIRST_MSI_INT	256	/* IRQ 255 is used as invalid IRQ */
+#define NUM_MSI_INTS	512	/* include unassigned MSIs */
+#define NUM_IO_INTS	(FIRST_MSI_INT + NUM_MSI_INTS)
+
 #ifndef XEN
 
 #define X86_IPI_HALT			0x00000001
