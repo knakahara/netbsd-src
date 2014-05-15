@@ -75,6 +75,10 @@ __KERNEL_RCSID(0, "$NetBSD: idt.c,v 1.3 2009/04/19 14:11:37 ad Exp $");
 
 #include <machine/segments.h>
 
+#ifdef DDB
+#include <ddb/db_output.h>
+#endif
+
 #if !defined(XEN)
 
 struct gate_descriptor *idt;
@@ -141,5 +145,36 @@ idt_init(void)
 {
 
 }
+
+#ifdef DDB
+void print_idt(void);
+void
+print_idt(void)
+{
+	int i;
+	void (*pr)(const char *, ...);
+
+	pr = printf;
+	extern int db_active;
+	if (db_active) {
+		pr = db_printf;
+	}
+
+	for (i = 0; i < NIDT; i++) {
+		struct gate_descriptor *curr = &idt[i];
+
+		(*pr)("idt[0x%x]\n", i);
+		(*pr)("    selector: 0x%0x\n", curr->gd_selector);
+		(*pr)("    ist     : 0x%0x\n", curr->gd_ist);
+		(*pr)("    type    : 0x%0x\n", curr->gd_type);
+		(*pr)("    dpl     : 0x%0x\n", curr->gd_dpl);
+		(*pr)("    p (=1)  : 0x%0x\n", curr->gd_p);
+		(*pr)("    func    : 0x%0lx\n",
+		      (long unsigned int)((curr->gd_hioffset << 16) |
+					 (curr->gd_looffset & 0xffff)));
+		(*pr)("\n");
+	}
+}
+#endif /* DDB */
 
 #endif /* !defined(XEN) */
