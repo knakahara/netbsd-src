@@ -163,6 +163,11 @@ print_idt(void)
 	for (i = 0; i < NIDT; i++) {
 		struct gate_descriptor *curr = &idt[i];
 
+		if (curr->gd_p != 1) {
+			/* unused idt */
+			continue;
+		}
+
 		(*pr)("idt[0x%x]\n", i);
 		(*pr)("    selector: 0x%0x\n", curr->gd_selector);
 		(*pr)("    ist     : 0x%0x\n", curr->gd_ist);
