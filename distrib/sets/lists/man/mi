@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1472 2014/04/25 12:11:27 abs Exp $
+# $NetBSD: mi,v 1.1474 2014/05/18 18:24:16 jakllsch Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -1193,6 +1193,7 @@
 ./usr/share/man/cat4/hppa/wax.0			man-sys-catman		.cat
 ./usr/share/man/cat4/hpqlb.0			man-sys-catman		.cat
 ./usr/share/man/cat4/hptide.0			man-sys-catman		.cat
+./usr/share/man/cat4/hythygtemp.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/PCIBIOS.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/apm.0			man-sys-catman		.cat
 ./usr/share/man/cat4/i386/autoconf.0		man-sys-catman		.cat
@@ -1379,6 +1380,7 @@
 ./usr/share/man/cat4/mca.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mcclock.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mcd.0			man-sys-catman		.cat
+./usr/share/man/cat4/mcp23s17gpio.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mcp980x.0			man-sys-catman		.cat
 ./usr/share/man/cat4/md.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mfb.0			man-sys-catman		.cat
@@ -1393,7 +1395,6 @@
 ./usr/share/man/cat4/mlx.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mly.0			man-sys-catman		.cat
 ./usr/share/man/cat4/module.0			man-obsolete		obsolete
-./usr/share/man/cat4/mcp23s17gpio.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mpii.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mpl115a.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mpls.0			man-sys-catman		.cat
@@ -4221,6 +4222,7 @@
 ./usr/share/man/html4/hppa/wax.html		man-sys-htmlman		html
 ./usr/share/man/html4/hpqlb.html		man-sys-htmlman		html
 ./usr/share/man/html4/hptide.html		man-sys-htmlman		html
+./usr/share/man/html4/hythygtemp.html		man-sys-htmlman		html
 ./usr/share/man/html4/i386/PCIBIOS.html		man-sys-htmlman		html
 ./usr/share/man/html4/i386/apm.html		man-sys-htmlman		html
 ./usr/share/man/html4/i386/autoconf.html	man-sys-htmlman		html
@@ -4378,6 +4380,7 @@
 ./usr/share/man/html4/mca.html			man-sys-htmlman		html
 ./usr/share/man/html4/mcclock.html		man-sys-htmlman		html
 ./usr/share/man/html4/mcd.html			man-sys-htmlman		html
+./usr/share/man/html4/mcp23s17gpio.html		man-sys-htmlman		html
 ./usr/share/man/html4/mcp980x.html		man-sys-htmlman		html
 ./usr/share/man/html4/md.html			man-sys-htmlman		html
 ./usr/share/man/html4/mfb.html			man-sys-htmlman		html
@@ -4392,7 +4395,6 @@
 ./usr/share/man/html4/mlx.html			man-sys-htmlman		html
 ./usr/share/man/html4/mly.html			man-sys-htmlman		html
 ./usr/share/man/html4/module.html		man-obsolete		obsolete
-./usr/share/man/html4/mcp23s17gpio.html		man-sys-htmlman		html
 ./usr/share/man/html4/mpii.html			man-sys-htmlman		html
 ./usr/share/man/html4/mpl115a.html		man-sys-htmlman		html
 ./usr/share/man/html4/mpls.html			man-sys-htmlman		html
@@ -7039,6 +7041,7 @@
 ./usr/share/man/man4/hppa/wax.4			man-sys-man		.man
 ./usr/share/man/man4/hpqlb.4			man-sys-man		.man
 ./usr/share/man/man4/hptide.4			man-sys-man		.man
+./usr/share/man/man4/hythygtemp.4		man-sys-man		.man
 ./usr/share/man/man4/i386/PCIBIOS.4		man-sys-man		.man
 ./usr/share/man/man4/i386/apm.4			man-sys-man		.man
 ./usr/share/man/man4/i386/autoconf.4		man-sys-man		.man
@@ -7225,6 +7228,7 @@
 ./usr/share/man/man4/mca.4			man-sys-man		.man
 ./usr/share/man/man4/mcclock.4			man-sys-man		.man
 ./usr/share/man/man4/mcd.4			man-sys-man		.man
+./usr/share/man/man4/mcp23s17gpio.4		man-sys-man		.man
 ./usr/share/man/man4/mcp980x.4			man-sys-man		.man
 ./usr/share/man/man4/md.4			man-sys-man		.man
 ./usr/share/man/man4/mfb.4			man-sys-man		.man
@@ -7239,7 +7243,6 @@
 ./usr/share/man/man4/mlx.4			man-sys-man		.man
 ./usr/share/man/man4/mly.4			man-sys-man		.man
 ./usr/share/man/man4/module.4			man-obsolete		obsolete
-./usr/share/man/man4/mcp23s17gpio.4		man-sys-man		.man
 ./usr/share/man/man4/mpii.4			man-sys-man		.man
 ./usr/share/man/man4/mpl115a.4			man-sys-man		.man
 ./usr/share/man/man4/mpls.4			man-sys-man		.man

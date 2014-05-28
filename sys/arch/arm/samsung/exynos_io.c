@@ -34,7 +34,7 @@
 #include "opt_exynos.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: exynos_io.c,v 1.3 2014/05/09 22:19:22 reinoud Exp $");
+__KERNEL_RCSID(1, "$NetBSD: exynos_io.c,v 1.6 2014/05/14 09:03:09 reinoud Exp $");
 
 #include <sys/param.h>
 #include <sys/bus.h>
@@ -78,6 +78,7 @@ exyo_match(device_t parent, cfdata_t cf, void *aux)
 	return 1;
 }
 
+
 static int
 exyo_print(void *aux, const char *pnp)
 {
@@ -89,16 +90,16 @@ exyo_print(void *aux, const char *pnp)
 	return QUIET;
 }
 
+
 void
 exyo_device_register(device_t self, void *aux)
 {
-	prop_dictionary_t dict = device_properties(self);
+}
 
-	if (device_is_a(self, "mct")) {
-		/* This clock always runs at F_in / xusbxti of 24 Mhz */
-		prop_dictionary_set_uint32(dict, "frequency", EXYNOS_F_IN_FREQ);
-		return;
-	}
+
+void
+exyo_device_register_post_config(device_t self, void *aux)
+{
 }
 
 static int

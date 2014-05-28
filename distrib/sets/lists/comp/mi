@@ -1,7 +1,8 @@
-#	$NetBSD: mi,v 1.1891 2014/04/25 00:24:39 pooka Exp $
+#	$NetBSD: mi,v 1.1893 2014/05/25 15:34:19 rmind Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
+#./usr/libdata/lint/llib-ldtrace.ln		comp-c-lintlib		lint,dtrace
 ./etc/mtree/set.comp				comp-sys-root
 ./usr/bin/addr2line				comp-debug-bin		binutils
 ./usr/bin/ar					comp-util-bin		binutils
@@ -3985,7 +3986,6 @@
 ./usr/libdata/lint/llib-ldm.ln			comp-c-lintlib		lint
 ./usr/libdata/lint/llib-ldns.ln			comp-bind-lintlib	lint
 ./usr/libdata/lint/llib-ldns_sd.ln		comp-mdns-lintlib	lint,mdns
-#./usr/libdata/lint/llib-ldtrace.ln		comp-c-lintlib		lint,dtrace
 ./usr/libdata/lint/llib-ldwarf.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-ledit.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lelf.ln			comp-c-lintlib		lint
@@ -10273,6 +10273,7 @@
 ./usr/share/man/cat9/ioctl.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/ioctl_copyin.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ioctl_copyout.0		comp-sys-catman		.cat
+./usr/share/man/cat9/ipi.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/ipkdb.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/ipkdb_connect.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ipkdb_init.0		comp-sys-catman		.cat
@@ -10976,10 +10977,10 @@
 ./usr/share/man/cat9/vattr_null.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vcons.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/vcount.0			comp-obsolete		obsolete
+./usr/share/man/cat9/vdead_check.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vdevgone.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/veriexec.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/vfinddev.0			comp-sys-catman		.cat
-./usr/share/man/cat9/vdead_check.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vflush.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/vflushbuf.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs.0			comp-sys-catman		.cat
@@ -16970,6 +16971,7 @@
 ./usr/share/man/html9/ioctl.html		comp-sys-htmlman	html
 ./usr/share/man/html9/ioctl_copyin.html		comp-sys-htmlman	html
 ./usr/share/man/html9/ioctl_copyout.html	comp-sys-htmlman	html
+./usr/share/man/html9/ipi.html			comp-sys-htmlman	html
 ./usr/share/man/html9/ipkdb.html		comp-sys-htmlman	html
 ./usr/share/man/html9/ipkdb_connect.html	comp-sys-htmlman	html
 ./usr/share/man/html9/ipkdb_init.html		comp-sys-htmlman	html
@@ -17630,10 +17632,10 @@
 ./usr/share/man/html9/vattr_null.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vcons.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vcount.html		comp-obsolete	obsolete
+./usr/share/man/html9/vdead_check.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vdevgone.html		comp-sys-htmlman	html
 ./usr/share/man/html9/veriexec.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vfinddev.html		comp-sys-htmlman	html
-./usr/share/man/html9/vdead_check.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vflush.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vflushbuf.html		comp-sys-htmlman	html
 ./usr/share/man/html9/vfs.html			comp-sys-htmlman	html
@@ -23820,6 +23822,7 @@
 ./usr/share/man/man9/ioctl.9			comp-sys-man		.man
 ./usr/share/man/man9/ioctl_copyin.9		comp-sys-man		.man
 ./usr/share/man/man9/ioctl_copyout.9		comp-sys-man		.man
+./usr/share/man/man9/ipi.9			comp-sys-man		.man
 ./usr/share/man/man9/ipkdb.9			comp-sys-man		.man
 ./usr/share/man/man9/ipkdb_connect.9		comp-sys-man		.man
 ./usr/share/man/man9/ipkdb_init.9		comp-sys-man		.man
@@ -24523,10 +24526,10 @@
 ./usr/share/man/man9/vattr_null.9		comp-sys-man		.man
 ./usr/share/man/man9/vcons.9			comp-sys-man		.man
 ./usr/share/man/man9/vcount.9			comp-obsolete		obsolete
+./usr/share/man/man9/vdead_check.9		comp-sys-man		.man
 ./usr/share/man/man9/vdevgone.9			comp-sys-man		.man
 ./usr/share/man/man9/veriexec.9			comp-sys-man		.man
 ./usr/share/man/man9/vfinddev.9			comp-sys-man		.man
-./usr/share/man/man9/vdead_check.9		comp-sys-man		.man
 ./usr/share/man/man9/vflush.9			comp-sys-man		.man
 ./usr/share/man/man9/vflushbuf.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs.9			comp-sys-man		.man
