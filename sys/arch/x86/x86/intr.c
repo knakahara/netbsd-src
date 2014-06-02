@@ -451,6 +451,69 @@ intr_free_io_intrsource(int irq)
 	return;
 }
 
+#if NIOAPIC > 0
+static int
+find_free_msi_vectors(int count)
+{
+	int first;
+	int i, j;
+
+	i = FIRST_MSI_INT;
+	while (i < NUM_IO_INTS) {
+		if (io_interrupt_sources[i] != NULL) {
+			i++;
+			continue;
+		}
+
+		first = i;
+		for (j = first; j < count; j++) {
+			if (io_interrupt_sources[j] != NULL)
+				break;
+		}
+		if (j != first + count - 1) {
+			i += count;
+			continue;
+		}
+
+		return first;
+	}
+
+	return -1;
+}
+
+/*
+ * return first vector number of allocated vecotrs for MSI.
+ * MSI vectors must be continuous.
+ */
+int
+intr_allocate_msi_vectors(int* count)
+{
+	int first = -1;
+	int i, j;
+	struct intrsource *isp;
+
+	for (; *count > 0; *count >>= 1) {
+		first = find_free_msi_vectors(*count);
+		if (first == -1)
+			continue;
+
+		for (i = first; i < first + *count; i++) {
+			isp = intr_allocate_io_intrsource(i);
+			if (isp == NULL) {
+				printf("cannot allocate %dth vector of %d\n",
+				    i, *count);
+				for (j = first; j < i; j++) {
+					intr_free_io_intrsource(j);
+				}
+				first = -1;
+				continue;
+			}
+		}
+	}
+
+	return first;
+}
+#endif /* NIOAPIC > 0 */
 
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,

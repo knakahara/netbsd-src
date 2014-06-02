@@ -367,6 +367,70 @@ struct msi_hdl {
 	int co;
 };
 
+/* XXXX tentative function name */
+/* XXXX define other file? */
+static int
+pci_msi_alloc_md(pci_intr_handle_t *ihp, int *count)
+{
+	int first_vector;
+
+	first_vector = intr_allocate_msi_vectors(count);
+	if (first_vector == -1) {
+		aprint_normal("cannot allocate MSI vectors.\n");
+		return 1;
+	}
+
+	*ihp = first_vector;
+	return 0;
+}
+
+/*
+ * This function should be MI API.
+ * This function is used by device drivers like pci_intr_map().
+ *
+ * "isp" is first vector number of MSI vectors instead of IRQ number.
+ * "count" must be powr of 2.
+ * "count" can decrease if sturct intrsource cannot be allocated.
+ */
+int
+pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t *ihp, int *count)
+{
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+
+	uint32_t value;
+	uint32_t mmc;
+	int hw_max;
+
+	if (*count < 1) {
+		aprint_normal("invalid count: %d\n", *count);
+		return 1;
+	}
+	if (((*count - 1) & *count) != 0) {
+		aprint_normal("count %d must be power of 2.\n", *count);
+		return 1;
+	}
+
+	/* the device does not have MSI capability */
+	if (pci_get_capability(pc, tag, PCI_CAP_MSI, NULL, &value) == 0) {
+		aprint_normal("the device does not have a MSI capability\n");
+		return 1;
+	}
+	/* XXXX should define MSI_CTL_SHIFT and MSI_MMC_SHIFT */
+	mmc = (value & PCI_MSI_CTL_MMC_MASK) >> (16 + 1);
+	if (mmc > 5) {
+		aprint_normal("the device use reserved MMC values.\n");
+		return 1;
+	}
+
+	hw_max = 1 << mmc;
+	if (*count > hw_max) {
+		*count = hw_max; /* cut off hw_max */
+	}
+
+	return pci_msi_alloc_md(ihp, count);
+}
+
 void *
 pci_msi_establish(struct pci_attach_args *pa, int level,
 		  int (*func)(void *), void *arg)
