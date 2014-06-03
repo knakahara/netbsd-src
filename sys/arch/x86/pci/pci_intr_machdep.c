@@ -370,17 +370,17 @@ struct msi_hdl {
 /* XXXX tentative function name */
 /* XXXX define other file? */
 static int
-pci_msi_alloc_md(pci_intr_handle_t *ihp, int *count)
+pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count)
 {
-	int first_vector;
+	int *vectors;
 
-	first_vector = intr_allocate_msi_vectors(count);
-	if (first_vector == -1) {
+	vectors = intr_allocate_msi_vectors(count);
+	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI vectors.\n");
 		return 1;
 	}
 
-	*ihp = first_vector;
+	*ihps = vectors;
 	return 0;
 }
 
@@ -388,12 +388,12 @@ pci_msi_alloc_md(pci_intr_handle_t *ihp, int *count)
  * This function should be MI API.
  * This function is used by device drivers like pci_intr_map().
  *
- * "isp" is first vector number of MSI vectors instead of IRQ number.
+ * "ihps" is the array  of vector numbers which MSI used instead of IRQ number.
  * "count" must be powr of 2.
  * "count" can decrease if sturct intrsource cannot be allocated.
  */
 int
-pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t *ihp, int *count)
+pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 {
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
@@ -428,7 +428,7 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t *ihp, int *count)
 		*count = hw_max; /* cut off hw_max */
 	}
 
-	return pci_msi_alloc_md(ihp, count);
+	return pci_msi_alloc_md(ihps, count);
 }
 
 void *

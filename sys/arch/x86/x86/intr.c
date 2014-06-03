@@ -482,14 +482,15 @@ find_free_msi_vectors(int count)
 }
 
 /*
- * return first vector number of allocated vecotrs for MSI.
+ * return vector numbers array of allocated vecotrs for MSI.
  * MSI vectors must be continuous.
  */
-int
-intr_allocate_msi_vectors(int* count)
+int *
+intr_allocate_msi_vectors(int *count)
 {
 	int first = -1;
 	int i, j;
+	int *vectors;
 	struct intrsource *isp;
 
 	for (; *count > 0; *count >>= 1) {
@@ -510,8 +511,24 @@ intr_allocate_msi_vectors(int* count)
 			}
 		}
 	}
+	if (first == -1) {
+		printf("cannot find free MSI vectors\n");
+		return NULL;
+	}
 
-	return first;
+	vectors = kmem_zalloc(sizeof(int) * (*count), KM_SLEEP);
+	if (vectors == NULL) {
+		printf("cannot allocate vectors\n");
+		for (i = first; i < *count; i++) {
+			intr_free_io_intrsource(i);
+		}
+		return NULL;
+	}
+	for (i = 0; i < *count; i++) {
+		vectors[i] = first + i;
+	}
+
+	return vectors;
 }
 #endif /* NIOAPIC > 0 */
 
