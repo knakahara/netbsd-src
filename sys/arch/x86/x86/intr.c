@@ -530,6 +530,17 @@ intr_allocate_msi_vectors(int *count)
 
 	return vectors;
 }
+
+void
+intr_free_msi_vectors(int *vectors, int count)
+{
+	int i;
+	for (i = 0; i < count; i++) {
+		intr_free_io_intrsource(vectors[i]);
+	}
+
+	kmem_free(vectors, sizeof(int) * count);
+}
 #endif /* NIOAPIC > 0 */
 
 static int

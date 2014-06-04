@@ -431,6 +431,28 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 	return pci_msi_alloc_md(ihps, count);
 }
 
+static void
+pci_msi_release_md(void **cookies, int count)
+{
+	int *vectors;
+
+	vectors = *cookies;
+	return intr_free_msi_vectors(vectors, count);
+}
+
+/* XXXX tentative function name */
+/* XXXX define other file? */
+void
+pci_msi_release(void **cookie, int count)
+{
+	if (count < 1) {
+		aprint_normal("invalid count: %d\n", count);
+		return;
+	}
+
+	return pci_msi_release_md(cookie, count);
+}
+
 void *
 pci_msi_establish(struct pci_attach_args *pa, int level,
 		  int (*func)(void *), void *arg)

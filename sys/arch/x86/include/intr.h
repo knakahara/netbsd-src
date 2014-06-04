@@ -183,6 +183,7 @@ struct pic *intr_findpic(int);
 void intr_printconfig(void);
 
 int *intr_allocate_msi_vectors(int *);
+void intr_free_msi_vectors(int *, int);
 
 int x86_send_ipi(struct cpu_info *, int);
 void x86_broadcast_ipi(int);
