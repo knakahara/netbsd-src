@@ -64,6 +64,7 @@ struct ioapic_softc {
 /*
  * MP: intr_handle_t is bitfielded.
  * ih&0xff -> legacy irq number.
+ * ih&0x3ff -> msi pseudo irq number.
  * ih&0x10000000 -> if 0, old-style isa irq; if 1, routed via ioapic.
  * (ih&0xff0000)>>16 -> ioapic id.
  * (ih&0x00ff00)>>8 -> ioapic pin.
@@ -72,6 +73,7 @@ struct ioapic_softc {
  */
 
 #define APIC_INT_VIA_APIC	0x10000000
+#define APIC_INT_VIA_MSG	0x20000000
 #define APIC_INT_APIC_MASK	0x00ff0000
 #define APIC_INT_APIC_SHIFT	16
 #define APIC_INT_PIN_MASK	0x0000ff00

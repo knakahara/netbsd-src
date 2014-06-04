@@ -451,7 +451,30 @@ intr_free_io_intrsource(int irq)
 	return;
 }
 
-#if NIOAPIC > 0
+static struct intrsource *
+intr_occupy_io_intrsource(int irq)
+{
+	if (io_interrupt_sources[irq] != NULL)
+		return io_interrupt_sources[irq];
+
+	return intr_allocate_io_intrsource(irq);
+}
+
+static void
+intr_unoccupy_io_intrsource(int irq)
+{
+	/*
+	 * XXXX
+	 * future work, IRQ interrupt should do intr_allocate_io_intersource()
+	 * in pci_intr_map(), as IRQ interrupt set affinity easily.
+	 * after done it, this special case is removed.
+	 */
+	if (irq >= FIRST_MSI_INT)
+		return;
+
+	return intr_free_io_intrsource(irq);
+}
+
 static int
 find_free_msi_vectors(int count)
 {
@@ -541,7 +564,6 @@ intr_free_msi_vectors(int *vectors, int count)
 
 	kmem_free(vectors, sizeof(int) * count);
 }
-#endif /* NIOAPIC > 0 */
 
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
@@ -575,7 +597,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
-		isp = intr_allocate_io_intrsource(pin);
+		isp = intr_occupy_io_intrsource(pin);
 		if (isp == NULL) {
 			return ENOMEM;
 		}
@@ -689,7 +711,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 	}
 	if (idtvec == 0) {
 		evcnt_detach(&ci->ci_isources[slot]->is_evcnt);
-		intr_free_io_intrsource(pin);
+		intr_unoccupy_io_intrsource(pin);
 		ci->ci_isources[slot] = NULL;
 		return EBUSY;
 	}
@@ -823,6 +845,11 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	bool mpsafe = (known_mpsafe || level != IPL_VM);
 #endif /* MULTIPROCESSOR */
 	uint64_t where;
+
+#if 0
+	bool is_msi = ((pin & APIC_INT_VIA_MSG) != 0);
+#endif
+	pin &= ~APIC_INT_VIA_MSG;
 
 #ifdef DIAGNOSTIC
 	if (legacy_irq != -1 && (legacy_irq < 0 || legacy_irq > 15))

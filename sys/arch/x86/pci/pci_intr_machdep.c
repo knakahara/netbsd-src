@@ -336,6 +336,7 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
  * from its kernel support)
  */
 
+#if 0
 /* dummies, needed by common intr_establish code */
 static void
 msipic_hwmask(struct pic *pic, int pin)
@@ -366,18 +367,107 @@ struct msi_hdl {
 	pcitag_t tag;
 	int co;
 };
+#endif
+
+/*
+ * XXXX should separate source file about MSI
+ */
+static pcitag_t msi_pcitags[NUM_MSI_INTS];
+static void
+set_msi_pcitag(int vector, pcitag_t tag)
+{
+	msi_pcitags[vector - FIRST_MSI_INT] = tag;
+}
+static pcitag_t
+get_msi_pcitag(int vector)
+{
+	return msi_pcitags[vector - FIRST_MSI_INT];
+}
+
+static void
+msi_hwmask(struct pic *pic, int pin)
+{
+}
+
+static void
+msi_hwunmask(struct pic *pic, int pin)
+{
+}
+
+static void
+msi_addroute(struct pic *pic, struct cpu_info *ci,
+	     int pin, int vec, int type)
+{
+	pci_chipset_tag_t pc = NULL;
+	pcitag_t tag = get_msi_pcitag(pin);
+	pcireg_t reg, addr;
+	int off;
+
+	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, &reg) == 0)
+		panic("%s: no msi capability", __func__);
+
+	/*
+	 * XXXX
+	 * see OpenBSD's cpu_attach().
+	 * OpenBSD's ci->ci_apicid is equal to NetBSD's ci_cpuid.
+	 * What's mean OpenBSD's ci->ci_cpuid? the value is sc->sc_dev.dv_unit.
+	 */
+	addr = 0xfee00000UL | (ci->ci_cpuid << 12);
+
+	if (reg & PCI_MSI_CTL_64BIT_ADDR) {
+		pci_conf_write(pc, tag, off + PCI_MSI_MADDR64_LO, addr);
+		pci_conf_write(pc, tag, off + PCI_MSI_MADDR64_HI, 0);
+		pci_conf_write(pc, tag, off + PCI_MSI_MDATA64, vec);
+	} else {
+		pci_conf_write(pc, tag, off + PCI_MSI_MADDR, addr);
+		pci_conf_write(pc, tag, off + PCI_MSI_MDATA, vec);
+	}
+	pci_conf_write(pc, tag, off, reg | PCI_MSI_CTL_MSI_ENABLE);
+}
+
+static void
+msi_delroute(struct pic *pic, struct cpu_info *ci,
+	     int pin, int vec, int type)
+{
+	pci_chipset_tag_t pc = NULL;
+	pcitag_t tag = get_msi_pcitag(pin);
+	pcireg_t reg;
+	int off;
+
+	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, &reg) == 0)
+		panic("%s: no msi capability", __func__);
+	pci_conf_write(pc, tag, off, reg & ~PCI_MSI_CTL_MSI_ENABLE);
+}
+
+static struct pic msi_pic = {
+	.pic_name = "msi",
+	.pic_type = PIC_MSI,
+	.pic_vecbase = 0,
+	.pic_apicid = 0,
+	.pic_lock = __SIMPLELOCK_UNLOCKED,
+	.pic_hwmask = msi_hwmask,
+	.pic_hwunmask = msi_hwunmask,
+	.pic_addroute = msi_addroute,
+	.pic_delroute = msi_delroute,
+	.pic_edge_stubs = ioapic_edge_stubs,
+};
 
 /* XXXX tentative function name */
 /* XXXX define other file? */
 static int
-pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count)
+pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
 	int *vectors;
+	int i;
 
 	vectors = intr_allocate_msi_vectors(count);
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI vectors.\n");
 		return 1;
+	}
+
+	for (i = 0; i < *count; i++) {
+		set_msi_pcitag(vectors[i], pa->pa_tag);
 	}
 
 	*ihps = vectors;
@@ -428,7 +518,7 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 		*count = hw_max; /* cut off hw_max */
 	}
 
-	return pci_msi_alloc_md(ihps, count);
+	return pci_msi_alloc_md(ihps, count, pa);
 }
 
 static void
@@ -453,6 +543,35 @@ pci_msi_release(void **cookie, int count)
 	return pci_msi_release_md(cookie, count);
 }
 
+void *
+pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg)
+{
+	int pin, irq;
+	struct pic *pic;
+	bool mpsafe;
+
+	irq = -1;
+	pic = &msi_pic;
+	pin = ih & (~MPSAFE_MASK); /* hint to search pcitag_t */
+	mpsafe = ((ih & MPSAFE_MASK) != 0);
+
+
+	if ((ih & APIC_INT_VIA_MSG) == 0) {
+		aprint_normal("invalid MSI ih: 0x%x\n", ih);
+		return NULL;
+	}
+
+	return intr_establish(irq, pic, pin, IST_LEVEL, level, func, arg,
+	    mpsafe);
+}
+
+void
+pci_msi_disestablish(pci_chipset_tag_t pc, void *cookie)
+{
+}
+
+#if 0
 void *
 pci_msi_establish(struct pci_attach_args *pa, int level,
 		  int (*func)(void *), void *arg)
@@ -516,4 +635,6 @@ pci_msi_disestablish(void *ih)
 	intr_disestablish(msih->ih);
 	free(msih, M_DEVBUF);
 }
+#endif
+
 #endif

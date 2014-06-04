@@ -120,8 +120,14 @@ void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 /* experimental MSI support */
 int pci_msi_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
 void pci_msi_release(void **, int);
+void *pci_msi_establish(pci_chipset_tag_t, pci_intr_handle_t,
+    int, int (*)(void *), void *);
+void pci_msi_disestablish(pci_chipset_tag_t, void *);
+
+#if 0
 void *pci_msi_establish(struct pci_attach_args *, int, int (*)(void *), void *);
 void pci_msi_disestablish(void *);
+#endif
 
 /*
  * ALL OF THE FOLLOWING ARE MACHINE-DEPENDENT, AND SHOULD NOT BE USED
