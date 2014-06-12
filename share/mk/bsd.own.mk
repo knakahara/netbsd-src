@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.809 2014/05/23 18:51:31 matt Exp $
+#	$NetBSD: bsd.own.mk,v 1.815 2014/06/06 21:04:02 skrll Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -51,17 +51,9 @@ TOOLCHAIN_MISSING?=	no
 #
 .if ${MKGCC:Uyes} != "no"
 
-#
-# Platforms still using GCC 4.1
-#
-.if ${MACHINE_CPU}  == "vax"
-HAVE_GCC?=    4
-
 # Platforms still using GCC 4.5
-.elif \
-      ${MACHINE_CPU} == "ia64" || \
+.if \
       ${MACHINE_CPU} == "m68k" || \
-      ${MACHINE_CPU} == "sh3" || \
       ${MACHINE_ARCH} == "powerpc"
 HAVE_GCC?=    45
 
@@ -86,7 +78,6 @@ EXTERNAL_GCC_SUBDIR=	/does/not/exist
 
 .if !empty(MACHINE_ARCH:Mearm*)
 _LIBC_COMPILER_RT.${MACHINE_ARCH}=	yes
-_LIBC_UNWIND_SUPPORT.${MACHINE_ARCH}=	yes
 .endif
 
 _LIBC_COMPILER_RT.i386=		yes
@@ -98,22 +89,8 @@ HAVE_LIBGCC?=	no
 HAVE_LIBGCC?=	yes
 .endif
 
-_LIBC_UNWIND_SUPPORT.alpha=	yes
-_LIBC_UNWIND_SUPPORT.hppa=	yes
-_LIBC_UNWIND_SUPPORT.i386=	yes
-_LIBC_UNWIND_SUPPORT.m68k=	yes
-_LIBC_UNWIND_SUPPORT.mipseb=	yes
-_LIBC_UNWIND_SUPPORT.mipsel=	yes
-_LIBC_UNWIND_SUPPORT.mips64eb=	yes
-_LIBC_UNWIND_SUPPORT.mips64el=	yes
-_LIBC_UNWIND_SUPPORT.powerpc=	yes
-_LIBC_UNWIND_SUPPORT.sh3el=	yes
-_LIBC_UNWIND_SUPPORT.sh3eb=	yes
-_LIBC_UNWIND_SUPPORT.sparc=	yes
-_LIBC_UNWIND_SUPPORT.sparc64=	yes
-_LIBC_UNWIND_SUPPORT.vax=	yes
-_LIBC_UNWIND_SUPPORT.x86_64=	yes
-.if ${MKLLVM:Uno} == "yes" && ${_LIBC_UNWIND_SUPPORT.${MACHINE_ARCH}:Uno} == "yes"
+# ia64 is not support
+.if ${MKLLVM:Uno} == "yes" || !empty(MACHINE_ARCH:Mearm*)
 HAVE_LIBGCC_EH?=	no
 .else
 HAVE_LIBGCC_EH?=	yes
@@ -1096,6 +1073,16 @@ MKINFO:=	no
 MKHTML:=	no
 MKMAN:=		no
 MKNLS:=		no
+.endif
+
+.if !empty(MACHINE_ARCH:Mearm*)
+_NEEDS_LIBCXX.${MACHINE_ARCH}=	yes
+.endif
+_NEEDS_LIBCXX.i386=	yes
+_NEEDS_LIBCXX.x86_64=	yes
+
+.if ${MKLLVM} == "yes" && ${_NEEDS_LIBCXX.${MACHINE_ARCH}:Uno} == "yes"
+MKLIBCXX:=	yes
 .endif
 
 #

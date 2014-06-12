@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.275 2014/05/18 14:46:16 rmind Exp $	*/
+/*	$NetBSD: if.c,v 1.280 2014/06/10 09:38:30 joerg Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2008 The NetBSD Foundation, Inc.
@@ -90,7 +90,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.275 2014/05/18 14:46:16 rmind Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.280 2014/06/10 09:38:30 joerg Exp $");
 
 #include "opt_inet.h"
 
@@ -112,6 +112,7 @@ __KERNEL_RCSID(0, "$NetBSD: if.c,v 1.275 2014/05/18 14:46:16 rmind Exp $");
 #include <sys/syslog.h>
 #include <sys/kauth.h>
 #include <sys/kmem.h>
+#include <sys/xcall.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -129,16 +130,16 @@ __KERNEL_RCSID(0, "$NetBSD: if.c,v 1.275 2014/05/18 14:46:16 rmind Exp $");
 #include <netatalk/at.h>
 #endif
 #include <net/pfil.h>
+#include <netinet/in.h>
+#include <netinet/in_var.h>
 
 #ifdef INET6
-#include <netinet/in.h>
 #include <netinet6/in6_var.h>
 #include <netinet6/nd6.h>
 #endif
 
 #include "carp.h"
 #if NCARP > 0
-#include <netinet/in_var.h>
 #include <netinet/ip_carp.h>
 #endif
 
@@ -189,8 +190,7 @@ static void sysctl_sndq_setup(struct sysctllog **, const char *,
     struct ifaltq *);
 
 #if defined(INET) || defined(INET6)
-static void sysctl_net_ifq_setup(struct sysctllog **, int, const char *,
-				 int, const char *, int, struct ifqueue *);
+static void sysctl_net_pktq_setup(struct sysctllog **, int);
 #endif
 
 static int
@@ -222,16 +222,12 @@ if_listener_cb(kauth_cred_t cred, kauth_action_t action, void *cookie,
 void
 ifinit(void)
 {
-#ifdef INET
-	{extern struct ifqueue ipintrq;
-	sysctl_net_ifq_setup(NULL, PF_INET, "inet", IPPROTO_IP, "ip",
-			     IPCTL_IFQ, &ipintrq);}
-#endif /* INET */
+#if defined(INET)
+	sysctl_net_pktq_setup(NULL, PF_INET);
+#endif
 #ifdef INET6
-	{extern struct ifqueue ip6intrq;
-	sysctl_net_ifq_setup(NULL, PF_INET6, "inet6", IPPROTO_IPV6, "ip6",
-			     IPV6CTL_IFQ, &ip6intrq);}
-#endif /* INET6 */
+	sysctl_net_pktq_setup(NULL, PF_INET6);
+#endif
 
 	callout_init(&if_slowtimo_ch, 0);
 	if_slowtimo(NULL);
@@ -714,6 +710,7 @@ if_detach(struct ifnet *ifp)
 	struct domain *dp;
 	const struct protosw *pr;
 	int s, i, family, purged;
+	uint64_t xc;
 
 	/*
 	 * XXX It's kind of lame that we have to have the
@@ -870,6 +867,17 @@ again:
 		}
 	}
 
+	/*
+	 * IP queues have to be processed separately: net-queue barrier
+	 * ensures that the packets are dequeued while a cross-call will
+	 * ensure that the interrupts have completed. FIXME: not quite..
+	 */
+#ifdef INET
+	pktq_barrier(ip_pktq);
+#endif
+	xc = xc_broadcast(0, (xcfunc_t)nullop, NULL, NULL);
+	xc_wait(xc);
+
 	splx(s);
 }
 
@@ -921,7 +929,7 @@ if_rt_walktree(struct rtentry *rt, void *v)
 	    rt_mask(rt), rt->rt_flags, NULL);
 	KASSERT((rt->rt_flags & RTF_UP) == 0);
 	rt->rt_ifp = NULL;
-	RTFREE(rt);
+	rtfree(rt);
 	if (error != 0)
 		printf("%s: warning: unable to delete rtentry @ %p, "
 		    "error = %d\n", ifp->if_xname, rt, error);
@@ -2331,12 +2339,86 @@ bad:
 }
 
 #if defined(INET) || defined(INET6)
-static void
-sysctl_net_ifq_setup(struct sysctllog **clog,
-		     int pf, const char *pfname,
-		     int ipn, const char *ipname,
-		     int qid, struct ifqueue *ifq)
+
+static int
+sysctl_pktq_maxlen(SYSCTLFN_ARGS, pktqueue_t *pq)
 {
+	u_int nmaxlen = pktq_get_count(pq, PKTQ_MAXLEN);
+	struct sysctlnode node = *rnode;
+	int error;
+
+	node.sysctl_data = &nmaxlen;
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error || newp == NULL)
+		return error;
+	return pktq_set_maxlen(pq, nmaxlen);
+}
+
+static int
+sysctl_pktq_count(SYSCTLFN_ARGS, pktqueue_t *pq, u_int count_id)
+{
+	int count = pktq_get_count(pq, count_id);
+	struct sysctlnode node = *rnode;
+	node.sysctl_data = &count;
+	return sysctl_lookup(SYSCTLFN_CALL(&node));
+}
+
+#define	SYSCTL_NET_PKTQ(q, cn, c)					\
+	static int							\
+	sysctl_net_##q##_##cn(SYSCTLFN_ARGS)				\
+	{								\
+		return sysctl_pktq_count(SYSCTLFN_CALL(rnode), q, c);	\
+	}
+
+#if defined(INET)
+static int
+sysctl_net_ip_pktq_maxlen(SYSCTLFN_ARGS)
+{
+	return sysctl_pktq_maxlen(SYSCTLFN_CALL(rnode), ip_pktq);
+}
+SYSCTL_NET_PKTQ(ip_pktq, items, PKTQ_NITEMS)
+SYSCTL_NET_PKTQ(ip_pktq, drops, PKTQ_DROPS)
+#endif
+
+#if defined(INET6)
+static int
+sysctl_net_ip6_pktq_maxlen(SYSCTLFN_ARGS)
+{
+	return sysctl_pktq_maxlen(SYSCTLFN_CALL(rnode), ip6_pktq);
+}
+SYSCTL_NET_PKTQ(ip6_pktq, items, PKTQ_NITEMS)
+SYSCTL_NET_PKTQ(ip6_pktq, drops, PKTQ_DROPS)
+#endif
+
+static void
+sysctl_net_pktq_setup(struct sysctllog **clog, int pf)
+{
+	sysctlfn len_func = NULL, maxlen_func = NULL, drops_func = NULL;
+	const char *pfname = NULL, *ipname = NULL;
+	int ipn = 0, qid = 0;
+
+	switch (pf) {
+#if defined(INET)
+	case PF_INET:
+		len_func = sysctl_net_ip_pktq_items;
+		maxlen_func = sysctl_net_ip_pktq_maxlen;
+		drops_func = sysctl_net_ip_pktq_drops;
+		pfname = "inet", ipn = IPPROTO_IP;
+		ipname = "ip", qid = IPCTL_IFQ;
+		break;
+#endif
+#if defined(INET6)
+	case PF_INET6:
+		len_func = sysctl_net_ip6_pktq_items;
+		maxlen_func = sysctl_net_ip6_pktq_maxlen;
+		drops_func = sysctl_net_ip6_pktq_drops;
+		pfname = "inet6", ipn = IPPROTO_IPV6;
+		ipname = "ip6", qid = IPV6CTL_IFQ;
+		break;
+#endif
+	default:
+		KASSERT(false);
+	}
 
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
@@ -2359,27 +2441,60 @@ sysctl_net_ifq_setup(struct sysctllog **clog,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_INT, "len",
 		       SYSCTL_DESCR("Current input queue length"),
-		       NULL, 0, &ifq->ifq_len, 0,
+		       len_func, 0, NULL, 0,
 		       CTL_NET, pf, ipn, qid, IFQCTL_LEN, CTL_EOL);
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
 		       CTLTYPE_INT, "maxlen",
 		       SYSCTL_DESCR("Maximum allowed input queue length"),
-		       NULL, 0, &ifq->ifq_maxlen, 0,
+		       maxlen_func, 0, NULL, 0,
 		       CTL_NET, pf, ipn, qid, IFQCTL_MAXLEN, CTL_EOL);
-#ifdef notyet
-	sysctl_createv(clog, 0, NULL, NULL,
-		       CTLFLAG_PERMANENT,
-		       CTLTYPE_INT, "peak",
-		       SYSCTL_DESCR("Highest input queue length"),
-		       NULL, 0, &ifq->ifq_peak, 0,
-		       CTL_NET, pf, ipn, qid, IFQCTL_PEAK, CTL_EOL);
-#endif
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_INT, "drops",
 		       SYSCTL_DESCR("Packets dropped due to full input queue"),
-		       NULL, 0, &ifq->ifq_drops, 0,
+		       drops_func, 0, NULL, 0,
 		       CTL_NET, pf, ipn, qid, IFQCTL_DROPS, CTL_EOL);
 }
 #endif /* INET || INET6 */
+
+static int
+if_sdl_sysctl(SYSCTLFN_ARGS)
+{
+	struct ifnet *ifp;
+	const struct sockaddr_dl *sdl;
+
+	if (namelen != 1)
+		return EINVAL;
+
+	ifp = if_byindex(name[0]);
+	if (ifp == NULL)
+		return ENODEV;
+
+	sdl = ifp->if_sadl;
+	if (sdl == NULL) {
+		*oldlenp = 0;
+		return 0;
+	}
+
+	if (oldp == NULL) {
+		*oldlenp = sdl->sdl_alen;
+		return 0;
+	}
+
+	if (*oldlenp >= sdl->sdl_alen)
+		*oldlenp = sdl->sdl_alen;
+	return sysctl_copyout(l, &sdl->sdl_data[sdl->sdl_nlen], oldp, *oldlenp);
+}
+
+SYSCTL_SETUP(sysctl_net_sdl_setup, "sysctl net.sdl subtree setup")
+{
+	const struct sysctlnode *rnode = NULL;
+
+	sysctl_createv(clog, 0, NULL, &rnode,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, "sdl",
+		       SYSCTL_DESCR("Get active link-layer address"),
+		       if_sdl_sysctl, 0, NULL, 0,
+		       CTL_NET, CTL_CREATE, CTL_EOL);
+}

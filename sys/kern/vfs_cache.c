@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_cache.c,v 1.94 2014/02/07 15:29:22 hannken Exp $	*/
+/*	$NetBSD: vfs_cache.c,v 1.97 2014/06/03 21:16:15 joerg Exp $	*/
 
 /*-
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
@@ -58,13 +58,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_cache.c,v 1.94 2014/02/07 15:29:22 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_cache.c,v 1.97 2014/06/03 21:16:15 joerg Exp $");
 
 #include "opt_ddb.h"
 #include "opt_revcache.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/sysctl.h>
 #include <sys/time.h>
 #include <sys/mount.h>
 #include <sys/vnode.h>
@@ -238,28 +239,35 @@ cache_disassociate(struct namecache *ncp)
  * Lock all CPUs to prevent any cache lookup activity.  Conceptually,
  * this locks out all "readers".
  */
+#define	UPDATE(f) do { \
+	nchstats.f += cpup->cpu_stats.f; \
+	cpup->cpu_stats.f = 0; \
+} while (/* CONSTCOND */ 0)
+
 static void
 cache_lock_cpus(void)
 {
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
 	struct nchcpu *cpup;
-	long *s, *d, *m;
 
 	for (CPU_INFO_FOREACH(cii, ci)) {
 		cpup = ci->ci_data.cpu_nch;
 		mutex_enter(&cpup->cpu_lock);
-
-		/* Collate statistics. */
-		d = (long *)&nchstats;
-		s = (long *)&cpup->cpu_stats;
-		m = s + sizeof(nchstats) / sizeof(long);
-		for (; s < m; s++, d++) {
-			*d += *s;
-			*s = 0;
-		}
+		UPDATE(ncs_goodhits);
+		UPDATE(ncs_neghits);
+		UPDATE(ncs_badhits);
+		UPDATE(ncs_falsehits);
+		UPDATE(ncs_miss);
+		UPDATE(ncs_long);
+		UPDATE(ncs_pass2);
+		UPDATE(ncs_2passes);
+		UPDATE(ncs_revhits);
+		UPDATE(ncs_revmiss);
 	}
 }
+
+#undef UPDATE
 
 /*
  * Release all CPU locks.
@@ -565,6 +573,7 @@ cache_revlookup(struct vnode *vp, struct vnode **dvpp, char **bpp, char *bufp)
 {
 	struct namecache *ncp;
 	struct vnode *dvp;
+	struct nchcpu *cpup;
 	struct ncvhashhead *nvcpp;
 	char *bp;
 	int error, nlen;
@@ -573,6 +582,7 @@ cache_revlookup(struct vnode *vp, struct vnode **dvpp, char **bpp, char *bufp)
 		goto out;
 
 	nvcpp = &ncvhashtbl[NCVHASH(vp)];
+	cpup = curcpu()->ci_data.cpu_nch;
 
 	mutex_enter(namecache_lock);
 	LIST_FOREACH(ncp, nvcpp, nc_vhash) {
@@ -591,7 +601,9 @@ cache_revlookup(struct vnode *vp, struct vnode **dvpp, char **bpp, char *bufp)
 			    ncp->nc_name[1] == '.')
 				panic("cache_revlookup: found entry for ..");
 #endif
-			COUNT(nchstats, ncs_revhits);
+			mutex_enter(&cpup->cpu_lock);
+			COUNT(cpup->cpu_stats, ncs_revhits);
+			mutex_exit(&cpup->cpu_lock);
 			nlen = ncp->nc_nlen;
 
 			if (bufp) {
@@ -623,7 +635,9 @@ cache_revlookup(struct vnode *vp, struct vnode **dvpp, char **bpp, char *bufp)
 		}
 		mutex_exit(&ncp->nc_lock);
 	}
-	COUNT(nchstats, ncs_revmiss);
+	mutex_enter(&cpup->cpu_lock);
+	COUNT(cpup->cpu_stats, ncs_revmiss);
+	mutex_exit(&cpup->cpu_lock);
 	mutex_exit(namecache_lock);
  out:
 	*dvpp = NULL;
@@ -1065,3 +1079,69 @@ namecache_print(struct vnode *vp, void (*pr)(const char *, ...))
 	}
 }
 #endif
+
+void
+namecache_count_pass2(void)
+{
+	struct nchcpu *cpup = curcpu()->ci_data.cpu_nch;
+
+	mutex_enter(&cpup->cpu_lock);
+	COUNT(cpup->cpu_stats, ncs_pass2);
+	mutex_exit(&cpup->cpu_lock);
+}
+
+void
+namecache_count_2passes(void)
+{
+	struct nchcpu *cpup = curcpu()->ci_data.cpu_nch;
+
+	mutex_enter(&cpup->cpu_lock);
+	COUNT(cpup->cpu_stats, ncs_2passes);
+	mutex_exit(&cpup->cpu_lock);
+}
+
+static int
+cache_stat_sysctl(SYSCTLFN_ARGS)
+{
+	struct nchstats_sysctl stats;
+
+	if (oldp == NULL) {
+		*oldlenp = sizeof(stats);
+		return 0;
+	}
+
+	if (*oldlenp < sizeof(stats)) {
+		*oldlenp = 0;
+		return 0;
+	}
+
+	memset(&stats, 0, sizeof(stats));
+
+	sysctl_unlock();
+	cache_lock_cpus();
+	stats.ncs_goodhits = nchstats.ncs_goodhits;
+	stats.ncs_neghits = nchstats.ncs_neghits;
+	stats.ncs_badhits = nchstats.ncs_badhits;
+	stats.ncs_falsehits = nchstats.ncs_falsehits;
+	stats.ncs_miss = nchstats.ncs_miss;
+	stats.ncs_long = nchstats.ncs_long;
+	stats.ncs_pass2 = nchstats.ncs_pass2;
+	stats.ncs_2passes = nchstats.ncs_2passes;
+	stats.ncs_revhits = nchstats.ncs_revhits;
+	stats.ncs_revmiss = nchstats.ncs_revmiss;
+	cache_unlock_cpus();
+	sysctl_relock();
+
+	*oldlenp = sizeof(stats);
+	return sysctl_copyout(l, &stats, oldp, sizeof(stats));
+}
+
+SYSCTL_SETUP(sysctl_cache_stat_setup, "vfs.namecache_stats subtree setup")
+{
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRUCT, "namecache_stats",
+		       SYSCTL_DESCR("namecache statistics"),
+		       cache_stat_sysctl, 0, NULL, 0,
+		       CTL_VFS, CTL_CREATE, CTL_EOL);
+}

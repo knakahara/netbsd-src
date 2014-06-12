@@ -1,4 +1,4 @@
-/*	$NetBSD: key.c,v 1.87 2014/05/19 02:51:25 rmind Exp $	*/
+/*	$NetBSD: key.c,v 1.90 2014/06/05 17:18:19 christos Exp $	*/
 /*	$FreeBSD: src/sys/netipsec/key.c,v 1.3.2.3 2004/02/14 22:23:23 bms Exp $	*/
 /*	$KAME: key.c,v 1.191 2001/06/27 10:46:49 sakane Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: key.c,v 1.87 2014/05/19 02:51:25 rmind Exp $");
+__KERNEL_RCSID(0, "$NetBSD: key.c,v 1.90 2014/06/05 17:18:19 christos Exp $");
 
 /*
  * This code is referd to RFC 2367
@@ -1220,11 +1220,12 @@ key_freeso(struct socket *so)
 	case PF_INET:
 	    {
 		struct inpcb *pcb = sotoinpcb(so);
-		struct inpcbpolicy *sp = pcb->inp_sp;
 
 		/* Does it have a PCB ? */
 		if (pcb == NULL)
 			return;
+
+		struct inpcbpolicy *sp = pcb->inp_sp;
 		key_freesp_so(&sp->sp_in);
 		key_freesp_so(&sp->sp_out);
 	    }
@@ -1772,7 +1773,7 @@ key_gather_mbuf(struct mbuf *m, const struct sadb_msghdr *mhp,
 	}
 	va_end(ap);
 
-	if ((result->m_flags & M_PKTHDR) != 0) {
+	if (result && (result->m_flags & M_PKTHDR) != 0) {
 		result->m_pkthdr.len = 0;
 		for (n = result; n; n = n->m_next)
 			result->m_pkthdr.len += n->m_len;
@@ -2007,6 +2008,7 @@ key_spdadd(struct socket *so, struct mbuf *m,
 	xpl->sadb_x_policy_id = newsp->id;
 
 	m_freem(m);
+	key_update_used();
 	return key_sendup_mbuf(so, n, KEY_SENDUP_ALL);
     }
 }
@@ -2139,6 +2141,7 @@ key_spddelete(struct socket *so, struct mbuf *m,
 	newmsg->sadb_msg_len = PFKEY_UNIT64(n->m_pkthdr.len);
 
 	m_freem(m);
+	key_update_used();
 	return key_sendup_mbuf(so, n, KEY_SENDUP_ALL);
     }
 }
@@ -8080,6 +8083,36 @@ key_setspddump(int *errorp, pid_t pid)
 
 	*errorp = 0;
 	return (m);
+}
+
+int
+key_get_used(void) {
+	return !LIST_EMPTY(&sptree[IPSEC_DIR_INBOUND]) ||
+	    !LIST_EMPTY(&sptree[IPSEC_DIR_OUTBOUND]);
+}
+
+void
+key_update_used(void)
+{
+	switch (ipsec_enabled) {
+	default:
+	case 0:
+#ifdef notyet
+		/* XXX: racy */
+		ipsec_used = 0;
+#endif
+		break;
+	case 1:
+#ifndef notyet
+		/* XXX: racy */
+		if (!ipsec_used)
+#endif
+		ipsec_used = key_get_used();
+		break;
+	case 2:
+		ipsec_used = 1;
+		break;
+	}
 }
 
 static int

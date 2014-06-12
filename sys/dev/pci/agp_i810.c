@@ -1,4 +1,4 @@
-/*	$NetBSD: agp_i810.c,v 1.82 2014/05/28 03:17:42 riastradh Exp $	*/
+/*	$NetBSD: agp_i810.c,v 1.86 2014/06/10 22:02:58 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.82 2014/05/28 03:17:42 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.86 2014/06/10 22:02:58 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -81,7 +81,14 @@ static int agp_i810_enable(struct agp_softc *, u_int32_t mode);
 static struct agp_memory *agp_i810_alloc_memory(struct agp_softc *, int,
 						vsize_t);
 static int agp_i810_free_memory(struct agp_softc *, struct agp_memory *);
-static int agp_i810_bind_memory(struct agp_softc *, struct agp_memory *, off_t);
+static int agp_i810_bind_memory(struct agp_softc *, struct agp_memory *,
+		off_t);
+static int agp_i810_bind_memory_main(struct agp_softc *, struct agp_memory *,
+		off_t);
+static int agp_i810_bind_memory_dcache(struct agp_softc *, struct agp_memory *,
+		off_t);
+static int agp_i810_bind_memory_hwcursor(struct agp_softc *,
+		struct agp_memory *, off_t);
 static int agp_i810_unbind_memory(struct agp_softc *, struct agp_memory *);
 
 static bool agp_i810_resume(device_t, const pmf_qual_t *);
@@ -272,7 +279,6 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 {
 	struct agp_softc *sc = device_private(self);
 	struct agp_i810_softc *isc;
-	struct agp_gatt *gatt;
 	int apbase, mmadr_bar, gtt_bar;
 	int mmadr_type, mmadr_flags;
 	bus_addr_t mmadr, gtt_off;
@@ -302,7 +308,8 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 			return agp_intel_attach(parent, self, aux);
 		}
 #endif
-		aprint_error(": can't find internal VGA device config space\n");
+		aprint_error(": can't find internal VGA"
+		    " config space\n");
 		error = ENOENT;
 		goto fail1;
 	}
@@ -441,36 +448,10 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	error = bus_space_map(isc->bst, mmadr, isc->size, mmadr_flags,
 	    &isc->bsh);
 	if (error) {
-		aprint_error_dev(self, "can't map MMIO registers: %d\n", error);
+		aprint_error_dev(self, "can't map MMIO registers: %d\n",
+		    error);
 		error = ENXIO;
 		goto fail1;
-	}
-
-	/* Map the GTT, from either part of the MMIO region or its own BAR.  */
-	if (gtt_bar == 0) {
-		isc->gtt_bst = isc->bst;
-		isc->gtt_size = (mmadr_size - gtt_off);
-		error = bus_space_map(isc->gtt_bst, (mmadr + gtt_off),
-		    isc->gtt_size, mmadr_flags, &isc->gtt_bsh);
-		if (error) {
-			aprint_error_dev(self, "can't map GTT: %d\n", error);
-			error = ENXIO;
-			goto fail2;
-		}
-	} else {
-		/*
-		 * All chipsets with a separate BAR for the GTT, namely
-		 * the i915 and G33 families, have 32-bit GTT BARs.
-		 *
-		 * XXX [citation needed]
-		 */
-		if (pci_mapreg_map(&isc->vga_pa, gtt_bar, PCI_MAPREG_TYPE_MEM,
-			0,
-			&isc->gtt_bst, &isc->gtt_bsh, NULL, &isc->gtt_size)) {
-			aprint_error_dev(self, "can't map GTT\n");
-			error = ENXIO;
-			goto fail2;
-		}
 	}
 
 	/* Set up a chipset flush page if necessary.  */
@@ -481,26 +462,12 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	case CHIP_G4X:
 		error = agp_i810_setup_chipset_flush_page(sc);
 		if (error) {
-			aprint_error_dev(self, "can't set up chipset flush page: %d\n",
-			    error);
-			goto fail3;
+			aprint_error_dev(self,
+			    "can't set up chipset flush page: %d\n", error);
+			goto fail2;
 		}
 		break;
 	}
-
-	/* Set up the generic AGP GATT record.  */
-	isc->initial_aperture = AGP_GET_APERTURE(sc);
-	gatt = malloc(sizeof(struct agp_gatt), M_AGP, M_NOWAIT);
-	if (!gatt) {
-		error = ENOMEM;
-		goto fail4;
-	}
-	isc->gatt = gatt;
-	gatt->ag_entries = AGP_GET_APERTURE(sc) >> AGP_PAGE_SHIFT;
-
-	/* Power management.  (XXX Nothing to save on suspend?  Fishy...)  */
-	if (!pmf_device_register(self, NULL, agp_i810_resume))
-		aprint_error_dev(self, "can't establish power handler\n");
 
 	/*
 	 * XXX horrible hack to allow drm code to use our mapping
@@ -512,7 +479,56 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	/* Initialize the chipset.  */
 	error = agp_i810_init(sc);
 	if (error)
-		goto fail5;
+		goto fail3;
+
+	/* Map the GTT, from either part of the MMIO region or its own BAR.  */
+	if (gtt_bar == 0) {
+		isc->gtt_bst = isc->bst;
+		if (isc->gtt_size < (mmadr_size - gtt_off)) {
+			aprint_error_dev(self, "GTTMMADR too small for GTT"
+			    ": %"PRIxMAX" < (%"PRIxMAX" - %"PRIxMAX")\n",
+			    (uintmax_t)isc->gtt_size,
+			    (uintmax_t)mmadr_size,
+			    (uintmax_t)gtt_off);
+			error = ENXIO;
+			goto fail4;
+		}
+		error = bus_space_map(isc->gtt_bst, (mmadr + gtt_off),
+		    isc->gtt_size, mmadr_flags, &isc->gtt_bsh);
+		if (error) {
+			aprint_error_dev(self, "can't map GTT: %d\n", error);
+			error = ENXIO;
+			goto fail4;
+		}
+	} else {
+		bus_size_t gtt_bar_size;
+		/*
+		 * All chipsets with a separate BAR for the GTT, namely
+		 * the i915 and G33 families, have 32-bit GTT BARs.
+		 *
+		 * XXX [citation needed]
+		 */
+		if (pci_mapreg_map(&isc->vga_pa, gtt_bar, PCI_MAPREG_TYPE_MEM,
+			0,
+			&isc->gtt_bst, &isc->gtt_bsh, NULL, &gtt_bar_size)) {
+			aprint_error_dev(self, "can't map GTT\n");
+			error = ENXIO;
+			goto fail4;
+		}
+		if (gtt_bar_size != isc->gtt_size) {
+			aprint_error_dev(self,
+			    "BAR size %"PRIxMAX
+			    " mismatches detected GTT size %"PRIxMAX
+			    "; trusting BAR\n",
+			    (uintmax_t)gtt_bar_size,
+			    (uintmax_t)isc->gtt_size);
+			isc->gtt_size = gtt_bar_size;
+		}
+	}
+
+	/* Power management.  (XXX Nothing to save on suspend?  Fishy...)  */
+	if (!pmf_device_register(self, NULL, agp_i810_resume))
+		aprint_error_dev(self, "can't establish power handler\n");
 
 	/* Match the generic AGP code's autoconf output format.  */
 	aprint_normal("%s", device_xname(self));
@@ -520,14 +536,15 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	/* Success!  */
 	return 0;
 
+fail5: __unused
+	pmf_device_deregister(self);
+	bus_space_unmap(isc->gtt_bst, isc->gtt_bsh, isc->gtt_size);
+	isc->gtt_size = 0;
+fail4:
 #if notyet
-fail6: __unused
 	agp_i810_fini(sc);
 #endif
-fail5:	pmf_device_deregister(self);
-	free(gatt, M_AGP);
-	isc->gatt = NULL;
-fail4:	switch (isc->chiptype) {
+fail3:	switch (isc->chiptype) {
 	case CHIP_I915:
 	case CHIP_I965:
 	case CHIP_G33:
@@ -535,8 +552,6 @@ fail4:	switch (isc->chiptype) {
 		agp_i810_teardown_chipset_flush_page(sc);
 		break;
 	}
-fail3:	bus_space_unmap(isc->gtt_bst, isc->gtt_bsh, isc->gtt_size);
-	isc->gtt_size = 0;
 fail2:	bus_space_unmap(isc->bst, isc->bsh, isc->size);
 	isc->size = 0;
 fail1:	free(isc, M_AGP);
@@ -550,7 +565,9 @@ static int
 agp_i810_setup_chipset_flush_page(struct agp_softc *sc)
 {
 	struct agp_i810_softc *const isc = sc->as_chipc;
-	pcireg_t reg, lo, hi;
+	const pci_chipset_tag_t pc = sc->as_pc;
+	const pcitag_t tag = sc->as_tag;
+	pcireg_t lo, hi;
 	bus_addr_t addr, minaddr, maxaddr;
 	int error;
 
@@ -562,13 +579,12 @@ agp_i810_setup_chipset_flush_page(struct agp_softc *sc)
 
 	/* Read the PCI config register: 4-byte on gen3, 8-byte on gen>=4.  */
 	if (isc->chiptype == CHIP_I915) {
-		reg = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I915_IFPADDR);
-		addr = reg;
+		addr = pci_conf_read(pc, tag, AGP_I915_IFPADDR);
 		minaddr = PAGE_SIZE;	/* XXX PCIBIOS_MIN_MEM?  */
 		maxaddr = UINT32_MAX;
 	} else {
-		hi = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I965_IFPADDR+4);
-		lo = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I965_IFPADDR);
+		hi = pci_conf_read(pc, tag, AGP_I965_IFPADDR+4);
+		lo = pci_conf_read(pc, tag, AGP_I965_IFPADDR);
 		/*
 		 * Convert to uint64_t, rather than bus_addr_t which
 		 * may be 32-bit, to avoid undefined behaviour with a
@@ -608,15 +624,12 @@ agp_i810_setup_chipset_flush_page(struct agp_softc *sc)
 		/* Write it into the PCI config register.  */
 		addr = isc->flush_addr | 1;
 		if (isc->chiptype == CHIP_I915) {
-			pci_conf_write(sc->as_pc, sc->as_tag, AGP_I915_IFPADDR,
-			    addr);
+			pci_conf_write(pc, tag, AGP_I915_IFPADDR, addr);
 		} else {
-			pci_conf_write(sc->as_pc, sc->as_tag,
-			    AGP_I965_IFPADDR + 4,
-			    __SHIFTOUT(addr, __BITS(63, 32)));
-			pci_conf_write(sc->as_pc, sc->as_tag,
-			    AGP_I965_IFPADDR,
-			    __SHIFTOUT(addr, __BITS(31, 0)));
+			hi = __SHIFTOUT(addr, __BITS(63, 32));
+			lo = __SHIFTOUT(addr, __BITS(31, 0));
+			pci_conf_write(pc, tag, AGP_I965_IFPADDR+4, hi);
+			pci_conf_write(pc, tag, AGP_I965_IFPADDR, lo);
 		}
 	}
 
@@ -667,13 +680,12 @@ static int
 agp_i810_init(struct agp_softc *sc)
 {
 	struct agp_i810_softc *isc;
-	struct agp_gatt *gatt;
 	int error;
 
 	isc = sc->as_chipc;
-	gatt = isc->gatt;
 
 	if (isc->chiptype == CHIP_I810) {
+		struct agp_gatt *gatt;
 		void *virtual;
 		int dummyseg;
 
@@ -684,27 +696,41 @@ agp_i810_init(struct agp_softc *sc)
 			isc->dcache_size = 0;
 
 		/* According to the specs the gatt on the i810 must be 64k */
-		error = agp_alloc_dmamem(sc->as_dmat, 64 * 1024,
+		isc->gtt_size = 64 * 1024;
+		gatt = malloc(sizeof(*gatt), M_AGP, M_NOWAIT);
+		if (gatt == NULL) {
+			aprint_error_dev(sc->as_dev,
+			    "can't malloc GATT record\n");
+			error = ENOMEM;
+			goto fail0;
+		}
+		gatt->ag_entries = isc->gtt_size / sizeof(uint32_t);
+		error = agp_alloc_dmamem(sc->as_dmat, isc->gtt_size,
 		    0, &gatt->ag_dmamap, &virtual, &gatt->ag_physical,
 		    &gatt->ag_dmaseg, 1, &dummyseg);
 		if (error) {
 			aprint_error_dev(sc->as_dev,
 			    "can't allocate memory for GTT: %d\n", error);
+			free(gatt, M_AGP);
 			goto fail0;
 		}
 
 		gatt->ag_virtual = (uint32_t *)virtual;
-		gatt->ag_size = gatt->ag_entries * sizeof(u_int32_t);
+		gatt->ag_size = gatt->ag_entries * sizeof(uint32_t);
 		memset(gatt->ag_virtual, 0, gatt->ag_size);
-
 		agp_flush_cache();
+
 		/* Install the GATT. */
-		WRITE4(AGP_I810_PGTBL_CTL, gatt->ag_physical | 1);
+		isc->pgtblctl = gatt->ag_physical | 1;
+		WRITE4(AGP_I810_PGTBL_CTL, isc->pgtblctl);
+		isc->gatt = gatt;
 	} else if (isc->chiptype == CHIP_I830) {
 		/* The i830 automatically initializes the 128k gatt on boot. */
+		/* XXX [citation needed] */
 		pcireg_t reg;
-		u_int32_t pgtblctl;
 		u_int16_t gcc1;
+
+		isc->gtt_size = 128 * 1024;
 
 		reg = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I830_GCC0);
 		gcc1 = (u_int16_t)(reg >> 16);
@@ -733,22 +759,20 @@ agp_i810_init(struct agp_softc *sc)
 		}
 
 		/* GATT address is already in there, make sure it's enabled */
-		pgtblctl = READ4(AGP_I810_PGTBL_CTL);
-		pgtblctl |= 1;
-		WRITE4(AGP_I810_PGTBL_CTL, pgtblctl);
-
-		gatt->ag_physical = pgtblctl & ~1;
+		isc->pgtblctl = READ4(AGP_I810_PGTBL_CTL);
+		isc->pgtblctl |= 1;
+		WRITE4(AGP_I810_PGTBL_CTL, isc->pgtblctl);
 	} else if (isc->chiptype == CHIP_I855 || isc->chiptype == CHIP_I915 ||
 		   isc->chiptype == CHIP_I965 || isc->chiptype == CHIP_G33 ||
 		   isc->chiptype == CHIP_G4X) {
 		pcireg_t reg;
-		u_int32_t pgtblctl, gtt_size, stolen;
+		u_int32_t gtt_size, stolen;	/* XXX kilobytes */
 		u_int16_t gcc1;
 
 		reg = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I855_GCC1);
 		gcc1 = (u_int16_t)(reg >> 16);
 
-		pgtblctl = READ4(AGP_I810_PGTBL_CTL);
+		isc->pgtblctl = READ4(AGP_I810_PGTBL_CTL);
 
 		/* Stolen memory is set up at the beginning of the aperture by
                  * the BIOS, consisting of the GATT followed by 4kb for the
@@ -762,7 +786,7 @@ agp_i810_init(struct agp_softc *sc)
 			gtt_size = 256;
 			break;
 		case CHIP_I965:
-			switch (pgtblctl & AGP_I810_PGTBL_SIZE_MASK) {
+			switch (isc->pgtblctl & AGP_I810_PGTBL_SIZE_MASK) {
 			case AGP_I810_PGTBL_SIZE_128KB:
 			case AGP_I810_PGTBL_SIZE_512KB:
 				gtt_size = 512;
@@ -805,6 +829,10 @@ agp_i810_init(struct agp_softc *sc)
 			panic("impossible chiptype %d", isc->chiptype);
 		}
 
+		/*
+		 * XXX If I'm reading the datasheets right, this stolen
+		 * memory detection logic is totally wrong.
+		 */
 		switch (gcc1 & AGP_I855_GCC1_GMS) {
 		case AGP_I855_GCC1_GMS_STOLEN_1M:
 			stolen = 1024;
@@ -878,9 +906,13 @@ agp_i810_init(struct agp_softc *sc)
 			break;
 		}
 
+		isc->gtt_size = gtt_size * 1024;
+
 		/* BIOS space */
+		/* XXX [citation needed] */
 		gtt_size += 4;
 
+		/* XXX [citation needed] for this subtraction */
 		isc->stolen = (stolen - gtt_size) * 1024 / 4096;
 
 		if (isc->stolen > 0) {
@@ -890,10 +922,8 @@ agp_i810_init(struct agp_softc *sc)
 		}
 
 		/* GATT address is already in there, make sure it's enabled */
-		pgtblctl |= 1;
-		WRITE4(AGP_I810_PGTBL_CTL, pgtblctl);
-
-		gatt->ag_physical = pgtblctl & ~1;
+		isc->pgtblctl |= 1;
+		WRITE4(AGP_I810_PGTBL_CTL, isc->pgtblctl);
 	}
 
 	/*
@@ -947,14 +977,11 @@ agp_i810_detach(struct agp_softc *sc)
 		WRITE4(AGP_I810_PGTBL_CTL, pgtblctl);
 	}
 
-	/* Put the aperture back the way it started. */
-	AGP_SET_APERTURE(sc, isc->initial_aperture);
-
 	if (sc->chiptype == CHIP_I810) {
 		agp_free_dmamem(sc->as_dmat, gatt->ag_size, gatt->ag_dmamap,
 		    (void *)gatt->ag_virtual, &gatt->ag_dmaseg, 1);
+		free(isc->gatt, M_AGP);
 	}
-	free(sc->gatt, M_AGP);
 
 	return 0;
 }
@@ -1013,73 +1040,11 @@ agp_i810_get_aperture(struct agp_softc *sc)
 }
 
 static int
-agp_i810_set_aperture(struct agp_softc *sc, u_int32_t aperture)
+agp_i810_set_aperture(struct agp_softc *sc __unused,
+    uint32_t aperture __unused)
 {
-	struct agp_i810_softc *isc = sc->as_chipc;
-	pcireg_t reg;
-	u_int16_t miscc, gcc1;
 
-	switch (isc->chiptype) {
-	case CHIP_I810:
-		/*
-		 * Double check for sanity.
-		 */
-		if (aperture != (32 * 1024 * 1024) &&
-		    aperture != (64 * 1024 * 1024)) {
-			aprint_error_dev(sc->as_dev, "bad aperture size %d\n",
-			    aperture);
-			return EINVAL;
-		}
-
-		reg = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I810_SMRAM);
-		miscc = (u_int16_t)(reg >> 16);
-		miscc &= ~AGP_I810_MISCC_WINSIZE;
-		if (aperture == 32 * 1024 * 1024)
-			miscc |= AGP_I810_MISCC_WINSIZE_32;
-		else
-			miscc |= AGP_I810_MISCC_WINSIZE_64;
-
-		reg &= 0x0000ffff;
-		reg |= ((pcireg_t)miscc) << 16;
-		pci_conf_write(sc->as_pc, sc->as_tag, AGP_I810_SMRAM, reg);
-		break;
-	case CHIP_I830:
-		if (aperture != (64 * 1024 * 1024) &&
-		    aperture != (128 * 1024 * 1024)) {
-			aprint_error_dev(sc->as_dev, "bad aperture size %d\n",
-			    aperture);
-			return EINVAL;
-		}
-		reg = pci_conf_read(sc->as_pc, sc->as_tag, AGP_I830_GCC0);
-		gcc1 = (u_int16_t)(reg >> 16);
-		gcc1 &= ~AGP_I830_GCC1_GMASIZE;
-		if (aperture == 64 * 1024 * 1024)
-			gcc1 |= AGP_I830_GCC1_GMASIZE_64;
-		else
-			gcc1 |= AGP_I830_GCC1_GMASIZE_128;
-
-		reg &= 0x0000ffff;
-		reg |= ((pcireg_t)gcc1) << 16;
-		pci_conf_write(sc->as_pc, sc->as_tag, AGP_I830_GCC0, reg);
-		break;
-	case CHIP_I855:
-	case CHIP_I915:
-		if (aperture != agp_i810_get_aperture(sc)) {
-			aprint_error_dev(sc->as_dev, "bad aperture size %d\n",
-			    aperture);
-			return EINVAL;
-		}
-		break;
-	case CHIP_I965:
-		if (aperture != 512 * 1024 * 1024) {
-			aprint_error_dev(sc->as_dev, "bad aperture size %d\n",
-			    aperture);
-			return EINVAL;
-		}
-		break;
-	}
-
-	return 0;
+	return ENOSYS;
 }
 
 static int
@@ -1087,11 +1052,11 @@ agp_i810_bind_page(struct agp_softc *sc, off_t offset, bus_addr_t physical)
 {
 	struct agp_i810_softc *isc = sc->as_chipc;
 
-	if (offset < 0 || offset >= (isc->gatt->ag_entries << AGP_PAGE_SHIFT)) {
+	if (offset < 0 || offset >= ((isc->gtt_size/4) << AGP_PAGE_SHIFT)) {
 #ifdef AGP_DEBUG
 		printf("%s: failed: offset 0x%08x, shift %d, entries %d\n",
 		    device_xname(sc->as_dev), (int)offset, AGP_PAGE_SHIFT,
-		    isc->gatt->ag_entries);
+		    isc->gtt_size/4);
 #endif
 		return EINVAL;
 	}
@@ -1114,7 +1079,7 @@ agp_i810_unbind_page(struct agp_softc *sc, off_t offset)
 {
 	struct agp_i810_softc *isc = sc->as_chipc;
 
-	if (offset < 0 || offset >= (isc->gatt->ag_entries << AGP_PAGE_SHIFT))
+	if (offset < 0 || offset >= ((isc->gtt_size/4) << AGP_PAGE_SHIFT))
 		return EINVAL;
 
 	if (isc->chiptype != CHIP_I810 ) {
@@ -1145,105 +1110,123 @@ agp_i810_enable(struct agp_softc *sc, u_int32_t mode)
 	return 0;
 }
 
+#define	AGP_I810_MEMTYPE_MAIN		0
+#define	AGP_I810_MEMTYPE_DCACHE		1
+#define	AGP_I810_MEMTYPE_HWCURSOR	2
+
 static struct agp_memory *
 agp_i810_alloc_memory(struct agp_softc *sc, int type, vsize_t size)
 {
 	struct agp_i810_softc *isc = sc->as_chipc;
 	struct agp_memory *mem;
+	int error;
 
 #ifdef AGP_DEBUG
 	printf("AGP: alloc(%d, 0x%x)\n", type, (int) size);
 #endif
 
+	if (size <= 0)
+		return NULL;
 	if ((size & (AGP_PAGE_SIZE - 1)) != 0)
-		return 0;
-
+		return NULL;
 	if (sc->as_allocated + size > sc->as_maxmem)
-		return 0;
-
-	if (type == 1) {
-		/*
-		 * Mapping local DRAM into GATT.
-		 */
-		if (isc->chiptype != CHIP_I810 )
-			return 0;
+		return NULL;
+	switch (type) {
+	case AGP_I810_MEMTYPE_MAIN:
+		break;
+	case AGP_I810_MEMTYPE_DCACHE:
+		if (isc->chiptype != CHIP_I810)
+			return NULL;
 		if (size != isc->dcache_size)
-			return 0;
-	} else if (type == 2) {
-		/*
-		 * Bogus mapping for the hardware cursor.
-		 */
-		if (size != AGP_PAGE_SIZE && size != 4 * AGP_PAGE_SIZE)
-			return 0;
+			return NULL;
+		break;
+	case AGP_I810_MEMTYPE_HWCURSOR:
+		if ((size != AGP_PAGE_SIZE) &&
+		    (size != AGP_PAGE_SIZE*4))
+			return NULL;
+		break;
+	default:
+		return NULL;
 	}
 
-	mem = malloc(sizeof *mem, M_AGP, M_WAITOK|M_ZERO);
+	mem = malloc(sizeof(*mem), M_AGP, M_WAITOK|M_ZERO);
 	if (mem == NULL)
-		return NULL;
+		goto fail0;
 	mem->am_id = sc->as_nextid++;
 	mem->am_size = size;
 	mem->am_type = type;
 
-	if (type == 2) {
-		/*
-		 * Allocate and wire down the memory now so that we can
-		 * get its physical address.
-		 */
-		mem->am_dmaseg = malloc(sizeof *mem->am_dmaseg, M_AGP,
+	switch (type) {
+	case AGP_I810_MEMTYPE_MAIN:
+		error = bus_dmamap_create(sc->as_dmat, size,
+		    (size >> AGP_PAGE_SHIFT) + 1, size, 0, BUS_DMA_WAITOK,
+		    &mem->am_dmamap);
+		if (error)
+			goto fail1;
+		break;
+	case AGP_I810_MEMTYPE_DCACHE:
+		break;
+	case AGP_I810_MEMTYPE_HWCURSOR:
+		mem->am_dmaseg = malloc(sizeof(*mem->am_dmaseg), M_AGP,
 		    M_WAITOK);
-		if (mem->am_dmaseg == NULL) {
-			free(mem, M_AGP);
-			return NULL;
-		}
-		if (agp_alloc_dmamem(sc->as_dmat, size, 0,
-		    &mem->am_dmamap, &mem->am_virtual, &mem->am_physical,
-		    mem->am_dmaseg, 1, &mem->am_nseg) != 0) {
+		error = agp_alloc_dmamem(sc->as_dmat, size, 0, &mem->am_dmamap,
+		    &mem->am_virtual, &mem->am_physical, mem->am_dmaseg, 1,
+		    &mem->am_nseg);
+		if (error) {
 			free(mem->am_dmaseg, M_AGP);
-			free(mem, M_AGP);
-			return NULL;
+			goto fail1;
 		}
-		memset(mem->am_virtual, 0, size);
-	} else if (type != 1) {
-		if (bus_dmamap_create(sc->as_dmat, size, size / PAGE_SIZE + 1,
-				      size, 0, BUS_DMA_NOWAIT,
-				      &mem->am_dmamap) != 0) {
-			free(mem, M_AGP);
-			return NULL;
-		}
+		(void)memset(mem->am_virtual, 0, size);
+		break;
+	default:
+		panic("invalid agp memory type: %d", type);
 	}
 
 	TAILQ_INSERT_TAIL(&sc->as_memory, mem, am_link);
 	sc->as_allocated += size;
 
 	return mem;
+
+fail1:	free(mem, M_AGP);
+fail0:	return NULL;
 }
 
 static int
 agp_i810_free_memory(struct agp_softc *sc, struct agp_memory *mem)
 {
+
 	if (mem->am_is_bound)
 		return EBUSY;
 
-	if (mem->am_type == 2) {
+	switch (mem->am_type) {
+	case AGP_I810_MEMTYPE_MAIN:
+	case AGP_I810_MEMTYPE_DCACHE:
+		break;
+	case AGP_I810_MEMTYPE_HWCURSOR:
 		agp_free_dmamem(sc->as_dmat, mem->am_size, mem->am_dmamap,
 		    mem->am_virtual, mem->am_dmaseg, mem->am_nseg);
 		free(mem->am_dmaseg, M_AGP);
+		break;
+	default:
+		panic("invalid agp i810 memory type: %d", mem->am_type);
 	}
 
 	sc->as_allocated -= mem->am_size;
 	TAILQ_REMOVE(&sc->as_memory, mem, am_link);
 	free(mem, M_AGP);
+
 	return 0;
 }
 
 static int
 agp_i810_bind_memory(struct agp_softc *sc, struct agp_memory *mem,
-		     off_t offset)
+    off_t offset)
 {
 	struct agp_i810_softc *isc = sc->as_chipc;
-	u_int32_t regval, i;
+	uint32_t pgtblctl;
+	int error;
 
-	if (mem->am_is_bound != 0)
+	if (mem->am_is_bound)
 		return EINVAL;
 
 	/*
@@ -1252,33 +1235,173 @@ agp_i810_bind_memory(struct agp_softc *sc, struct agp_memory *mem,
 	 * to the GTT through the MMIO window.
 	 * Until the issue is solved, simply restore it.
 	 */
-	regval = bus_space_read_4(isc->bst, isc->bsh, AGP_I810_PGTBL_CTL);
-	if (regval != (isc->gatt->ag_physical | 1)) {
-		printf("agp_i810_bind_memory: PGTBL_CTL is 0x%x - fixing\n",
-		       regval);
+	pgtblctl = bus_space_read_4(isc->bst, isc->bsh, AGP_I810_PGTBL_CTL);
+	if (pgtblctl != isc->pgtblctl) {
+		printf("agp_i810_bind_memory: PGTBL_CTL is 0x%"PRIx32
+		    " - fixing\n", pgtblctl);
 		bus_space_write_4(isc->bst, isc->bsh, AGP_I810_PGTBL_CTL,
-				  isc->gatt->ag_physical | 1);
+		    isc->pgtblctl);
 	}
 
-	if (mem->am_type == 2) {
-		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
-			agp_i810_bind_page(sc, offset + i,
-			    mem->am_physical + i);
-		mem->am_offset = offset;
-		mem->am_is_bound = 1;
-		return 0;
+	switch (mem->am_type) {
+	case AGP_I810_MEMTYPE_MAIN:
+		error = agp_i810_bind_memory_main(sc, mem, offset);
+		break;
+	case AGP_I810_MEMTYPE_DCACHE:
+		error = agp_i810_bind_memory_dcache(sc, mem, offset);
+		break;
+	case AGP_I810_MEMTYPE_HWCURSOR:
+		error = agp_i810_bind_memory_hwcursor(sc, mem, offset);
+		break;
+	default:
+		panic("invalid agp i810 memory type: %d", mem->am_type);
 	}
+	if (error)
+		return error;
 
-	if (mem->am_type != 1)
-		return agp_generic_bind_memory(sc, mem, offset);
-
-	if (isc->chiptype != CHIP_I810)
-		return EINVAL;
-
-	for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
-		agp_i810_write_gtt_entry(isc, i, i | 3);
+	/* Success!  */
 	mem->am_is_bound = 1;
 	return 0;
+}
+
+static int
+agp_i810_bind_memory_main(struct agp_softc *sc, struct agp_memory *mem,
+    off_t offset)
+{
+	struct agp_i810_softc *const isc = sc->as_chipc;
+	bus_dma_segment_t *segs;
+	int nseg_alloc, nseg;
+	uint32_t i, j;
+	unsigned seg;
+	bus_addr_t addr;
+	bus_size_t len;
+	int error;
+
+	/* Ensure we have a sane size/offset that will fit.  */
+	if (offset < 0)
+		return EINVAL;
+	if (offset & (AGP_PAGE_SIZE - 1))
+		return EINVAL;
+	if (mem->am_size > ((isc->gtt_size/4) << AGP_PAGE_SHIFT))
+		return EINVAL;
+	if (offset > (((isc->gtt_size/4) << AGP_PAGE_SHIFT) -
+		mem->am_size))
+		return EINVAL;
+
+	/* Allocate an array of DMA segments.  */
+	nseg_alloc = (mem->am_size >> AGP_PAGE_SHIFT);
+	if (nseg_alloc > (SIZE_MAX / sizeof(*segs))) {
+		error = ENOMEM;
+		goto fail0;
+	}
+	segs = malloc(nseg_alloc * sizeof(*segs), M_AGP, M_WAITOK);
+
+	/* Allocate DMA-safe physical segments.  */
+	error = bus_dmamem_alloc(sc->as_dmat, mem->am_size, PAGE_SIZE,
+	    0, segs, nseg_alloc, &nseg, BUS_DMA_WAITOK);
+	if (error)
+		goto fail1;
+	KASSERT(nseg <= nseg_alloc);
+
+	/* Shrink the array of DMA segments if we can.  */
+	if (nseg < nseg_alloc) {
+		segs = realloc(segs, nseg, M_AGP, M_WAITOK);
+		nseg_alloc = nseg;
+	}
+
+	/* Load the DMA map.  */
+	error = bus_dmamap_load_raw(sc->as_dmat, mem->am_dmamap,
+	    segs, mem->am_nseg, mem->am_size, BUS_DMA_WAITOK);
+	if (error)
+		goto fail2;
+
+	/* Bind the pages in the GTT.  */
+	i = 0;
+	KASSERT((mem->am_size & (AGP_PAGE_SIZE - 1)) == 0);
+	for (seg = 0; seg < mem->am_dmamap->dm_nsegs; seg++) {
+		KASSERT((offset + i) < mem->am_size);
+		addr = mem->am_dmamap->dm_segs[seg].ds_addr;
+		len = MIN(mem->am_dmamap->dm_segs[seg].ds_len,
+		    (mem->am_size - (offset + i)));
+		do {
+			KASSERT(0 < len);
+			KASSERT((len & (AGP_PAGE_SIZE - 1)) == 0);
+			KASSERT((offset + i) < (mem->am_size - len));
+			error = agp_i810_bind_page(sc, offset + i, addr);
+			if (error)
+				goto fail3;
+			i += AGP_PAGE_SIZE;
+			addr += AGP_PAGE_SIZE;
+			len -= AGP_PAGE_SIZE;
+		} while (0 < len);
+	}
+
+	/* Success!  */
+	mem->am_dmaseg = segs;
+	mem->am_offset = offset;
+	return 0;
+
+fail3:	for (j = 0; j < i; j += AGP_PAGE_SIZE)
+		(void)agp_i810_unbind_page(sc, offset + j);
+	bus_dmamap_unload(sc->as_dmat, mem->am_dmamap);
+fail2:	bus_dmamem_free(sc->as_dmat, segs, nseg_alloc);
+fail1:	free(segs, M_AGP);
+fail0:	KASSERT(error);
+	return error;
+}
+
+#define	I810_GTT_PTE_VALID	0x01
+#define	I810_GTT_PTE_DCACHE	0x02
+
+static int
+agp_i810_bind_memory_dcache(struct agp_softc *sc, struct agp_memory *mem,
+    off_t offset)
+{
+	struct agp_i810_softc *const isc __diagused = sc->as_chipc;
+	uint32_t i, j;
+	int error;
+
+	KASSERT(isc->chiptype == CHIP_I810);
+
+	KASSERT((mem->am_size & (AGP_PAGE_SIZE - 1)) == 0);
+	for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE) {
+		/* XXX No offset?  */
+		error = agp_i810_write_gtt_entry(isc, i,
+		    i | I810_GTT_PTE_VALID | I810_GTT_PTE_DCACHE);
+		if (error)
+			goto fail0;
+	}
+
+	/* Success!  */
+	return 0;
+
+fail0:	for (j = 0; j < i; j += AGP_PAGE_SIZE)
+		(void)agp_i810_unbind_page(sc, offset + j);
+	return error;
+}
+
+static int
+agp_i810_bind_memory_hwcursor(struct agp_softc *sc, struct agp_memory *mem,
+    off_t offset)
+{
+	const bus_addr_t pa = mem->am_physical;
+	uint32_t i, j;
+	int error;
+
+	KASSERT((mem->am_size & (AGP_PAGE_SIZE - 1)) == 0);
+	for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE) {
+		error = agp_i810_bind_page(sc, offset + i, pa + i);
+		if (error)
+			goto fail0;
+	}
+
+	/* Success!  */
+	mem->am_offset = offset;
+	return 0;
+
+fail0:	for (j = 0; j < i; j += AGP_PAGE_SIZE)
+		(void)agp_i810_unbind_page(sc, offset + j);
+	return error;
 }
 
 static int
@@ -1287,25 +1410,24 @@ agp_i810_unbind_memory(struct agp_softc *sc, struct agp_memory *mem)
 	struct agp_i810_softc *isc = sc->as_chipc;
 	u_int32_t i;
 
-	if (mem->am_is_bound == 0)
+	if (!mem->am_is_bound)
 		return EINVAL;
 
-	if (mem->am_type == 2) {
+	switch (mem->am_type) {
+	case AGP_I810_MEMTYPE_MAIN:
+	case AGP_I810_MEMTYPE_HWCURSOR:
 		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
 			agp_i810_unbind_page(sc, mem->am_offset + i);
-		mem->am_offset = 0;
-		mem->am_is_bound = 0;
-		return 0;
+		break;
+	case AGP_I810_MEMTYPE_DCACHE:
+		KASSERT(isc->chiptype == CHIP_I810);
+		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
+			(void)agp_i810_write_gtt_entry(isc, i, 0);
+		break;
+	default:
+		panic("invalid agp i810 memory type: %d", mem->am_type);
 	}
 
-	if (mem->am_type != 1)
-		return agp_generic_unbind_memory(sc, mem);
-
-	if (isc->chiptype != CHIP_I810)
-		return EINVAL;
-
-	for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
-		agp_i810_write_gtt_entry(isc, i, 0);
 	mem->am_is_bound = 0;
 	return 0;
 }
@@ -1317,10 +1439,9 @@ agp_i810_resume(device_t dv, const pmf_qual_t *qual)
 	struct agp_i810_softc *isc = sc->as_chipc;
 
 	/*
-	 * XXX Nothing uses isc->pgtblctl!  Save on suspend, restore on
-	 * resume?
+	 * XXX Nothing uses this!  Save on suspend, restore on resume?
 	 */
-	isc->pgtblctl = READ4(AGP_I810_PGTBL_CTL);
+	isc->pgtblctl_resume_hack = READ4(AGP_I810_PGTBL_CTL);
 	agp_flush_cache();
 
 	return true;

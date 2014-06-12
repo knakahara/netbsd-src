@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.1103 2014/04/21 16:35:38 chs Exp $
+# $NetBSD: GENERIC,v 1.1105 2014/06/10 01:42:39 hikaru Exp $
 #
 # GENERIC machine description file
 #
@@ -22,7 +22,7 @@ include 	"arch/i386/conf/std.i386"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.1103 $"
+#ident 		"GENERIC-$Revision: 1.1105 $"
 
 maxusers	64		# estimated number of users
 
@@ -199,7 +199,7 @@ options 	NFSSERVER	# Network File System server
 #options 	GATEWAY		# packet forwarding
 options 	INET		# IP + ICMP + TCP + UDP
 options 	INET6		# IPv6
-#options 	IPSEC		# IP security
+options 	IPSEC		# IP security
 #options 	IPSEC_DEBUG	# debug for IP security
 #options 	MPLS		# MultiProtocol Label Switching (needs ifmpls)
 #options 	MROUTING	# IP multicast routing
@@ -992,6 +992,7 @@ tlp*	at pci? dev ? function ?	# DECchip 21x4x and clones
 txp*	at pci? dev ? function ?	# 3com 3cr990
 vte*	at pci? dev ? function ?	# RDC R6040 10/100 Ethernet
 vge*	at pci? dev ? function ?	# VIATech VT612X Gigabit Ethernet
+vmx*	at pci? dev ? function ?	# VMware VMXNET3
 vr*	at pci? dev ? function ?	# VIA Rhine Fast Ethernet
 wi*	at pci? dev ? function ?	# Intersil Prism Mini-PCI (802.11b)
 wm*	at pci? dev ? function ?	# Intel 8254x gigabit
