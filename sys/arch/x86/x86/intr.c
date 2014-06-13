@@ -454,8 +454,9 @@ intr_free_io_intrsource(int irq)
 static struct intrsource *
 intr_occupy_io_intrsource(int irq)
 {
-	if (io_interrupt_sources[irq] != NULL)
+	if (io_interrupt_sources[irq] != NULL) {
 		return io_interrupt_sources[irq];
+	}
 
 	return intr_allocate_io_intrsource(irq);
 }
@@ -489,12 +490,12 @@ find_free_msi_vectors(int count)
 		}
 
 		first = i;
-		for (j = first; j < count; j++) {
-			if (io_interrupt_sources[j] != NULL)
+		for (j = 0; j < count; j++) {
+			if (io_interrupt_sources[first + j] != NULL)
 				break;
 		}
-		if (j != first + count - 1) {
-			i += count;
+		if (j != count) {
+			i += j;
 			continue;
 		}
 
@@ -530,9 +531,10 @@ intr_allocate_msi_vectors(int *count)
 					intr_free_io_intrsource(j);
 				}
 				first = -1;
-				continue;
 			}
 		}
+		if (i == first + *count)
+			break;
 	}
 	if (first == -1) {
 		printf("cannot find free MSI vectors\n");
@@ -571,6 +573,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 {
 	int slot, i;
 	struct intrsource *isp;
+	int start = 0; /* XXXX */
 
 	KASSERT(mutex_owned(&cpu_lock));
 
@@ -580,11 +583,15 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 	} else {
 		slot = -1;
 
+		/* XXXX */
+		if (pin >= FIRST_MSI_INT)
+			start = 16;
+
 		/*
 		 * intr_allocate_slot has checked for an existing mapping.
 		 * Now look for a free slot.
 		 */
-		for (i = 0; i < MAX_INTR_SOURCES ; i++) {
+		for (i = start; i < MAX_INTR_SOURCES ; i++) {
 			if (ci->ci_isources[i] == NULL) {
 				slot = i;
 				break;
@@ -965,6 +972,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	/* All set up, so add a route for the interrupt and unmask it. */
 	(*pic->pic_addroute)(pic, ci, pin, idt_vec, type);
 	(*pic->pic_hwunmask)(pic, pin);
+
 	mutex_exit(&cpu_lock);
 
 #ifdef INTRDEBUG
@@ -1252,9 +1260,13 @@ intr_printconfig(void)
 			    device_xname(ci->ci_dev), i, isp->is_pin,
 			    isp->is_pic->pic_name, isp->is_type, isp->is_maxlevel);
 			for (ih = isp->is_handlers; ih != NULL;
-			     ih = ih->ih_next)
+			     ih = ih->ih_next) {
 				(*pr)("\thandler %p level %d\n",
 				    ih->ih_fun, ih->ih_level);
+				if (ih->ih_fun == intr_biglock_wrapper)
+					(*pr)("\treal handler %p\n",
+					    ih->ih_realfun);
+			}
 #if NIOAPIC > 0
 			if (isp->is_pic->pic_type == PIC_IOAPIC) {
 				struct ioapic_softc *sc;

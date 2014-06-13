@@ -225,6 +225,10 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 {
 	pci_chipset_tag_t ipc;
 
+	if (ih & APIC_INT_VIA_MSG) {
+		return "msi";
+	}
+
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)
 			continue;
@@ -400,7 +404,7 @@ msi_addroute(struct pic *pic, struct cpu_info *ci,
 {
 	pci_chipset_tag_t pc = NULL;
 	pcitag_t tag = get_msi_pcitag(pin);
-	pcireg_t reg, addr;
+	pcireg_t reg, addr, data, ctl;
 	int off;
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, &reg) == 0)
@@ -412,17 +416,21 @@ msi_addroute(struct pic *pic, struct cpu_info *ci,
 	 * OpenBSD's ci->ci_apicid is equal to NetBSD's ci_cpuid.
 	 * What's mean OpenBSD's ci->ci_cpuid? the value is sc->sc_dev.dv_unit.
 	 */
-	addr = 0xfee00000UL | (ci->ci_cpuid << 12);
+	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid, LAPIC_MSIADDR_DSTID_MASK);
+	/*if triger mode is edge, it don't care level for trigger mode. */
+	data = __SHIFTIN(vec, LAPIC_MSIDATA_VECTOR_MASK) |
+		LAPIC_MSIDATA_TRGMODE_EDGE | LAPIC_MSIDATA_DM_FIXED;
 
 	if (reg & PCI_MSI_CTL_64BIT_ADDR) {
 		pci_conf_write(pc, tag, off + PCI_MSI_MADDR64_LO, addr);
 		pci_conf_write(pc, tag, off + PCI_MSI_MADDR64_HI, 0);
-		pci_conf_write(pc, tag, off + PCI_MSI_MDATA64, vec);
+		pci_conf_write(pc, tag, off + PCI_MSI_MDATA64, data);
 	} else {
 		pci_conf_write(pc, tag, off + PCI_MSI_MADDR, addr);
-		pci_conf_write(pc, tag, off + PCI_MSI_MDATA, vec);
+		pci_conf_write(pc, tag, off + PCI_MSI_MDATA, data);
 	}
-	pci_conf_write(pc, tag, off, reg | PCI_MSI_CTL_MSI_ENABLE);
+	ctl = reg | PCI_MSI_CTL_MSI_ENABLE;
+	pci_conf_write(pc, tag, off + PCI_MSI_CTL, ctl);
 }
 
 static void
@@ -468,6 +476,7 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 
 	for (i = 0; i < *count; i++) {
 		set_msi_pcitag(vectors[i], pa->pa_tag);
+		vectors[i] |= APIC_INT_VIA_MSG;
 	}
 
 	*ihps = vectors;
@@ -556,13 +565,12 @@ pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	pin = ih & (~MPSAFE_MASK); /* hint to search pcitag_t */
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
-
 	if ((ih & APIC_INT_VIA_MSG) == 0) {
 		aprint_normal("invalid MSI ih: 0x%x\n", ih);
 		return NULL;
 	}
 
-	return intr_establish(irq, pic, pin, IST_LEVEL, level, func, arg,
+	return intr_establish(irq, pic, pin, IST_EDGE, level, func, arg,
 	    mpsafe);
 }
 
