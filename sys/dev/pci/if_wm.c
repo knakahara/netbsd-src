@@ -1157,6 +1157,7 @@ wm_match(device_t parent, cfdata_t cf, void *aux)
 	return 0;
 }
 
+#define TRY_MSI 1
 static void
 wm_attach(device_t parent, device_t self, void *aux)
 {
@@ -1165,7 +1166,12 @@ wm_attach(device_t parent, device_t self, void *aux)
 	prop_dictionary_t dict;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	pci_chipset_tag_t pc = pa->pa_pc;
+#ifdef TRY_MSI
+	pci_intr_handle_t *ihs;
+	int msi_count = 1;
+#else
 	pci_intr_handle_t ih;
+#endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
 	bus_space_tag_t memt;
@@ -1310,6 +1316,25 @@ wm_attach(device_t parent, device_t self, void *aux)
 	/*
 	 * Map and establish our interrupt.
 	 */
+#ifdef TRY_MSI
+	if (pci_msi_alloc(pa, &ihs, &msi_count)) {
+		aprint_error_dev(sc->sc_dev, "failed to MSI allocate\n");
+		return;
+	}
+	if (msi_count == 0) {
+		aprint_error_dev(sc->sc_dev, "failed to MSI allocate count == 0\n");
+		return;
+	}
+	intrstr = pci_intr_string(pc, ihs[0], intrbuf, sizeof(intrbuf));
+	sc->sc_ih = pci_msi_establish(pc, ihs[0], IPL_NET, wm_intr, sc);
+	if (sc->sc_ih == NULL) {
+		aprint_error_dev(sc->sc_dev, "unable to establish MSI");
+		if (intrstr != NULL)
+			aprint_error(" at %s", intrstr);
+		aprint_error("\n");
+		return;
+	}
+#else
 	if (pci_intr_map(pa, &ih)) {
 		aprint_error_dev(sc->sc_dev, "unable to map interrupt\n");
 		return;
@@ -1323,6 +1348,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		aprint_error("\n");
 		return;
 	}
+#endif
 	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 	/*
