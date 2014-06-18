@@ -118,6 +118,7 @@ void		*pci_intr_establish(pci_chipset_tag_t, pci_intr_handle_t,
 void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 
 /* experimental MSI support */
+int pci_msi_count(struct pci_attach_args *);
 int pci_msi_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
 void pci_msi_release(void **, int);
 void *pci_msi_establish(pci_chipset_tag_t, pci_intr_handle_t,

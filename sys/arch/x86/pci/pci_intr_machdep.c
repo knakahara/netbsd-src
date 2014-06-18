@@ -460,6 +460,35 @@ static struct pic msi_pic = {
 	.pic_edge_stubs = ioapic_edge_stubs,
 };
 
+/*
+ * return number of the devices's MSI vectors
+ * return 0 if the device does not support MSI
+ */
+int
+pci_msi_count(struct pci_attach_args *pa)
+{
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+
+	int offset;
+	pcireg_t reg;
+	int mmc;
+
+	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &offset, NULL) == 0)
+		return 0;
+
+	reg = pci_conf_read(pc, tag, offset + PCI_MSI_CTL);
+	mmc = PCI_MSI_CTL_MMC(reg);
+	switch (mmc) {
+	case 0x6:
+	case 0x7:
+		aprint_normal("the device use reserved MMC values.\n");
+		return 0;
+	default:
+		return 1 << mmc;
+	}
+}
+
 /* XXXX tentative function name */
 /* XXXX define other file? */
 static int
@@ -490,15 +519,11 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
  * "ihps" is the array  of vector numbers which MSI used instead of IRQ number.
  * "count" must be powr of 2.
  * "count" can decrease if sturct intrsource cannot be allocated.
+ * if count == 0, return non-zero value.
  */
 int
 pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 {
-	pci_chipset_tag_t pc = pa->pa_pc;
-	pcitag_t tag = pa->pa_tag;
-
-	uint32_t value;
-	uint32_t mmc;
 	int hw_max;
 
 	if (*count < 1) {
@@ -510,20 +535,12 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 		return 1;
 	}
 
-	/* the device does not have MSI capability */
-	if (pci_get_capability(pc, tag, PCI_CAP_MSI, NULL, &value) == 0) {
-		aprint_normal("the device does not have a MSI capability\n");
+	hw_max = pci_msi_count(pa);
+	if (hw_max == 0)
 		return 1;
-	}
-	/* XXXX should define MSI_CTL_SHIFT and MSI_MMC_SHIFT */
-	mmc = (value & PCI_MSI_CTL_MMC_MASK) >> (16 + 1);
-	if (mmc > 5) {
-		aprint_normal("the device use reserved MMC values.\n");
-		return 1;
-	}
 
-	hw_max = 1 << mmc;
 	if (*count > hw_max) {
+		aprint_normal("cut off MSI count to %d\n", hw_max);
 		*count = hw_max; /* cut off hw_max */
 	}
 
