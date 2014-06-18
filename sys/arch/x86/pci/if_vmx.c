@@ -625,8 +625,10 @@ vmxnet3_intr(void *arg)
 {
 	struct vmxnet3_softc *sc = arg;
 
+#ifndef TRY_MSI
 	if (READ_BAR1(sc, VMXNET3_BAR1_INTR) == 0)
 		return 0;
+#endif
 	if (sc->sc_ds->event)
 		vmxnet3_evintr(sc);
 	vmxnet3_rxintr(sc, &sc->sc_rxq[0]);
