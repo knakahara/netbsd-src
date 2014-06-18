@@ -105,6 +105,8 @@ struct vmxnet3_softc {
 	bus_space_handle_t sc_ioh1;
 	bus_dma_tag_t sc_dmat;
 
+	int sc_intr_type;
+
 	struct vmxnet3_txqueue sc_txq[NTXQUEUE];
 	struct vmxnet3_rxqueue sc_rxq[NRXQUEUE];
 	struct vmxnet3_driver_shared *sc_ds;
@@ -187,19 +189,15 @@ vmxnet3_match(device_t parent, cfdata_t match, void *aux)
 	return 0;
 }
 
-#define TRY_MSI 1
 void
 vmxnet3_attach(device_t parent, device_t self, void *aux)
 {
 	struct vmxnet3_softc *sc = device_private(self);
 	struct pci_attach_args *pa = aux;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-#ifdef TRY_MSI
 	pci_intr_handle_t *ihs;
-	int msi_count = 1;
-#else
+	int vmxnet3_msi_num = 1; /* if use multi MSI, vih must be array */
 	pci_intr_handle_t ih;
-#endif
 	const char *intrstr;
 	void *vih;
 	u_int memtype, ver, macl, mach;
@@ -250,37 +248,35 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-#ifdef TRY_MSI
-	if (pci_msi_alloc(pa, &ihs, &msi_count)) {
-		aprint_error_dev(sc->sc_dev, "failed to MSI allocate\n");
-		return;
+	if (pci_msi_count(pa) >= vmxnet3_msi_num &&
+	    !pci_msi_alloc(pa, &ihs, &vmxnet3_msi_num)) {
+		intrstr = pci_intr_string(pa->pa_pc, ihs[0], intrbuf,
+					  sizeof(intrbuf));
+		vih = pci_msi_establish(pa->pa_pc, ihs[0], IPL_NET,
+					vmxnet3_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			return;
+		}
+		sc->sc_intr_type = VMXNET3_IT_MSI;
 	}
-	if (msi_count == 0) {
-		aprint_error_dev(sc->sc_dev, "failed to MSI allocate count == 0\n");
-		return;
+	else {
+		if (pci_intr_map(pa, &ih)) {
+			aprint_error_dev(sc->sc_dev, "failed to map interrupt\n");
+			return;
+		}
+		intrstr = pci_intr_string(pa->pa_pc, ih, intrbuf, sizeof(intrbuf));
+		vih = pci_intr_establish(pa->pa_pc, ih, IPL_NET, vmxnet3_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish interrupt%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			return;
+		}
+		sc->sc_intr_type = VMXNET3_IT_LEGACY;
 	}
-	intrstr = pci_intr_string(pa->pa_pc, ihs[0], intrbuf, sizeof(intrbuf));
-	vih = pci_msi_establish(pa->pa_pc, ihs[0], IPL_NET, vmxnet3_intr, sc);
-	if (vih == NULL) {
-		aprint_error_dev(sc->sc_dev,
-		    "unable to establish MSI%s%s\n",
-		    intrstr ? " at " : "", intrstr ? intrstr : "");
-		return;
-	}
-#else
-	if (pci_intr_map(pa, &ih)) {
-		aprint_error_dev(sc->sc_dev, "failed to map interrupt\n");
-		return;
-	}
-	intrstr = pci_intr_string(pa->pa_pc, ih, intrbuf, sizeof(intrbuf));
-	vih = pci_intr_establish(pa->pa_pc, ih, IPL_NET, vmxnet3_intr, sc);
-	if (vih == NULL) {
-		aprint_error_dev(sc->sc_dev,
-		    "unable to establish interrupt%s%s\n",
-		    intrstr ? " at " : "", intrstr ? intrstr : "");
-		return;
-	}
-#endif
 	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 	WRITE_CMD(sc, VMXNET3_CMD_GET_MACL);
@@ -625,10 +621,11 @@ vmxnet3_intr(void *arg)
 {
 	struct vmxnet3_softc *sc = arg;
 
-#ifndef TRY_MSI
-	if (READ_BAR1(sc, VMXNET3_BAR1_INTR) == 0)
-		return 0;
-#endif
+	if (sc->sc_intr_type == VMXNET3_IT_LEGACY) {
+		if (READ_BAR1(sc, VMXNET3_BAR1_INTR) == 0)
+			return 0;
+	}
+
 	if (sc->sc_ds->event)
 		vmxnet3_evintr(sc);
 	vmxnet3_rxintr(sc, &sc->sc_rxq[0]);
