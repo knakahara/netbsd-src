@@ -189,6 +189,7 @@ struct pic softintr_pic = {
 };
 
 static struct intrsource *io_interrupt_sources[NUM_IO_INTS];
+static __cpu_simple_lock_t io_interrupt_sources_lock = __SIMPLELOCK_UNLOCKED;
 
 #if NIOAPIC > 0 || NACPICA > 0
 static int intr_scan_bus(int, int, int *);
@@ -418,22 +419,25 @@ intr_scan_bus(int bus, int pin, int *handle)
 static struct intrsource *
 intr_allocate_io_intrsource(int irq)
 {
-	struct intrsource *isp;
+	struct intrsource *isp = NULL;
 
 	if (irq > NUM_IO_INTS)
 		return NULL;
 
-	if (io_interrupt_sources[irq] != NULL)
-		return NULL;
+	__cpu_simple_lock(&io_interrupt_sources_lock);
 
-	isp = kmem_zalloc(sizeof(*isp), KM_SLEEP);
+	if (io_interrupt_sources[irq] != NULL)
+		goto out;
+
+	isp = kmem_zalloc(sizeof(*isp), KM_NOSLEEP);
 	if (isp == NULL) {
-		return NULL;
+		goto out;
 	}
 
-	/* XXXX need lock */
 	io_interrupt_sources[irq] = isp;
 
+out:
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	return isp;
 }
 
@@ -443,21 +447,31 @@ intr_free_io_intrsource(int irq)
 	if (irq > NUM_IO_INTS)
 		return;
 
+	__cpu_simple_lock(&io_interrupt_sources_lock);
+
+
 	if (io_interrupt_sources[irq] == NULL)
-		return;
+		goto out;
 
 	kmem_free(io_interrupt_sources[irq], sizeof(*io_interrupt_sources[irq]));
 	io_interrupt_sources[irq] = NULL;
+
+out:
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	return;
 }
 
 static struct intrsource *
 intr_occupy_io_intrsource(int irq)
 {
+	__cpu_simple_lock(&io_interrupt_sources_lock);
+
 	if (io_interrupt_sources[irq] != NULL) {
+		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		return io_interrupt_sources[irq];
 	}
 
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	return intr_allocate_io_intrsource(irq);
 }
 
@@ -483,6 +497,7 @@ find_free_msi_vectors(int count)
 	int i, j;
 
 	i = FIRST_MSI_INT;
+	__cpu_simple_lock(&io_interrupt_sources_lock);
 	while (i < NUM_IO_INTS) {
 		if (io_interrupt_sources[i] != NULL) {
 			i++;
@@ -499,10 +514,15 @@ find_free_msi_vectors(int count)
 			continue;
 		}
 
-		return first;
+		/* found */
+		goto out;
 	}
+	first = -1;
 
-	return -1;
+out:
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
+
+	return first;
 }
 
 /*
