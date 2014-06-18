@@ -1088,6 +1088,10 @@ intr_string(int ih, char *buf, size_t len)
 	if (ih == 0)
 		panic("%s: bogus handle 0x%x", __func__, ih);
 
+	if (ih & APIC_INT_VIA_MSG) {
+		snprintf(buf, len, "msi %d", ih & ~APIC_INT_VIA_MSG);
+		return buf;
+	}
 
 #if NIOAPIC > 0
 	if (ih & APIC_INT_VIA_APIC) {
