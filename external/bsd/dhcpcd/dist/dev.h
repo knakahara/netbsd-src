@@ -1,4 +1,4 @@
-/* $NetBSD: dev.h,v 1.1.1.3 2014/03/01 11:00:43 roy Exp $ */
+/* $NetBSD: dev.h,v 1.1.1.4 2014/06/14 20:51:09 roy Exp $ */
 
 /*
  * dhcpcd - DHCP client daemon
@@ -40,7 +40,7 @@ struct dev {
 };
 
 struct dev_dhcpcd {
-	void (*handle_interface)(void *, int, const char *);
+	int (*handle_interface)(void *, int, const char *);
 };
 
 int dev_init(struct dev *, const struct dev_dhcpcd *);

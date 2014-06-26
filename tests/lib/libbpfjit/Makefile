@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.1 2012/11/11 17:37:34 alnsn Exp $
+# $NetBSD: Makefile,v 1.3 2014/06/17 19:26:18 alnsn Exp $
 
 .include <bsd.own.mk>
 .include <../../../external/bsd/sljit/Makefile.inc>

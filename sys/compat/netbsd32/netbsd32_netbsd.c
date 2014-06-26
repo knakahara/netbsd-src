@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_netbsd.c,v 1.187 2014/05/15 18:25:35 manu Exp $	*/
+/*	$NetBSD: netbsd32_netbsd.c,v 1.190 2014/06/22 19:09:39 maxv Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001, 2008 Matthew R. Green
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_netbsd.c,v 1.187 2014/05/15 18:25:35 manu Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_netbsd.c,v 1.190 2014/06/22 19:09:39 maxv Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_ddb.h"
@@ -1236,7 +1236,7 @@ netbsd32___quotactl(struct lwp *l, const struct netbsd32___quotactl_args *uap, r
 		args.u.put.qc_val = NETBSD32PTR64(args32.u.put.qc_val);
 		break;
 	    case QUOTACTL_DELETE:
-		args.u.delete.qc_key = NETBSD32PTR64(args32.u.delete.qc_key);
+		args.u.remove.qc_key = NETBSD32PTR64(args32.u.remove.qc_key);
 		break;
 	    case QUOTACTL_CURSOROPEN:
 		args.u.cursoropen.qc_cursor =
@@ -1765,10 +1765,8 @@ netbsd32_swapctl_stats(struct lwp *l, struct sys_swapctl_args *uap, register_t *
 
 	if (count < 0)
 		return EINVAL;
-
 	if (count == 0 || uvmexp.nswapdev == 0)
 		return 0;
-
 	/* Make sure userland cannot exhaust kernel memory */
 	if ((size_t)count > (size_t)uvmexp.nswapdev)
 		count = uvmexp.nswapdev;

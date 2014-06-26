@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_syscalls.c,v 1.482 2014/04/20 21:26:51 maxv Exp $	*/
+/*	$NetBSD: vfs_syscalls.c,v 1.484 2014/06/14 11:37:35 njoly Exp $	*/
 
 /*-
  * Copyright (c) 2008, 2009 The NetBSD Foundation, Inc.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.482 2014/04/20 21:26:51 maxv Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.484 2014/06/14 11:37:35 njoly Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_fileassoc.h"
@@ -1004,7 +1004,7 @@ do_sys_quotactl(const char *path_u, const struct quotactl_args *args)
 				args->u.put.qc_val);
 		break;
 	    case QUOTACTL_DELETE:
-		error = do_sys_quotactl_delete(mp, args->u.delete.qc_key);
+		error = do_sys_quotactl_delete(mp, args->u.remove.qc_key);
 		break;
 	    case QUOTACTL_CURSOROPEN:
 		error = do_sys_quotactl_cursoropen(mp,
@@ -3923,6 +3923,9 @@ sys_truncate(struct lwp *l, const struct sys_truncate_args *uap, register_t *ret
 	struct vattr vattr;
 	int error;
 
+	if (SCARG(uap, length) < 0)
+		return EINVAL;
+
 	error = namei_simple_user(SCARG(uap, path),
 				NSM_FOLLOW_TRYEMULROOT, &vp);
 	if (error != 0)
@@ -3956,6 +3959,9 @@ sys_ftruncate(struct lwp *l, const struct sys_ftruncate_args *uap, register_t *r
 	struct vnode *vp;
 	file_t *fp;
 	int error;
+
+	if (SCARG(uap, length) < 0)
+		return EINVAL;
 
 	/* fd_getvnode() will use the descriptor for us */
 	if ((error = fd_getvnode(SCARG(uap, fd), &fp)) != 0)

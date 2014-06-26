@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.16 2014/02/20 00:42:27 pooka Exp $
+#	$NetBSD: Makefile,v 1.18 2014/06/17 08:42:35 alnsn Exp $
 #
 
 .include <bsd.own.mk>

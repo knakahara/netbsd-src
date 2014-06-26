@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bridge.c,v 1.77 2013/06/29 21:06:58 rmind Exp $	*/
+/*	$NetBSD: if_bridge.c,v 1.84 2014/06/23 06:27:58 ozaki-r Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -80,7 +80,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.77 2013/06/29 21:06:58 rmind Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.84 2014/06/23 06:27:58 ozaki-r Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_bridge_ipf.h"
@@ -106,6 +106,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.77 2013/06/29 21:06:58 rmind Exp $")
 #include <net/if_dl.h>
 #include <net/if_types.h>
 #include <net/if_llc.h>
+#include <net/pktqueue.h>
 
 #include <net/if_ether.h>
 #include <net/if_bridgevar.h>
@@ -186,6 +187,7 @@ static int	bridge_init(struct ifnet *);
 static void	bridge_stop(struct ifnet *, int);
 static void	bridge_start(struct ifnet *);
 
+static void	bridge_input(struct ifnet *, struct mbuf *);
 static void	bridge_forward(void *);
 
 static void	bridge_timer(void *);
@@ -251,6 +253,9 @@ static int	bridge_ip_checkbasic(struct mbuf **mp);
 static int	bridge_ip6_checkbasic(struct mbuf **mp);
 # endif /* INET6 */
 #endif /* BRIDGE_IPF */
+
+static void bridge_sysctl_fwdq_setup(struct sysctllog **clog,
+    struct bridge_softc *sc);
 
 struct bridge_control {
 	int	(*bc_func)(struct bridge_softc *, void *);
@@ -351,13 +356,6 @@ bridge_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_hold_time = BSTP_DEFAULT_HOLD_TIME;
 	sc->sc_filter_flags = 0;
 
-	/* software interrupt to do the work */
-	sc->sc_softintr = softint_establish(SOFTINT_NET, bridge_forward, sc);
-	if (sc->sc_softintr == NULL) {
-		free(sc, M_DEVBUF);
-		return ENOMEM;
-	}
-
 	/* Initialize our routing table. */
 	bridge_rtable_init(sc);
 
@@ -379,6 +377,11 @@ bridge_clone_create(struct if_clone *ifc, int unit)
 	ifp->if_dlt = DLT_EN10MB;
 	ifp->if_hdrlen = ETHER_HDR_LEN;
 	IFQ_SET_READY(&ifp->if_snd);
+
+	sc->sc_fwd_pktq = pktq_create(IFQ_MAXLEN, bridge_forward, sc);
+	KASSERT(sc->sc_fwd_pktq != NULL);
+
+	bridge_sysctl_fwdq_setup(&ifp->if_sysctl_log, sc);
 
 	if_attach(ifp);
 
@@ -403,6 +406,9 @@ bridge_clone_destroy(struct ifnet *ifp)
 	struct bridge_iflist *bif;
 	int s;
 
+	/* Must be called during IFF_RUNNING, i.e., before bridge_stop */
+	pktq_barrier(sc->sc_fwd_pktq);
+
 	s = splnet();
 
 	bridge_stop(ifp, 1);
@@ -416,14 +422,102 @@ bridge_clone_destroy(struct ifnet *ifp)
 
 	if_detach(ifp);
 
+	/* Should be called after if_detach for safe */
+	pktq_flush(sc->sc_fwd_pktq);
+	pktq_destroy(sc->sc_fwd_pktq);
+
 	/* Tear down the routing table. */
 	bridge_rtable_fini(sc);
-
-	softint_disestablish(sc->sc_softintr);
 
 	free(sc, M_DEVBUF);
 
 	return (0);
+}
+
+static int
+bridge_sysctl_fwdq_maxlen(SYSCTLFN_ARGS)
+{
+	struct sysctlnode node = *rnode;
+	const struct bridge_softc *sc =	node.sysctl_data;
+	return sysctl_pktq_maxlen(SYSCTLFN_CALL(rnode), sc->sc_fwd_pktq);
+}
+
+#define	SYSCTL_BRIDGE_PKTQ(cn, c)					\
+	static int							\
+	bridge_sysctl_fwdq_##cn(SYSCTLFN_ARGS)				\
+	{								\
+		struct sysctlnode node = *rnode;			\
+		const struct bridge_softc *sc =	node.sysctl_data;	\
+		return sysctl_pktq_count(SYSCTLFN_CALL(rnode),		\
+					 sc->sc_fwd_pktq, c);		\
+	}
+
+SYSCTL_BRIDGE_PKTQ(items, PKTQ_NITEMS)
+SYSCTL_BRIDGE_PKTQ(drops, PKTQ_DROPS)
+
+static void
+bridge_sysctl_fwdq_setup(struct sysctllog **clog, struct bridge_softc *sc)
+{
+	const struct sysctlnode *cnode, *rnode;
+	sysctlfn len_func = NULL, maxlen_func = NULL, drops_func = NULL;
+	const char *ifname = sc->sc_if.if_xname;
+
+	len_func = bridge_sysctl_fwdq_items;
+	maxlen_func = bridge_sysctl_fwdq_maxlen;
+	drops_func = bridge_sysctl_fwdq_drops;
+
+	if (sysctl_createv(clog, 0, NULL, &rnode,
+			   CTLFLAG_PERMANENT,
+			   CTLTYPE_NODE, "interfaces",
+			   SYSCTL_DESCR("Per-interface controls"),
+			   NULL, 0, NULL, 0,
+			   CTL_NET, CTL_CREATE, CTL_EOL) != 0)
+		goto bad;
+
+	if (sysctl_createv(clog, 0, &rnode, &rnode,
+			   CTLFLAG_PERMANENT,
+			   CTLTYPE_NODE, ifname,
+			   SYSCTL_DESCR("Interface controls"),
+			   NULL, 0, NULL, 0,
+			   CTL_CREATE, CTL_EOL) != 0)
+		goto bad;
+
+	if (sysctl_createv(clog, 0, &rnode, &rnode,
+			   CTLFLAG_PERMANENT,
+			   CTLTYPE_NODE, "fwdq",
+			   SYSCTL_DESCR("Protocol input queue controls"),
+			   NULL, 0, NULL, 0,
+			   CTL_CREATE, CTL_EOL) != 0)
+		goto bad;
+
+	if (sysctl_createv(clog, 0, &rnode, &cnode,
+			   CTLFLAG_PERMANENT,
+			   CTLTYPE_INT, "len",
+			   SYSCTL_DESCR("Current forwarding queue length"),
+			   len_func, 0, (void *)sc, 0,
+			   CTL_CREATE, IFQCTL_LEN, CTL_EOL) != 0)
+		goto bad;
+
+	if (sysctl_createv(clog, 0, &rnode, &cnode,
+			   CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			   CTLTYPE_INT, "maxlen",
+			   SYSCTL_DESCR("Maximum allowed forwarding queue length"),
+			   maxlen_func, 0, (void *)sc, 0,
+			   CTL_CREATE, IFQCTL_MAXLEN, CTL_EOL) != 0)
+		goto bad;
+
+	if (sysctl_createv(clog, 0, &rnode, &cnode,
+			   CTLFLAG_PERMANENT,
+			   CTLTYPE_INT, "drops",
+			   SYSCTL_DESCR("Packets dropped due to full forwarding queue"),
+			   drops_func, 0, (void *)sc, 0,
+			   CTL_CREATE, IFQCTL_DROPS, CTL_EOL) != 0)
+		goto bad;
+
+	return;
+bad:
+	aprint_error("%s: could not attach sysctl nodes\n", ifname);
+	return;
 }
 
 /*
@@ -610,6 +704,7 @@ bridge_delete_member(struct bridge_softc *sc, struct bridge_iflist *bif)
 		break;
 	}
 
+	ifs->if_input = ether_input;
 	ifs->if_bridge = NULL;
 	LIST_REMOVE(bif, bif_next);
 
@@ -642,6 +737,9 @@ bridge_ioctl_add(struct bridge_softc *sc, void *arg)
 	if (ifs->if_bridge != NULL)
 		return (EBUSY);
 
+	if (ifs->if_input != ether_input)
+		return EINVAL;
+
 	bif = malloc(sizeof(*bif), M_DEVBUF, M_NOWAIT);
 	if (bif == NULL)
 		return (ENOMEM);
@@ -667,6 +765,7 @@ bridge_ioctl_add(struct bridge_softc *sc, void *arg)
 
 	ifs->if_bridge = sc;
 	LIST_INSERT_HEAD(&sc->sc_iflist, bif, bif_next);
+	ifs->if_input = bridge_input;
 
 	if (sc->sc_if.if_flags & IFF_RUNNING)
 		bstp_initialization(sc);
@@ -1340,19 +1439,16 @@ bridge_forward(void *v)
 	struct ether_header *eh;
 	int s;
 
+	KERNEL_LOCK(1, NULL);
 	mutex_enter(softnet_lock);
 	if ((sc->sc_if.if_flags & IFF_RUNNING) == 0) {
 		mutex_exit(softnet_lock);
+		KERNEL_UNLOCK_ONE(NULL);
 		return;
 	}
 
 	s = splnet();
-	while (1) {
-		IFQ_POLL(&sc->sc_if.if_snd, m);
-		if (m == NULL)
-			break;
-		IFQ_DEQUEUE(&sc->sc_if.if_snd, m);
-
+	while ((m = pktq_dequeue(sc->sc_fwd_pktq)) != NULL) {
 		src_if = m->m_pkthdr.rcvif;
 
 		sc->sc_if.if_ipackets++;
@@ -1466,6 +1562,37 @@ bridge_forward(void *v)
 	}
 	splx(s);
 	mutex_exit(softnet_lock);
+	KERNEL_UNLOCK_ONE(NULL);
+}
+
+static bool
+bstp_state_before_learning(struct bridge_iflist *bif)
+{
+	if (bif->bif_flags & IFBIF_STP) {
+		switch (bif->bif_state) {
+		case BSTP_IFSTATE_BLOCKING:
+		case BSTP_IFSTATE_LISTENING:
+		case BSTP_IFSTATE_DISABLED:
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+bridge_ourether(struct bridge_iflist *bif, struct ether_header *eh, int src)
+{
+	uint8_t *ether = src ? eh->ether_shost : eh->ether_dhost;
+
+	if (memcmp(CLLADDR(bif->bif_ifp->if_sadl), ether, ETHER_ADDR_LEN) == 0
+#if NCARP > 0
+	    || (bif->bif_ifp->if_carp &&
+	        carp_ourether(bif->bif_ifp->if_carp, eh, IFT_ETHER, src) != NULL)
+#endif /* NCARP > 0 */
+	    )
+		return true;
+
+	return false;
 }
 
 /*
@@ -1475,113 +1602,80 @@ bridge_forward(void *v)
  *	bridging if it is not for us.
  *	should be called at splnet()
  */
-struct mbuf *
+static void
 bridge_input(struct ifnet *ifp, struct mbuf *m)
 {
 	struct bridge_softc *sc = ifp->if_bridge;
 	struct bridge_iflist *bif;
 	struct ether_header *eh;
-	struct mbuf *mc;
 
-	if ((sc->sc_if.if_flags & IFF_RUNNING) == 0)
-		return (m);
+	if ((sc->sc_if.if_flags & IFF_RUNNING) == 0) {
+		ether_input(ifp, m);
+		return;
+	}
 
 	bif = bridge_lookup_member_if(sc, ifp);
-	if (bif == NULL)
-		return (m);
+	if (bif == NULL) {
+		ether_input(ifp, m);
+		return;
+	}
 
 	eh = mtod(m, struct ether_header *);
 
-	if (m->m_flags & (M_BCAST|M_MCAST)) {
-		if (bif->bif_flags & IFBIF_STP) {
-			/* Tap off 802.1D packets; they do not get forwarded. */
-			if (memcmp(eh->ether_dhost, bstp_etheraddr,
-			    ETHER_ADDR_LEN) == 0) {
-				m = bstp_input(sc, bif, m);
-				if (m == NULL)
-					return (NULL);
-			}
-
-			switch (bif->bif_state) {
-			case BSTP_IFSTATE_BLOCKING:
-			case BSTP_IFSTATE_LISTENING:
-			case BSTP_IFSTATE_DISABLED:
-				return (m);
-			}
-		}
-
-		/*
-		 * Make a deep copy of the packet and enqueue the copy
-		 * for bridge processing; return the original packet for
-		 * local processing.
-		 */
-		if (IF_QFULL(&sc->sc_if.if_snd)) {
-			IF_DROP(&sc->sc_if.if_snd);
-			return (m);
-		}
-		mc = m_dup(m, 0, M_COPYALL, M_NOWAIT);
-		if (mc == NULL)
-			return (m);
-
-		/* Perform the bridge forwarding function with the copy. */
-		IF_ENQUEUE(&sc->sc_if.if_snd, mc);
-		softint_schedule(sc->sc_softintr);
-
-		/* Return the original packet for local processing. */
-		return (m);
-	}
-
-	if (bif->bif_flags & IFBIF_STP) {
-		switch (bif->bif_state) {
-		case BSTP_IFSTATE_BLOCKING:
-		case BSTP_IFSTATE_LISTENING:
-		case BSTP_IFSTATE_DISABLED:
-			return (m);
-		}
+	if (ETHER_IS_MULTICAST(eh->ether_dhost)) {
+		if (memcmp(etherbroadcastaddr,
+		    eh->ether_dhost, ETHER_ADDR_LEN) == 0)
+			m->m_flags |= M_BCAST;
+		else
+			m->m_flags |= M_MCAST;
 	}
 
 	/*
-	 * Unicast.  Make sure it's not for us.
+	 * A 'fast' path for packets addressed to interfaces that are
+	 * part of this bridge.
 	 */
-	LIST_FOREACH(bif, &sc->sc_iflist, bif_next) {
-		/* It is destined for us. */
-		if (memcmp(CLLADDR(bif->bif_ifp->if_sadl), eh->ether_dhost,
-		    ETHER_ADDR_LEN) == 0
-#if NCARP > 0
-		    || (bif->bif_ifp->if_carp && carp_ourether(bif->bif_ifp->if_carp,
-			eh, IFT_ETHER, 0) != NULL)
-#endif /* NCARP > 0 */
-		    ) {
-			if (bif->bif_flags & IFBIF_LEARNING)
-				(void) bridge_rtupdate(sc,
-				    eh->ether_shost, ifp, 0, IFBAF_DYNAMIC);
-			m->m_pkthdr.rcvif = bif->bif_ifp;
-			return (m);
-		}
+	if (!(m->m_flags & (M_BCAST|M_MCAST)) &&
+	    !bstp_state_before_learning(bif)) {
+		struct bridge_iflist *_bif;
 
-		/* We just received a packet that we sent out. */
-		if (memcmp(CLLADDR(bif->bif_ifp->if_sadl), eh->ether_shost,
-		    ETHER_ADDR_LEN) == 0
-#if NCARP > 0
-		    || (bif->bif_ifp->if_carp && carp_ourether(bif->bif_ifp->if_carp,
-			eh, IFT_ETHER, 1) != NULL)
-#endif /* NCARP > 0 */
-		    ) {
-			m_freem(m);
-			return (NULL);
+		LIST_FOREACH(_bif, &sc->sc_iflist, bif_next) {
+			/* It is destined for us. */
+			if (bridge_ourether(_bif, eh, 0)) {
+				if (_bif->bif_flags & IFBIF_LEARNING)
+					(void) bridge_rtupdate(sc,
+					    eh->ether_shost, ifp, 0, IFBAF_DYNAMIC);
+				m->m_pkthdr.rcvif = _bif->bif_ifp;
+				ether_input(_bif->bif_ifp, m);
+				return;
+			}
+
+			/* We just received a packet that we sent out. */
+			if (bridge_ourether(_bif, eh, 1)) {
+				m_freem(m);
+				return;
+			}
 		}
 	}
 
-	/* Perform the bridge forwarding function. */
-	if (IF_QFULL(&sc->sc_if.if_snd)) {
-		IF_DROP(&sc->sc_if.if_snd);
+	/* Tap off 802.1D packets; they do not get forwarded. */
+	if (bif->bif_flags & IFBIF_STP &&
+	    memcmp(eh->ether_dhost, bstp_etheraddr, ETHER_ADDR_LEN) == 0) {
+		bstp_input(sc, bif, m);
+		return;
+	}
+
+	/*
+	 * A normal switch would discard the packet here, but that's not what
+	 * we've done historically. This also prevents some obnoxious behaviour.
+	 */
+	if (bstp_state_before_learning(bif)) {
+		ether_input(ifp, m);
+		return;
+	}
+
+	/* Queue the packet for bridge forwarding. */
+	if (__predict_false(!pktq_enqueue(sc->sc_fwd_pktq, m, 0)))
 		m_freem(m);
-		return (NULL);
-	}
-	IF_ENQUEUE(&sc->sc_if.if_snd, m);
-	softint_schedule(sc->sc_softintr);
-
-	return (NULL);
 }
 
 /*
@@ -1598,7 +1692,9 @@ bridge_broadcast(struct bridge_softc *sc, struct ifnet *src_if,
 	struct bridge_iflist *bif;
 	struct mbuf *mc;
 	struct ifnet *dst_if;
-	int used = 0;
+	bool used, bmcast;
+
+	used = bmcast = m->m_flags & (M_BCAST|M_MCAST);
 
 	LIST_FOREACH(bif, &sc->sc_iflist, bif_next) {
 		dst_if = bif->bif_ifp;
@@ -1613,16 +1709,15 @@ bridge_broadcast(struct bridge_softc *sc, struct ifnet *src_if,
 			}
 		}
 
-		if ((bif->bif_flags & IFBIF_DISCOVER) == 0 &&
-		    (m->m_flags & (M_BCAST|M_MCAST)) == 0)
+		if ((bif->bif_flags & IFBIF_DISCOVER) == 0 && !bmcast)
 			continue;
 
 		if ((dst_if->if_flags & IFF_RUNNING) == 0)
 			continue;
 
-		if (LIST_NEXT(bif, bif_next) == NULL) {
+		if (!used && LIST_NEXT(bif, bif_next) == NULL) {
 			mc = m;
-			used = 1;
+			used = true;
 		} else {
 			mc = m_copym(m, 0, M_COPYALL, M_DONTWAIT);
 			if (mc == NULL) {
@@ -1633,7 +1728,10 @@ bridge_broadcast(struct bridge_softc *sc, struct ifnet *src_if,
 
 		bridge_enqueue(sc, dst_if, mc, 1);
 	}
-	if (used == 0)
+
+	if (bmcast)
+		ether_input(src_if, m);
+	else if (!used)
 		m_freem(m);
 }
 
@@ -1647,7 +1745,7 @@ bridge_rtupdate(struct bridge_softc *sc, const uint8_t *dst,
     struct ifnet *dst_if, int setflags, uint8_t flags)
 {
 	struct bridge_rtnode *brt;
-	int error, s;
+	int error;
 
 	/*
 	 * A route for this destination might already exist.  If so,
@@ -1662,9 +1760,7 @@ bridge_rtupdate(struct bridge_softc *sc, const uint8_t *dst,
 		 * initialize the expiration time and Ethernet
 		 * address.
 		 */
-		s = splnet();
 		brt = pool_get(&bridge_rtnode_pool, PR_NOWAIT);
-		splx(s);
 		if (brt == NULL)
 			return (ENOMEM);
 
@@ -1674,9 +1770,7 @@ bridge_rtupdate(struct bridge_softc *sc, const uint8_t *dst,
 		memcpy(brt->brt_addr, dst, ETHER_ADDR_LEN);
 
 		if ((error = bridge_rtnode_insert(sc, brt)) != 0) {
-			s = splnet();
 			pool_put(&bridge_rtnode_pool, brt);
-			splx(s);
 			return (error);
 		}
 	}

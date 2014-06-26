@@ -1,4 +1,4 @@
-/*	$NetBSD: tcx.c,v 1.48 2014/05/13 05:30:38 martin Exp $ */
+/*	$NetBSD: tcx.c,v 1.52 2014/06/24 05:04:14 macallan Exp $ */
 
 /*
  *  Copyright (c) 1996, 1998, 2009 The NetBSD Foundation, Inc.
@@ -38,13 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcx.c,v 1.48 2014/05/13 05:30:38 martin Exp $");
-
-/*
- * define for cg8 emulation on S24 (24-bit version of tcx) for the SS5;
- * it is bypassed on the 8-bit version (onboard framebuffer for SS4)
- */
-#undef TCX_CG8
+__KERNEL_RCSID(0, "$NetBSD: tcx.c,v 1.52 2014/06/24 05:04:14 macallan Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -92,18 +86,19 @@ struct tcx_softc {
 
 	bus_space_handle_t sc_bt;	/* Brooktree registers */
 	bus_space_handle_t sc_thc;	/* THC registers */
-	uint8_t *sc_fbaddr;		/* framebuffer */
-	uint64_t *sc_rblit;		/* blitspace */
-	uint64_t *sc_rstip;		/* stipple space */
+	uint8_t 	*sc_fbaddr;	/* framebuffer */
+	uint64_t 	*sc_rblit;	/* blitspace */
+	uint64_t 	*sc_rstip;	/* stipple space */
 
-	short	sc_8bit;		/* true if 8-bit hardware */
-	short	sc_blanked;		/* true if blanked */
-	u_char	sc_cmap_red[256];
-	u_char	sc_cmap_green[256];
-	u_char	sc_cmap_blue[256];
-	int 	sc_mode, sc_bg;
-	int	sc_cursor_x, sc_cursor_y;
-	int	sc_hotspot_x, sc_hotspot_y;
+	short		sc_8bit;	/* true if 8-bit hardware */
+	short		sc_blanked;	/* true if blanked */
+	uint32_t	sc_fbsize;	/* size of the 8bit fb */
+	u_char		sc_cmap_red[256];
+	u_char		sc_cmap_green[256];
+	u_char		sc_cmap_blue[256];
+	int 		sc_mode, sc_bg;
+	int		sc_cursor_x, sc_cursor_y;
+	int		sc_hotspot_x, sc_hotspot_y;
 	struct vcons_data vd;
 };
 
@@ -143,6 +138,15 @@ struct wsscreen_list tcx_screenlist = {
 #define TCX_CTL_24_MAPPED	0x01000000	/* 24 bits, uses color map */
 #define TCX_CTL_24_LEVEL	0x03000000	/* 24 bits, ignores color map */
 #define TCX_CTL_PIXELMASK	0x00FFFFFF	/* mask for index/level */
+
+/*
+ * differences between S24 and tcx, as far as this driver is concerned:
+ * - S24 has 4MB VRAM, 24bit + 2bit control planes, no expansion possible
+ * - tcx has 1MB VRAM, 8bit, no control planes, may have a VSIMM toat bumps
+ *   VRAM to 2MB
+ * - tcx can apply ROPs to STIP operations, unlike S24
+ * - tcx has a Bt458 DAC, just like CG6. S24 has an AT&T 20C567
+ */
 
 /* autoconfiguration driver */
 static void	tcxattach(device_t, device_t, void *);
@@ -205,19 +209,6 @@ struct wsdisplay_accessops tcx_accessops = {
 
 #define OBPNAME	"SUNW,tcx"
 
-#ifdef TCX_CG8
-/*
- * For CG8 emulation, we map the 32-bit-deep framebuffer at an offset of
- * 256K; the cg8 space begins with a mono overlay plane and an overlay
- * enable plane (128K bytes each, 1 bit per pixel), immediately followed
- * by the color planes, 32 bits per pixel.  We also map just the 32-bit
- * framebuffer at 0x04000000 (TCX_USER_RAM_COMPAT), for compatibility
- * with the cg8 driver.
- */
-#define	TCX_CG8OVERLAY	(256 * 1024)
-#define	TCX_SIZE_DFB32	(1152 * 900 * 4) /* max size of the framebuffer */
-#endif
-
 /*
  * Match a tcx.
  */
@@ -242,7 +233,7 @@ tcxattach(device_t parent, device_t self, void *args)
 	struct wsemuldisplaydev_attach_args aa;
 	struct rasops_info *ri;
 	unsigned long defattr;
-	int node, ramsize;
+	int node;
 	struct fbdevice *fb = &sc->sc_fb;
 	bus_space_handle_t bh;
 	int isconsole, i, j;
@@ -270,17 +261,23 @@ tcxattach(device_t parent, device_t self, void *args)
 	fb->fb_type.fb_depth = 8;
 	fb_setsize_obp(fb, fb->fb_type.fb_depth, 1152, 900, node);
 
+	/*
+	 * actual FB size ( of the 8bit region )
+	 * no need to restrict userland mappings to the visible VRAM
+	 */
 	if (sc->sc_8bit) {
-		printf(" (8-bit only TCX)\n");
-		ramsize = 1024 * 1024;
+		aprint_normal(" (8-bit only TCX)\n");
+		/* at least the SS4 can have 2MB with a VSIMM */
+		sc->sc_fbsize = 0x100000 * prom_getpropint(node, "vram", 1);
 	} else {
-		printf(" (S24)\n");
-		ramsize = 4 * 1024 * 1024;
+		aprint_normal(" (S24)\n");
+		/* all S24 I know of have 4MB, non-expandable */
+		sc->sc_fbsize = 0x100000;
 	}
 
 	fb->fb_type.fb_cmsize = 256;
-	fb->fb_type.fb_size = ramsize;
-	printf("%s: %s, %d x %d", device_xname(self), OBPNAME,
+	fb->fb_type.fb_size = sc->sc_fbsize;	/* later code assumes 8bit */
+	aprint_normal_dev(self, "%s, %d x %d\n", OBPNAME,
 		fb->fb_type.fb_width,
 		fb->fb_type.fb_height);
 
@@ -308,7 +305,8 @@ tcxattach(device_t parent, device_t self, void *args)
 			 sc->sc_physaddr[TCX_REG_THC].oa_base,
 			 0x1000,
 			 BUS_SPACE_MAP_LINEAR, &sc->sc_thc) != 0) {
-		printf("tcxattach: cannot map thc registers\n");
+		aprint_error_dev(self,
+		    "tcxattach: cannot map thc registers\n");
 		return;
 	}
 
@@ -317,7 +315,7 @@ tcxattach(device_t parent, device_t self, void *args)
 			 sc->sc_physaddr[TCX_REG_CMAP].oa_base,
 			 0x1000,
 			 BUS_SPACE_MAP_LINEAR, &sc->sc_bt) != 0) {
-		printf("tcxattach: cannot map bt registers\n");
+		aprint_error_dev(self, "tcxattach: cannot map DAC registers\n");
 		return;
 	}
 
@@ -325,42 +323,76 @@ tcxattach(device_t parent, device_t self, void *args)
 	if (sbus_bus_map(sa->sa_bustag,
 		 sc->sc_physaddr[TCX_REG_DFB8].oa_space,
 		 sc->sc_physaddr[TCX_REG_DFB8].oa_base,
-			 1024 * 1024,
+			 sc->sc_fbsize,
 			 BUS_SPACE_MAP_LINEAR,
 			 &bh) != 0) {
-		printf("tcxattach: cannot map framebuffer\n");
+		aprint_error_dev(self, "tcxattach: cannot map framebuffer\n");
 		return;
 	}
 	sc->sc_fbaddr = bus_space_vaddr(sa->sa_bustag, bh);
 
-	/* RBLIT space */
-	if (sbus_bus_map(sa->sa_bustag,
-		 sc->sc_physaddr[TCX_REG_RBLIT].oa_space,
-		 sc->sc_physaddr[TCX_REG_RBLIT].oa_base,
-			 8 * 1024 * 1024,
-			 BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_LARGE,
-			 &bh) != 0) {
-		printf("tcxattach: cannot map RBLIT space\n");
-		return;
+	/*
+	 * 8bit tcx has the RSTIP and RBLIT ranges set to size 0.
+	 * On Real Hardware they work anyway ( on my SS4 at least ) but
+	 * emulators may not be so forgiving.
+	 */
+	if (sc->sc_8bit) {
+		/* BLIT space */
+		if (sbus_bus_map(sa->sa_bustag,
+			 sc->sc_physaddr[TCX_REG_BLIT].oa_space,
+			 sc->sc_physaddr[TCX_REG_BLIT].oa_base,
+				 sc->sc_fbsize << 3,
+				 BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_LARGE,
+				 &bh) != 0) {
+			aprint_error_dev(self,
+			    "tcxattach: cannot map BLIT space\n");
+			return;
+		}
+		sc->sc_rblit = bus_space_vaddr(sa->sa_bustag, bh);
+	
+		/* STIP space */
+		if (sbus_bus_map(sa->sa_bustag,
+			 sc->sc_physaddr[TCX_REG_STIP].oa_space,
+			 sc->sc_physaddr[TCX_REG_STIP].oa_base,
+				 sc->sc_fbsize << 3,
+				 BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_LARGE,
+				 &bh) != 0) {
+			aprint_error_dev(self,
+			    "tcxattach: cannot map STIP space\n");
+			return;
+		}
+		sc->sc_rstip = bus_space_vaddr(sa->sa_bustag, bh);
+	} else {
+		/* RBLIT space */
+		if (sbus_bus_map(sa->sa_bustag,
+			 sc->sc_physaddr[TCX_REG_RBLIT].oa_space,
+			 sc->sc_physaddr[TCX_REG_RBLIT].oa_base,
+				 sc->sc_fbsize << 3,
+				 BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_LARGE,
+				 &bh) != 0) {
+			aprint_error_dev(self,
+			    "tcxattach: cannot map RBLIT space\n");
+			return;
+		}
+		sc->sc_rblit = bus_space_vaddr(sa->sa_bustag, bh);
+	
+		/* RSTIP space */
+		if (sbus_bus_map(sa->sa_bustag,
+			 sc->sc_physaddr[TCX_REG_RSTIP].oa_space,
+			 sc->sc_physaddr[TCX_REG_RSTIP].oa_base,
+				 sc->sc_fbsize << 3,
+				 BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_LARGE,
+				 &bh) != 0) {
+			aprint_error_dev(self,
+			    "tcxattach: cannot map RSTIP space\n");
+			return;
+		}
+		sc->sc_rstip = bus_space_vaddr(sa->sa_bustag, bh);
 	}
-	sc->sc_rblit = bus_space_vaddr(sa->sa_bustag, bh);
-
-	/* RSTIP space */
-	if (sbus_bus_map(sa->sa_bustag,
-		 sc->sc_physaddr[TCX_REG_RSTIP].oa_space,
-		 sc->sc_physaddr[TCX_REG_RSTIP].oa_base,
-			 8 * 1024 * 1024,
-			 BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_LARGE,
-			 &bh) != 0) {
-		printf("tcxattach: cannot map RSTIP space\n");
-		return;
-	}
-	sc->sc_rstip = bus_space_vaddr(sa->sa_bustag, bh);
-
 	isconsole = fb_is_console(node);
 
 	confreg = bus_space_read_4(sa->sa_bustag, sc->sc_thc, THC_CONFIG);
-	printf(", id %d, rev %d, sense %d",
+	aprint_normal_dev(self, "id %d, rev %d, sense %d\n",
 		(confreg & THC_CFG_FBID) >> THC_CFG_FBID_SHIFT,
 		(confreg & THC_CFG_REV) >> THC_CFG_REV_SHIFT,
 		(confreg & THC_CFG_SENSE) >> THC_CFG_SENSE_SHIFT
@@ -380,16 +412,17 @@ tcxattach(device_t parent, device_t self, void *args)
 	}
 	tcx_loadcmap(sc, 0, 256);
 
-	tcx_set_cursor(sc);
+	if (!sc->sc_8bit)
+	    tcx_set_cursor(sc);
+
 	/* enable video */
 	confreg = bus_space_read_4(sa->sa_bustag, sc->sc_thc, THC_MISC);
 	confreg |= THC_MISC_VIDEN;
 	bus_space_write_4(sa->sa_bustag, sc->sc_thc, THC_MISC, confreg);
 
 	if (isconsole) {
-		printf(" (console)\n");
-	} else
-		printf("\n");
+		aprint_error_dev(self, "(console)\n");
+	}
 
 	fb_attach(&sc->sc_fb, isconsole);
 
@@ -402,10 +435,10 @@ tcxattach(device_t parent, device_t self, void *args)
 	vcons_init_screen(&sc->vd, &tcx_console_screen, 1, &defattr);
 	tcx_console_screen.scr_flags |= VCONS_SCREEN_IS_STATIC;
 
-	sc->sc_bg = (defattr >> 16) & 0xff;
-	tcx_clearscreen(sc, 0);
-
 	ri = &tcx_console_screen.scr_ri;
+
+	sc->sc_bg = ri->ri_devcmap[(defattr >> 16) & 0xff];
+	tcx_clearscreen(sc, 0);
 
 	tcx_defscreendesc.nrows = ri->ri_rows;
 	tcx_defscreendesc.ncols = ri->ri_cols;
@@ -758,8 +791,12 @@ tcx_ioctl(void *v, void *vs, u_long cmd, void *data, int flag,
 						tcx_clearscreen(sc, 3);
 				}
 			}
+			return 0;
+
 		case WSDISPLAYIO_GCURPOS:
-			{
+			if (sc->sc_8bit) {
+				return EOPNOTSUPP;
+			} else {
 				struct wsdisplay_curpos *cp = (void *)data;
 
 				cp->x = sc->sc_cursor_x;
@@ -768,7 +805,9 @@ tcx_ioctl(void *v, void *vs, u_long cmd, void *data, int flag,
 			return 0;
 
 		case WSDISPLAYIO_SCURPOS:
-			{
+			if (sc->sc_8bit) {
+				return EOPNOTSUPP;
+			} else {
 				struct wsdisplay_curpos *cp = (void *)data;
 
 				sc->sc_cursor_x = cp->x;
@@ -778,7 +817,9 @@ tcx_ioctl(void *v, void *vs, u_long cmd, void *data, int flag,
 			return 0;
 
 		case WSDISPLAYIO_GCURMAX:
-			{
+			if (sc->sc_8bit) {
+				return EOPNOTSUPP;
+			} else {
 				struct wsdisplay_curpos *cp = (void *)data;
 
 				cp->x = 32;
@@ -787,7 +828,9 @@ tcx_ioctl(void *v, void *vs, u_long cmd, void *data, int flag,
 			return 0;
 
 		case WSDISPLAYIO_SCURSOR:
-			{
+			if (sc->sc_8bit) {
+				return EOPNOTSUPP;
+			} else {
 				struct wsdisplay_cursor *cursor = (void *)data;
 
 				return tcx_do_cursor(sc, cursor);
@@ -805,14 +848,14 @@ tcx_mmap(void *v, void *vs, off_t offset, int prot)
 	/* 'regular' framebuffer mmap()ing */
 	if (sc->sc_8bit) {
 		/* on 8Bit boards hand over the 8 bit aperture */
-		if (offset > 1024 * 1024)
+		if (offset > sc->sc_fbsize)
 			return -1;
 		return bus_space_mmap(sc->sc_bustag,
 		    sc->sc_physaddr[TCX_REG_DFB8].oa_base + offset, 0, prot,
 		    BUS_SPACE_MAP_LINEAR);
 	} else {
 		/* ... but if we have a 24bit aperture we use it */
-		if (offset > 1024 * 1024 * 4)
+		if (offset > sc->sc_fbsize * 4)
 			return -1;
 		return bus_space_mmap(sc->sc_bustag,
 		    sc->sc_physaddr[TCX_REG_DFB24].oa_base + offset, 0, prot,
@@ -855,15 +898,18 @@ tcx_init_screen(void *cookie, struct vcons_screen *scr,
 static void
 tcx_clearscreen(struct tcx_softc *sc, int spc)
 {
-	uint64_t bg = ((uint64_t)sc->sc_bg << 32) | 0xffffffffLL;
+	/* ROP in the upper 4bit is necessary, tcx actually uses it */
+	uint64_t bg = 0x30000000ffffffffLL;
 	uint64_t spc64;
-	int i;
+	int i, len;
 
-	spc64 = spc & 3;
-	spc64 = spc64 << 56;
+	bg |=  ((uint64_t)sc->sc_bg << 32);
+	spc64 = (spc & 3) << 24;
+	bg |= spc64;
 
-	for (i = 0; i < 1024 * 1024; i += 32)
-		sc->sc_rstip[i] = bg | spc64;
+	len = sc->sc_fb.fb_type.fb_width * sc->sc_fb.fb_type.fb_height;
+	for (i = 0; i < len; i += 32)
+		sc->sc_rstip[i] = bg;
 }
 
 static void
@@ -1074,6 +1120,10 @@ tcx_putchar(void *cookie, int row, int col, u_int c, long attr)
 static int
 tcx_do_cursor(struct tcx_softc *sc, struct wsdisplay_cursor *cur)
 {
+	if (sc->sc_8bit) {
+		/* hw cursor is not implemented on tcx */
+		return -1;
+	}
 	if (cur->which & WSDISPLAY_CURSOR_DOCUR) {
 
 		if (cur->enable) {

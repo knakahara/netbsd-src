@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1118 2014/06/05 14:41:13 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1125 2014/06/22 23:53:16 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.3.2
-Current Vers:	6.3.2
+Version:	6.4.0
+Current Vers:	6.4.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -345,8 +345,8 @@ Notes:
 Please use "expat" as the vendor tag for CVS imports.
 
 Package:	file
-Version:	5.16
-Current Vers:	5.18
+Version:	5.19
+Current Vers:	5.19
 Maintainer:	Christos Zoulas <christos@zoulas.com>
 Archive Site:	ftp://ftp.astron.com/pub/file/
 Home Page:	http://www.darwinsys.com/file/
@@ -400,7 +400,7 @@ Before importing a new version of external/gpl3/gcc:
 	- you can use the gcc2netbsd script for the above (except version)
 
 Package:	gdb
-Version:	7.6.1
+Version:	7.7.1
 Current Vers:	7.7.1
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
@@ -1271,8 +1271,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2014d / tzdata2014c
-Current Vers:	tzcode2014d / tzdata2014d
+Version:	tzcode2014e / tzdata2014e
+Current Vers:	tzcode2014e / tzdata2014e
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/
@@ -1357,13 +1357,13 @@ Notes:
      implementation.
 
 Package:	pigz
-Version:	2.1.6
+Version:	2.3.1
 Current Vers:	2.3.1
 Maintainer:	Mark Adler <madler@alumni.caltech.edu>
 Archive Site:	http://zlib.net/pigz/
 Home Page:	http://zlib.net/pigz/
 Mailing List:	http://mail.zlib.net/mailman/listinfo/pigz-announce_zlib.net
-Responsible:	mrg
+Responsible:	mrg, tls
 License:	zlib
 Location:	external/zlib/pigz/dist
 Notes:
@@ -1431,8 +1431,8 @@ Location:	external/cddl/osnet
 Notes:
 
 Package:	sljit
-Version:	svn revision 186
-Current Vers:	svn revision 226
+Version:	0.91 (svn revision 257)
+Current Vers:	svn revision 268
 Maintainer:	Zoltán Herczeg <hzmester@freemail.hu
 Archive Site:	http://sourceforge.net/projects/sljit/
 Home Page:	http://sljit.sourceforge.net/

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bridgevar.h,v 1.15 2012/08/23 12:06:32 drochner Exp $	*/
+/*	$NetBSD: if_bridgevar.h,v 1.19 2014/06/20 14:22:48 ozaki-r Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -205,6 +205,8 @@ struct ifbrparam {
 #define	ifbrp_filter	ifbrp_ifbrpu.ifbrpu_int32	/* filtering flags */
 
 #ifdef _KERNEL
+#include <net/pktqueue.h>
+
 /*
  * Timekeeping structure used in spanning tree code.
  */
@@ -301,7 +303,7 @@ struct bridge_softc {
 	LIST_HEAD(, bridge_rtnode) sc_rtlist;	/* list version of above */
 	uint32_t		sc_rthash_key;	/* key for hash */
 	uint32_t		sc_filter_flags; /* ipf and flags */
-	void			*sc_softintr;
+	pktqueue_t *		sc_fwd_pktq;
 };
 
 extern const uint8_t bstp_etheraddr[];
@@ -310,11 +312,10 @@ void	bridge_ifdetach(struct ifnet *);
 
 int	bridge_output(struct ifnet *, struct mbuf *, const struct sockaddr *,
 	    struct rtentry *);
-struct mbuf *bridge_input(struct ifnet *, struct mbuf *);
 
 void	bstp_initialization(struct bridge_softc *);
 void	bstp_stop(struct bridge_softc *);
-struct mbuf *bstp_input(struct bridge_softc *, struct bridge_iflist *, struct mbuf *);
+void	bstp_input(struct bridge_softc *, struct bridge_iflist *, struct mbuf *);
 
 void	bridge_enqueue(struct bridge_softc *, struct ifnet *, struct mbuf *,
 	    int);

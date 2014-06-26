@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.280 2014/06/10 09:38:30 joerg Exp $	*/
+/*	$NetBSD: if.c,v 1.283 2014/06/22 08:10:18 rtr Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2008 The NetBSD Foundation, Inc.
@@ -90,7 +90,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.280 2014/06/10 09:38:30 joerg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.283 2014/06/22 08:10:18 rtr Exp $");
 
 #include "opt_inet.h"
 
@@ -874,6 +874,9 @@ again:
 	 */
 #ifdef INET
 	pktq_barrier(ip_pktq);
+#endif
+#ifdef INET6
+	pktq_barrier(ip6_pktq);
 #endif
 	xc = xc_broadcast(0, (xcfunc_t)nullop, NULL, NULL);
 	xc_wait(xc);
@@ -1919,8 +1922,8 @@ doifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 #ifdef COMPAT_OSOCK
 		error = compat_ifioctl(so, ocmd, cmd, data, l);
 #else
-		error = (*so->so_proto->pr_usrreqs->pr_generic)(so,
-		    PRU_CONTROL, (struct mbuf *)cmd, (struct mbuf *)data,
+		error = (*so->so_proto->pr_usrreqs->pr_ioctl)(so,
+		    (struct mbuf *)cmd, (struct mbuf *)data,
 		    (struct mbuf *)ifp, l);
 #endif
 	}
@@ -2339,29 +2342,6 @@ bad:
 }
 
 #if defined(INET) || defined(INET6)
-
-static int
-sysctl_pktq_maxlen(SYSCTLFN_ARGS, pktqueue_t *pq)
-{
-	u_int nmaxlen = pktq_get_count(pq, PKTQ_MAXLEN);
-	struct sysctlnode node = *rnode;
-	int error;
-
-	node.sysctl_data = &nmaxlen;
-	error = sysctl_lookup(SYSCTLFN_CALL(&node));
-	if (error || newp == NULL)
-		return error;
-	return pktq_set_maxlen(pq, nmaxlen);
-}
-
-static int
-sysctl_pktq_count(SYSCTLFN_ARGS, pktqueue_t *pq, u_int count_id)
-{
-	int count = pktq_get_count(pq, count_id);
-	struct sysctlnode node = *rnode;
-	node.sysctl_data = &count;
-	return sysctl_lookup(SYSCTLFN_CALL(&node));
-}
 
 #define	SYSCTL_NET_PKTQ(q, cn, c)					\
 	static int							\

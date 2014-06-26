@@ -1,4 +1,4 @@
-/*	$NetBSD: agp_i810.c,v 1.86 2014/06/10 22:02:58 riastradh Exp $	*/
+/*	$NetBSD: agp_i810.c,v 1.103 2014/06/12 18:46:32 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.86 2014/06/10 22:02:58 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.103 2014/06/12 18:46:32 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -70,6 +70,8 @@ struct agp_softc *agp_i810_sc = NULL;
 
 /* XXX hack, see below */
 static bus_addr_t agp_i810_vga_regbase;
+static bus_size_t agp_i810_vga_regsize;
+static bus_space_tag_t agp_i810_vga_bst;
 static bus_space_handle_t agp_i810_vga_bsh;
 
 static u_int32_t agp_i810_get_aperture(struct agp_softc *);
@@ -82,8 +84,6 @@ static struct agp_memory *agp_i810_alloc_memory(struct agp_softc *, int,
 						vsize_t);
 static int agp_i810_free_memory(struct agp_softc *, struct agp_memory *);
 static int agp_i810_bind_memory(struct agp_softc *, struct agp_memory *,
-		off_t);
-static int agp_i810_bind_memory_main(struct agp_softc *, struct agp_memory *,
 		off_t);
 static int agp_i810_bind_memory_dcache(struct agp_softc *, struct agp_memory *,
 		off_t);
@@ -281,8 +281,8 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	struct agp_i810_softc *isc;
 	int apbase, mmadr_bar, gtt_bar;
 	int mmadr_type, mmadr_flags;
-	bus_addr_t mmadr, gtt_off;
-	bus_size_t mmadr_size;
+	bus_addr_t mmadr;
+	bus_size_t mmadr_size, gtt_off;
 	int error;
 
 	isc = malloc(sizeof *isc, M_AGP, M_NOWAIT|M_ZERO);
@@ -390,13 +390,15 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	case CHIP_G33:
 		apbase = AGP_I915_GMADR;
 		mmadr_bar = AGP_I915_MMADR;
+		isc->size = 512*1024;
 		gtt_bar = AGP_I915_GTTADR;
-		gtt_off = ~(bus_addr_t)0; /* XXXGCC */
+		gtt_off = ~(bus_size_t)0; /* XXXGCC */
 		break;
 	case CHIP_I965:
 		apbase = AGP_I965_GMADR;
 		mmadr_bar = AGP_I965_MMADR;
 		mmadr_type |= PCI_MAPREG_MEM_TYPE_64BIT;
+		isc->size = 512*1024;
 		gtt_bar = 0;
 		gtt_off = AGP_I965_GTT;
 		break;
@@ -404,12 +406,14 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 		apbase = AGP_I965_GMADR;
 		mmadr_bar = AGP_I965_MMADR;
 		mmadr_type |= PCI_MAPREG_MEM_TYPE_64BIT;
+		isc->size = 512*1024;
 		gtt_bar = 0;
 		gtt_off = AGP_G4X_GTT;
 		break;
 	default:
 		apbase = AGP_I810_GMADR;
 		mmadr_bar = AGP_I810_MMADR;
+		isc->size = 512*1024;
 		gtt_bar = 0;
 		gtt_off = AGP_I810_GTT;
 		break;
@@ -432,17 +436,12 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 		error = ENXIO;
 		goto fail1;
 	}
-	if (gtt_bar == 0) {
-		if (mmadr_size < gtt_off) {
-			aprint_error_dev(self, "MMIO registers too small"
-			    ": %"PRIuMAX" < %"PRIuMAX"\n",
-			    (uintmax_t)mmadr_size, (uintmax_t)gtt_off);
-			error = ENXIO;
-			goto fail1;
-		}
-		isc->size = gtt_off;
-	} else {
-		isc->size = mmadr_size;
+	if (mmadr_size < isc->size) {
+		aprint_error_dev(self, "MMIO registers too small"
+		    ": %"PRIuMAX" < %"PRIuMAX"\n",
+		    (uintmax_t)mmadr_size, (uintmax_t)isc->size);
+		error = ENXIO;
+		goto fail1;
 	}
 	isc->bst = isc->vga_pa.pa_memt;
 	error = bus_space_map(isc->bst, mmadr, isc->size, mmadr_flags,
@@ -474,6 +473,8 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	 * of VGA chip registers
 	 */
 	agp_i810_vga_regbase = mmadr;
+	agp_i810_vga_regsize = isc->size;
+	agp_i810_vga_bst = isc->bst;
 	agp_i810_vga_bsh = isc->bsh;
 
 	/* Initialize the chipset.  */
@@ -484,17 +485,27 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 	/* Map the GTT, from either part of the MMIO region or its own BAR.  */
 	if (gtt_bar == 0) {
 		isc->gtt_bst = isc->bst;
-		if (isc->gtt_size < (mmadr_size - gtt_off)) {
+		if ((mmadr_size - gtt_off) < isc->gtt_size) {
 			aprint_error_dev(self, "GTTMMADR too small for GTT"
-			    ": %"PRIxMAX" < (%"PRIxMAX" - %"PRIxMAX")\n",
-			    (uintmax_t)isc->gtt_size,
+			    ": (%"PRIxMAX" - %"PRIxMAX") < %"PRIxMAX"\n",
 			    (uintmax_t)mmadr_size,
-			    (uintmax_t)gtt_off);
+			    (uintmax_t)gtt_off,
+			    (uintmax_t)isc->gtt_size);
 			error = ENXIO;
 			goto fail4;
 		}
-		error = bus_space_map(isc->gtt_bst, (mmadr + gtt_off),
-		    isc->gtt_size, mmadr_flags, &isc->gtt_bsh);
+		/*
+		 * Map the GTT separately if we can, so that we can map
+		 * it prefetchable, but in early models, there are MMIO
+		 * registers before and after the GTT, so we can only
+		 * take a subregion.
+		 */
+		if (isc->size < gtt_off)
+			error = bus_space_map(isc->gtt_bst, (mmadr + gtt_off),
+			    isc->gtt_size, mmadr_flags, &isc->gtt_bsh);
+		else
+			error = bus_space_subregion(isc->bst, isc->bsh,
+			    gtt_off, isc->gtt_size, &isc->gtt_bsh);
 		if (error) {
 			aprint_error_dev(self, "can't map GTT: %d\n", error);
 			error = ENXIO;
@@ -538,7 +549,8 @@ agp_i810_attach(device_t parent, device_t self, void *aux)
 
 fail5: __unused
 	pmf_device_deregister(self);
-	bus_space_unmap(isc->gtt_bst, isc->gtt_bsh, isc->gtt_size);
+	if ((gtt_bar != 0) || (isc->size < gtt_off))
+		bus_space_unmap(isc->gtt_bst, isc->gtt_bsh, isc->gtt_size);
 	isc->gtt_size = 0;
 fail4:
 #if notyet
@@ -667,12 +679,21 @@ agp_i810_teardown_chipset_flush_page(struct agp_softc *sc)
  * of VGA chip registers
  */
 int
-agp_i810_borrow(bus_addr_t base, bus_space_handle_t *hdlp)
+agp_i810_borrow(bus_addr_t base, bus_size_t size, bus_space_handle_t *hdlp)
 {
 
-	if (!agp_i810_vga_regbase || base != agp_i810_vga_regbase)
+	if (agp_i810_vga_regbase == 0)
 		return 0;
-	*hdlp = agp_i810_vga_bsh;
+	if (base < agp_i810_vga_regbase)
+		return 0;
+	if (agp_i810_vga_regsize < size)
+		return 0;
+	if ((base - agp_i810_vga_regbase) > (agp_i810_vga_regsize - size))
+		return 0;
+	if (bus_space_subregion(agp_i810_vga_bst, agp_i810_vga_bsh,
+		(base - agp_i810_vga_regbase), (agp_i810_vga_regsize - size),
+		hdlp))
+		return 0;
 	return 1;
 }
 
@@ -823,7 +844,31 @@ agp_i810_init(struct agp_softc *sc)
 			}
 			break;
 		case CHIP_G4X:
-			gtt_size = 0;
+			switch (isc->pgtblctl & AGP_G4X_PGTBL_SIZE_MASK) {
+			case AGP_G4X_PGTBL_SIZE_512K:
+				gtt_size = 512;
+				break;
+			case AGP_G4X_PGTBL_SIZE_256K:
+				gtt_size = 256;
+				break;
+			case AGP_G4X_PGTBL_SIZE_128K:
+				gtt_size = 128;
+				break;
+			case AGP_G4X_PGTBL_SIZE_1M:
+				gtt_size = 1*1024;
+				break;
+			case AGP_G4X_PGTBL_SIZE_2M:
+				gtt_size = 2*1024;
+				break;
+			case AGP_G4X_PGTBL_SIZE_1_5M:
+				gtt_size = 1*1024 + 512;
+				break;
+			default:
+				aprint_error_dev(sc->as_dev,
+				    "bad PGTBL size\n");
+				error = ENXIO;
+				goto fail0;
+			}
 			break;
 		default:
 			panic("impossible chiptype %d", isc->chiptype);
@@ -993,7 +1038,7 @@ agp_i810_get_aperture(struct agp_softc *sc)
 	struct agp_i810_softc *isc = sc->as_chipc;
 	pcireg_t reg;
 	u_int32_t size;
-	u_int16_t miscc, gcc1, msac;
+	u_int16_t miscc, gcc1;
 
 	size = 0;
 
@@ -1021,13 +1066,7 @@ agp_i810_get_aperture(struct agp_softc *sc)
 	case CHIP_I915:
 	case CHIP_G33:
 	case CHIP_G4X:
-		reg = pci_conf_read(isc->vga_pa.pa_pc, isc->vga_pa.pa_tag,
-		    AGP_I915_MSAC);
-		msac = (u_int16_t)(reg >> 16);
-		if (msac & AGP_I915_MSAC_APER_128M)
-			size = 128 * 1024 * 1024;
-		else
-			size = 256 * 1024 * 1024;
+		size = sc->as_apsize;
 		break;
 	case CHIP_I965:
 		size = 512 * 1024 * 1024;
@@ -1129,8 +1168,12 @@ agp_i810_alloc_memory(struct agp_softc *sc, int type, vsize_t size)
 		return NULL;
 	if ((size & (AGP_PAGE_SIZE - 1)) != 0)
 		return NULL;
-	if (sc->as_allocated + size > sc->as_maxmem)
+	KASSERT(sc->as_allocated <= sc->as_maxmem);
+	if (size > (sc->as_maxmem - sc->as_allocated))
 		return NULL;
+	if (size > ((isc->gtt_size/4) << AGP_PAGE_SHIFT))
+		return NULL;
+
 	switch (type) {
 	case AGP_I810_MEMTYPE_MAIN:
 		break;
@@ -1200,6 +1243,8 @@ agp_i810_free_memory(struct agp_softc *sc, struct agp_memory *mem)
 
 	switch (mem->am_type) {
 	case AGP_I810_MEMTYPE_MAIN:
+		bus_dmamap_destroy(sc->as_dmat, mem->am_dmamap);
+		break;
 	case AGP_I810_MEMTYPE_DCACHE:
 		break;
 	case AGP_I810_MEMTYPE_HWCURSOR:
@@ -1245,8 +1290,8 @@ agp_i810_bind_memory(struct agp_softc *sc, struct agp_memory *mem,
 
 	switch (mem->am_type) {
 	case AGP_I810_MEMTYPE_MAIN:
-		error = agp_i810_bind_memory_main(sc, mem, offset);
-		break;
+		return agp_generic_bind_memory_bounded(sc, mem, offset,
+		    0, (isc->gtt_size/4) << AGP_PAGE_SHIFT);
 	case AGP_I810_MEMTYPE_DCACHE:
 		error = agp_i810_bind_memory_dcache(sc, mem, offset);
 		break;
@@ -1262,92 +1307,6 @@ agp_i810_bind_memory(struct agp_softc *sc, struct agp_memory *mem,
 	/* Success!  */
 	mem->am_is_bound = 1;
 	return 0;
-}
-
-static int
-agp_i810_bind_memory_main(struct agp_softc *sc, struct agp_memory *mem,
-    off_t offset)
-{
-	struct agp_i810_softc *const isc = sc->as_chipc;
-	bus_dma_segment_t *segs;
-	int nseg_alloc, nseg;
-	uint32_t i, j;
-	unsigned seg;
-	bus_addr_t addr;
-	bus_size_t len;
-	int error;
-
-	/* Ensure we have a sane size/offset that will fit.  */
-	if (offset < 0)
-		return EINVAL;
-	if (offset & (AGP_PAGE_SIZE - 1))
-		return EINVAL;
-	if (mem->am_size > ((isc->gtt_size/4) << AGP_PAGE_SHIFT))
-		return EINVAL;
-	if (offset > (((isc->gtt_size/4) << AGP_PAGE_SHIFT) -
-		mem->am_size))
-		return EINVAL;
-
-	/* Allocate an array of DMA segments.  */
-	nseg_alloc = (mem->am_size >> AGP_PAGE_SHIFT);
-	if (nseg_alloc > (SIZE_MAX / sizeof(*segs))) {
-		error = ENOMEM;
-		goto fail0;
-	}
-	segs = malloc(nseg_alloc * sizeof(*segs), M_AGP, M_WAITOK);
-
-	/* Allocate DMA-safe physical segments.  */
-	error = bus_dmamem_alloc(sc->as_dmat, mem->am_size, PAGE_SIZE,
-	    0, segs, nseg_alloc, &nseg, BUS_DMA_WAITOK);
-	if (error)
-		goto fail1;
-	KASSERT(nseg <= nseg_alloc);
-
-	/* Shrink the array of DMA segments if we can.  */
-	if (nseg < nseg_alloc) {
-		segs = realloc(segs, nseg, M_AGP, M_WAITOK);
-		nseg_alloc = nseg;
-	}
-
-	/* Load the DMA map.  */
-	error = bus_dmamap_load_raw(sc->as_dmat, mem->am_dmamap,
-	    segs, mem->am_nseg, mem->am_size, BUS_DMA_WAITOK);
-	if (error)
-		goto fail2;
-
-	/* Bind the pages in the GTT.  */
-	i = 0;
-	KASSERT((mem->am_size & (AGP_PAGE_SIZE - 1)) == 0);
-	for (seg = 0; seg < mem->am_dmamap->dm_nsegs; seg++) {
-		KASSERT((offset + i) < mem->am_size);
-		addr = mem->am_dmamap->dm_segs[seg].ds_addr;
-		len = MIN(mem->am_dmamap->dm_segs[seg].ds_len,
-		    (mem->am_size - (offset + i)));
-		do {
-			KASSERT(0 < len);
-			KASSERT((len & (AGP_PAGE_SIZE - 1)) == 0);
-			KASSERT((offset + i) < (mem->am_size - len));
-			error = agp_i810_bind_page(sc, offset + i, addr);
-			if (error)
-				goto fail3;
-			i += AGP_PAGE_SIZE;
-			addr += AGP_PAGE_SIZE;
-			len -= AGP_PAGE_SIZE;
-		} while (0 < len);
-	}
-
-	/* Success!  */
-	mem->am_dmaseg = segs;
-	mem->am_offset = offset;
-	return 0;
-
-fail3:	for (j = 0; j < i; j += AGP_PAGE_SIZE)
-		(void)agp_i810_unbind_page(sc, offset + j);
-	bus_dmamap_unload(sc->as_dmat, mem->am_dmamap);
-fail2:	bus_dmamem_free(sc->as_dmat, segs, nseg_alloc);
-fail1:	free(segs, M_AGP);
-fail0:	KASSERT(error);
-	return error;
 }
 
 #define	I810_GTT_PTE_VALID	0x01
@@ -1415,14 +1374,16 @@ agp_i810_unbind_memory(struct agp_softc *sc, struct agp_memory *mem)
 
 	switch (mem->am_type) {
 	case AGP_I810_MEMTYPE_MAIN:
-	case AGP_I810_MEMTYPE_HWCURSOR:
-		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
-			agp_i810_unbind_page(sc, mem->am_offset + i);
-		break;
+		return agp_generic_unbind_memory(sc, mem);
 	case AGP_I810_MEMTYPE_DCACHE:
 		KASSERT(isc->chiptype == CHIP_I810);
 		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
 			(void)agp_i810_write_gtt_entry(isc, i, 0);
+		break;
+	case AGP_I810_MEMTYPE_HWCURSOR:
+		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
+			(void)agp_i810_unbind_page(sc, mem->am_offset + i);
+		mem->am_offset = 0;
 		break;
 	default:
 		panic("invalid agp i810 memory type: %d", mem->am_type);
