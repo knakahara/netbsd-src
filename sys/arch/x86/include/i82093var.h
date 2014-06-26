@@ -69,8 +69,9 @@ struct ioapic_softc {
  * (ih&0xff0000)>>16 -> ioapic id.
  * (ih&0x00ff00)>>8 -> ioapic pin.
  *
- * 0x80000000 is used by pci_intr_machdep.c for MPSAFE_MASK
  */
+
+#define	MPSAFE_MASK		0x80000000
 
 #define APIC_INT_VIA_APIC	0x10000000
 #define APIC_INT_VIA_MSG	0x20000000
