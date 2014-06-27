@@ -1109,7 +1109,7 @@ intr_string(int ih, char *buf, size_t len)
 		panic("%s: bogus handle 0x%x", __func__, ih);
 
 	if (ih & APIC_INT_VIA_MSG) {
-		snprintf(buf, len, "msi %d", ih & ~APIC_INT_VIA_MSG);
+		snprintf(buf, len, "msi/msi-x %d", ih & ~APIC_INT_VIA_MSG);
 		return buf;
 	}
 
