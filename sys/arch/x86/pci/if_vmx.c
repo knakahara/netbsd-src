@@ -156,6 +156,11 @@ void vmxnet3_link_state(struct vmxnet3_softc *);
 void vmxnet3_enable_all_intrs(struct vmxnet3_softc *);
 void vmxnet3_disable_all_intrs(struct vmxnet3_softc *);
 int vmxnet3_intr(void *);
+
+int vmxnet3_rx_intr(void *);
+int vmxnet3_tx_intr(void *);
+int vmxnet3_event_intr(void *);
+
 void vmxnet3_evintr(struct vmxnet3_softc *);
 void vmxnet3_txintr(struct vmxnet3_softc *, struct vmxnet3_txqueue *);
 void vmxnet3_rxintr(struct vmxnet3_softc *, struct vmxnet3_rxqueue *);
@@ -205,6 +210,9 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 	u_char enaddr[ETHER_ADDR_LEN];
 	char intrbuf[PCI_INTRSTR_LEN];
 
+	int want_count = VMXNET3_NINTR;
+	int vmxnet3_msix_num = want_count;
+
 	sc->sc_dev = self;
 
 	pci_aprint_devinfo_fancy(pa, "Ethernet controller", "vmxnet3", 1);
@@ -251,7 +259,48 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-	if (pci_msi_count(pa) >= vmxnet3_msi_num &&
+	if (pci_msix_count(pa) >= want_count &&
+	    !pci_msix_alloc(pa, &ihs, &vmxnet3_msix_num) &&
+	    vmxnet3_msix_num == want_count) {
+		intrstr = pci_intr_string(pa->pa_pc, ihs[VMXNET3_RX_INTR_INDEX], intrbuf,
+					  sizeof(intrbuf));
+		vih = pci_msix_establish(pa->pa_pc, ihs[VMXNET3_RX_INTR_INDEX], IPL_NET,
+					vmxnet3_rx_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI-X(for RX)%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			return;
+		}
+		aprint_normal_dev(sc->sc_dev, "for RX interrupting at %s\n", intrstr);
+
+		intrstr = pci_intr_string(pa->pa_pc, ihs[VMXNET3_TX_INTR_INDEX], intrbuf,
+					  sizeof(intrbuf));
+		vih = pci_msix_establish(pa->pa_pc, ihs[VMXNET3_TX_INTR_INDEX], IPL_NET,
+					vmxnet3_tx_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI-X(for TX)%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			return;
+		}
+		aprint_normal_dev(sc->sc_dev, "for TX interrupting at %s\n", intrstr);
+
+		intrstr = pci_intr_string(pa->pa_pc, ihs[VMXNET3_EV_INTR_INDEX], intrbuf,
+					  sizeof(intrbuf));
+		vih = pci_msix_establish(pa->pa_pc, ihs[VMXNET3_EV_INTR_INDEX], IPL_NET,
+					vmxnet3_event_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI-X(for others)%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			return;
+		}
+		aprint_normal_dev(sc->sc_dev, "for EV interrupting at %s\n", intrstr);
+
+		sc->sc_intr_type = VMXNET3_IT_MSIX;
+	}
+	else if (pci_msi_count(pa) >= vmxnet3_msi_num &&
 	    !pci_msi_alloc(pa, &ihs, &vmxnet3_msi_num)) {
 		intrstr = pci_intr_string(pa->pa_pc, ihs[0], intrbuf,
 					  sizeof(intrbuf));
@@ -263,6 +312,8 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 			    intrstr ? " at " : "", intrstr ? intrstr : "");
 			return;
 		}
+		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
+
 		sc->sc_intr_type = VMXNET3_IT_MSI;
 	}
 	else {
@@ -278,9 +329,10 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 			    intrstr ? " at " : "", intrstr ? intrstr : "");
 			return;
 		}
+		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
+
 		sc->sc_intr_type = VMXNET3_IT_LEGACY;
 	}
-	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 	WRITE_CMD(sc, VMXNET3_CMD_GET_MACL);
 	macl = READ_BAR1(sc, VMXNET3_BAR1_CMD);
@@ -403,7 +455,8 @@ vmxnet3_dma_init(struct vmxnet3_softc *sc)
 	ds->mcast_table = mcast_pa;
 	ds->automask = 1;
 	ds->nintr = VMXNET3_NINTR;
-	ds->evintr = 0;
+	ds->evintr = VMXNET3_EV_INTR_INDEX;
+
 	ds->ictrl = VMXNET3_ICTRL_DISABLE_ALL;
 	for (i = 0; i < VMXNET3_NINTR; i++)
 		ds->modlevel[i] = UPT1_IMOD_ADAPTIVE;
@@ -446,7 +499,7 @@ vmxnet3_alloc_txring(struct vmxnet3_softc *sc, int queue)
 	ts->comp_ring_len = NTXCOMPDESC;
 	ts->driver_data = vtophys(tq);
 	ts->driver_data_len = sizeof *tq;
-	ts->intr_idx = 0;
+	ts->intr_idx = VMXNET3_TX_INTR_INDEX;
 	ts->stopped = 1;
 	ts->error = 0;
 	return 0;
@@ -495,7 +548,7 @@ vmxnet3_alloc_rxring(struct vmxnet3_softc *sc, int queue)
 	rs->comp_ring_len = NRXCOMPDESC;
 	rs->driver_data = vtophys(rq);
 	rs->driver_data_len = sizeof *rq;
-	rs->intr_idx = 0;
+	rs->intr_idx = VMXNET3_RX_INTR_INDEX;
 	rs->stopped = 1;
 	rs->error = 0;
 	return 0;
@@ -619,6 +672,57 @@ vmxnet3_disable_all_intrs(struct vmxnet3_softc *sc)
 	for (i = 0; i < VMXNET3_NINTR; i++)
 		vmxnet3_disable_intr(sc, i);
 }
+
+int
+vmxnet3_event_intr(void *arg)
+{
+	struct vmxnet3_softc *sc = arg;
+
+	if (sc->sc_ds->event)
+		vmxnet3_evintr(sc);
+
+#ifdef VMXNET3_STAT
+	vmxstat.intr++;
+#endif
+
+	vmxnet3_enable_intr(sc, VMXNET3_EV_INTR_INDEX);
+	return 1;
+}
+
+int
+vmxnet3_rx_intr(void *arg)
+{
+	struct vmxnet3_softc *sc = arg;
+	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+
+	if ((ifp->if_flags & IFF_RUNNING) == 0)
+		return 0;
+
+	vmxnet3_rxintr(sc, &sc->sc_rxq[0]);
+#ifdef VMXNET3_STAT
+	vmxstat.intr++;
+#endif
+	vmxnet3_enable_intr(sc, VMXNET3_RX_INTR_INDEX);
+	return 1;
+}
+
+int
+vmxnet3_tx_intr(void *arg)
+{
+	struct vmxnet3_softc *sc = arg;
+	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+
+	if ((ifp->if_flags & IFF_RUNNING) == 0)
+		return 0;
+
+	vmxnet3_txintr(sc, &sc->sc_txq[0]);
+#ifdef VMXNET3_STAT
+	vmxstat.intr++;
+#endif
+	vmxnet3_enable_intr(sc, VMXNET3_TX_INTR_INDEX);
+	return 1;
+}
+
 
 int
 vmxnet3_intr(void *arg)
