@@ -210,8 +210,9 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 	u_char enaddr[ETHER_ADDR_LEN];
 	char intrbuf[PCI_INTRSTR_LEN];
 
-	int want_count = VMXNET3_NINTR;
-	int vmxnet3_msix_num = want_count;
+	int msix_want_count = VMXNET3_NINTR;
+	int msix_num = msix_want_count;
+	int done_establish = 0;
 
 	sc->sc_dev = self;
 
@@ -259,9 +260,9 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-	if (pci_msix_count(pa) >= want_count &&
-	    !pci_msix_alloc(pa, &ihs, &vmxnet3_msix_num) &&
-	    vmxnet3_msix_num == want_count) {
+	if (pci_msix_count(pa) >= msix_want_count &&
+	    !pci_msix_alloc(pa, &ihs, &msix_num) &&
+	    msix_num == msix_want_count) {
 		intrstr = pci_intr_string(pa->pa_pc, ihs[VMXNET3_RX_INTR_INDEX], intrbuf,
 					  sizeof(intrbuf));
 		vih = pci_msix_establish(pa->pa_pc, ihs[VMXNET3_RX_INTR_INDEX], IPL_NET,
@@ -299,8 +300,10 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "for EV interrupting at %s\n", intrstr);
 
 		sc->sc_intr_type = VMXNET3_IT_MSIX;
+
+		done_establish = 1;
 	}
-	else if (pci_msi_count(pa) >= vmxnet3_msi_num &&
+	else if (!done_establish && pci_msi_count(pa) >= vmxnet3_msi_num &&
 	    !pci_msi_alloc(pa, &ihs, &vmxnet3_msi_num)) {
 		intrstr = pci_intr_string(pa->pa_pc, ihs[0], intrbuf,
 					  sizeof(intrbuf));
@@ -315,8 +318,14 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 		sc->sc_intr_type = VMXNET3_IT_MSI;
+		sc->sc_ds->nintr = 0;
+		sc->sc_ds->evintr = 0;
+		sc->sc_rxq[0].rs->intr_idx = 0;
+		sc->sc_txq[0].ts->intr_idx = 0;
+
+		done_establish = 1;
 	}
-	else {
+	else if (!done_establish) {
 		if (pci_intr_map(pa, &ih)) {
 			aprint_error_dev(sc->sc_dev, "failed to map interrupt\n");
 			return;
@@ -332,6 +341,10 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 		sc->sc_intr_type = VMXNET3_IT_LEGACY;
+		sc->sc_ds->nintr = 0;
+		sc->sc_ds->evintr = 0;
+		sc->sc_rxq[0].rs->intr_idx = 0;
+		sc->sc_txq[0].ts->intr_idx = 0;
 	}
 
 	WRITE_CMD(sc, VMXNET3_CMD_GET_MACL);
@@ -454,8 +467,8 @@ vmxnet3_dma_init(struct vmxnet3_softc *sc)
 	ds->nrxqueue = NRXQUEUE;
 	ds->mcast_table = mcast_pa;
 	ds->automask = 1;
-	ds->nintr = VMXNET3_NINTR;
-	ds->evintr = VMXNET3_EV_INTR_INDEX;
+	ds->nintr = VMXNET3_NINTR; /* at first, try to use MSI-X */
+	ds->evintr = VMXNET3_EV_INTR_INDEX; /* at first, try to use MSI-X */
 
 	ds->ictrl = VMXNET3_ICTRL_DISABLE_ALL;
 	for (i = 0; i < VMXNET3_NINTR; i++)
@@ -548,7 +561,7 @@ vmxnet3_alloc_rxring(struct vmxnet3_softc *sc, int queue)
 	rs->comp_ring_len = NRXCOMPDESC;
 	rs->driver_data = vtophys(rq);
 	rs->driver_data_len = sizeof *rq;
-	rs->intr_idx = VMXNET3_RX_INTR_INDEX;
+	rs->intr_idx = VMXNET3_RX_INTR_INDEX; /* at first, try to use MSI-X */
 	rs->stopped = 1;
 	rs->error = 0;
 	return 0;
@@ -677,6 +690,7 @@ int
 vmxnet3_event_intr(void *arg)
 {
 	struct vmxnet3_softc *sc = arg;
+	uint8_t idx = sc->sc_ds->evintr;
 
 	if (sc->sc_ds->event)
 		vmxnet3_evintr(sc);
@@ -685,7 +699,7 @@ vmxnet3_event_intr(void *arg)
 	vmxstat.intr++;
 #endif
 
-	vmxnet3_enable_intr(sc, VMXNET3_EV_INTR_INDEX);
+	vmxnet3_enable_intr(sc, idx);
 	return 1;
 }
 
@@ -694,6 +708,7 @@ vmxnet3_rx_intr(void *arg)
 {
 	struct vmxnet3_softc *sc = arg;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+	uint8_t idx = sc->sc_rxq[0].rs->intr_idx;
 
 	if ((ifp->if_flags & IFF_RUNNING) == 0)
 		return 0;
@@ -702,7 +717,7 @@ vmxnet3_rx_intr(void *arg)
 #ifdef VMXNET3_STAT
 	vmxstat.intr++;
 #endif
-	vmxnet3_enable_intr(sc, VMXNET3_RX_INTR_INDEX);
+	vmxnet3_enable_intr(sc, idx);
 	return 1;
 }
 
@@ -711,6 +726,7 @@ vmxnet3_tx_intr(void *arg)
 {
 	struct vmxnet3_softc *sc = arg;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+	uint8_t idx = sc->sc_txq[0].ts->intr_idx;
 
 	if ((ifp->if_flags & IFF_RUNNING) == 0)
 		return 0;
@@ -719,7 +735,7 @@ vmxnet3_tx_intr(void *arg)
 #ifdef VMXNET3_STAT
 	vmxstat.intr++;
 #endif
-	vmxnet3_enable_intr(sc, VMXNET3_TX_INTR_INDEX);
+	vmxnet3_enable_intr(sc, idx);
 	return 1;
 }
 
