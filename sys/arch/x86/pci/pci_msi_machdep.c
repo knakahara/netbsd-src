@@ -16,6 +16,8 @@
 #include <machine/i82093var.h>
 #include <machine/pic.h>
 
+#define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
+
 static struct pci_attach_args msi_pci_attach_args[NUM_MSI_INTS];
 static void
 set_msi_pci_attach_args(int vector, struct pci_attach_args *pa)
@@ -174,6 +176,7 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 	    entry_base + PCI_MSIX_TABLE_ENTRY_DATA, data);
 	bus_space_write_4(mth->mth_tag, mth->mth_handle,
 	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, 0);
+	BUS_SPACE_WRITE_FLUSH(mth->mth_tag, mth->mth_handle);
 
 	ctl = pci_conf_read(pc, tag, off + PCI_MSIX_CTL);
 
