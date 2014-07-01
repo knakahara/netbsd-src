@@ -311,9 +311,9 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 		return 1;
 	}
 
-	vectors = intr_allocate_msi_vectors(count);
+	vectors = intr_allocate_msix_vectors(count);
 	if (vectors == NULL) {
-		aprint_normal("cannot allocate MSI vectors.\n");
+		aprint_normal("cannot allocate MSI-X vectors.\n");
 		return 1;
 	}
 

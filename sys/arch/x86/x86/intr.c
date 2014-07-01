@@ -525,19 +525,15 @@ out:
 	return first;
 }
 
-/*
- * return vector numbers array of allocated vecotrs for MSI.
- * MSI vectors must be continuous.
- */
-int *
-intr_allocate_msi_vectors(int *count)
+static int *
+intr_allocate_msi_common_vectors(int *count, int (*next_count)(int))
 {
 	int first = -1;
 	int i, j;
 	int *vectors;
 	struct intrsource *isp;
 
-	for (; *count > 0; *count >>= 1) {
+	for (; *count > 0; *count = (*next_count)(*count)) {
 		first = find_free_msi_vectors(*count);
 		if (first == -1)
 			continue;
@@ -576,6 +572,22 @@ intr_allocate_msi_vectors(int *count)
 	return vectors;
 }
 
+static int
+msi_next_count(int count)
+{
+	return count >> 1;
+}
+
+/*
+ * return vector numbers array of allocated vecotrs for MSI.
+ * MSI vectors must be continuous and power of 2.
+ */
+int *
+intr_allocate_msi_vectors(int *count)
+{
+	return intr_allocate_msi_common_vectors(count, msi_next_count);
+}
+
 void
 intr_free_msi_vectors(int *vectors, int count)
 {
@@ -585,6 +597,28 @@ intr_free_msi_vectors(int *vectors, int count)
 	}
 
 	kmem_free(vectors, sizeof(int) * count);
+}
+
+static int
+msix_next_count(int count)
+{
+	return --count;
+}
+
+/*
+ * return vector numbers array of allocated vecotrs for MSI-X.
+ * XXXX future work MSI-X can use sparse vectors.
+ */
+int *
+intr_allocate_msix_vectors(int *count)
+{
+	return intr_allocate_msi_common_vectors(count, msix_next_count);
+}
+
+void
+intr_free_msix_vectors(int *vectors, int count)
+{
+	return intr_free_msi_vectors(vectors, count);
 }
 
 static int
