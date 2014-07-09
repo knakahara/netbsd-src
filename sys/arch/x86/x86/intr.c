@@ -621,13 +621,35 @@ intr_free_msix_vectors(int *vectors, int count)
 	return intr_free_msi_vectors(vectors, count);
 }
 
+/*
+ * return "next" cpu for round-robin assigning
+ * ignore SPCF_NOINTR
+ * XXXX
+ * should be per a device
+ */
+static struct cpu_info *
+intr_get_next_cpu(void)
+{
+	static struct cpu_info *assigned = &cpu_info_primary;
+
+	/* primary cpu is used by legacy cpus, so avoid it at first time. */
+	if (assigned->ci_next != NULL) {
+		assigned = assigned->ci_next;
+	}
+	else {
+		assigned = &cpu_info_primary;
+	}
+
+	return assigned;
+}
+
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
-		       int *index)
+		       int *index, int is_msi)
 {
 	int slot, i;
 	struct intrsource *isp;
-	int start = 0; /* XXXX */
+	int start = 0;
 
 	KASSERT(mutex_owned(&cpu_lock));
 
@@ -637,9 +659,9 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 	} else {
 		slot = -1;
 
-		/* XXXX */
-		if (pin >= FIRST_MSI_INT)
-			start = 16;
+		/* avoid reserved slots for legacy interrupts. */
+		if (is_msi)
+			start = NUM_LEGACY_IRQS;
 
 		/*
 		 * intr_allocate_slot has checked for an existing mapping.
@@ -678,7 +700,8 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
  */
 static int __noinline
 intr_allocate_slot(struct pic *pic, int pin, int level,
-		   struct cpu_info **cip, int *index, int *idt_slot)
+		   struct cpu_info **cip, int *index, int *idt_slot,
+		   int is_msi)
 {
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci, *lci;
@@ -717,7 +740,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 		 * Must be directed to BP.
 		 */
 		ci = &cpu_info_primary;
-		error = intr_allocate_slot_cpu(ci, pic, pin, &slot);
+		error = intr_allocate_slot_cpu(ci, pic, pin, &slot, is_msi);
 	} else {
 		/*
 		 * Find least loaded AP/BP and try to allocate there.
@@ -736,8 +759,10 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 			ci = &cpu_info_primary;
 #endif
 		}
+		if (is_msi)
+			ci = intr_get_next_cpu();
 		KASSERT(ci != NULL);
-		error = intr_allocate_slot_cpu(ci, pic, pin, &slot);
+		error = intr_allocate_slot_cpu(ci, pic, pin, &slot, is_msi);
 
 		/*
 		 * If that did not work, allocate anywhere.
@@ -749,7 +774,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 					continue;
 				}
 				error = intr_allocate_slot_cpu(ci, pic,
-				    pin, &slot);
+				    pin, &slot, is_msi);
 				if (error == 0) {
 					break;
 				}
@@ -907,9 +932,8 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 #endif /* MULTIPROCESSOR */
 	uint64_t where;
 
-#if 0
 	bool is_msi = ((pin & APIC_INT_VIA_MSG) != 0);
-#endif
+
 	pin &= ~APIC_INT_VIA_MSG;
 
 #ifdef DIAGNOSTIC
@@ -927,7 +951,8 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	}
 
 	mutex_enter(&cpu_lock);
-	error = intr_allocate_slot(pic, pin, level, &ci, &slot, &idt_vec);
+	error = intr_allocate_slot(pic, pin, level, &ci,
+				   &slot, &idt_vec, is_msi);
 	if (error != 0) {
 		mutex_exit(&cpu_lock);
 		kmem_free(ih, sizeof(*ih));
