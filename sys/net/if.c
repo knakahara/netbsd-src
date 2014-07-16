@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.283 2014/06/22 08:10:18 rtr Exp $	*/
+/*	$NetBSD: if.c,v 1.285 2014/07/01 10:16:02 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2008 The NetBSD Foundation, Inc.
@@ -90,7 +90,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.283 2014/06/22 08:10:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.285 2014/07/01 10:16:02 ozaki-r Exp $");
 
 #include "opt_inet.h"
 
@@ -611,6 +611,12 @@ if_attach(ifnet_t *ifp)
 	ifp->if_snd.altq_ifp  = ifp;
 #endif
 
+#ifdef NET_MPSAFE
+	ifp->if_snd.ifq_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
+#else
+	ifp->if_snd.ifq_lock = NULL;
+#endif
+
 	ifp->if_pfil = pfil_head_create(PFIL_TYPE_IFNET, ifp);
 	(void)pfil_run_hooks(if_pfil,
 	    (struct mbuf **)PFIL_IFNET_ATTACH, ifp, PFIL_IFNET);
@@ -731,6 +737,9 @@ if_detach(struct ifnet *ifp)
 	if (ALTQ_IS_ATTACHED(&ifp->if_snd))
 		altq_detach(&ifp->if_snd);
 #endif
+
+	if (ifp->if_snd.ifq_lock)
+		mutex_obj_free(ifp->if_snd.ifq_lock);
 
 	sysctl_teardown(&ifp->if_sysctl_log);
 
@@ -1715,8 +1724,7 @@ ifioctl_common(struct ifnet *ifp, u_long cmd, void *data)
 }
 
 int
-ifaddrpref_ioctl(struct socket *so, u_long cmd, void *data, struct ifnet *ifp,
-    lwp_t *l)
+ifaddrpref_ioctl(struct socket *so, u_long cmd, void *data, struct ifnet *ifp)
 {
 	struct if_addrprefreq *ifap = (struct if_addrprefreq *)data;
 	struct ifaddr *ifa;
@@ -1728,7 +1736,7 @@ ifaddrpref_ioctl(struct socket *so, u_long cmd, void *data, struct ifnet *ifp,
 
 	switch (cmd) {
 	case SIOCSIFADDRPREF:
-		if (kauth_authorize_network(l->l_cred, KAUTH_NETWORK_INTERFACE,
+		if (kauth_authorize_network(curlwp->l_cred, KAUTH_NETWORK_INTERFACE,
 		    KAUTH_REQ_NETWORK_INTERFACE_SETPRIV, ifp, (void *)cmd,
 		    NULL) != 0)
 			return EPERM;
@@ -1923,8 +1931,7 @@ doifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 		error = compat_ifioctl(so, ocmd, cmd, data, l);
 #else
 		error = (*so->so_proto->pr_usrreqs->pr_ioctl)(so,
-		    (struct mbuf *)cmd, (struct mbuf *)data,
-		    (struct mbuf *)ifp, l);
+		    cmd, data, ifp);
 #endif
 	}
 

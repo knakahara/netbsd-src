@@ -1,8 +1,8 @@
-/*	$NetBSD: if_bnx.c,v 1.53 2014/06/17 21:37:20 msaitoh Exp $	*/
+/*	$NetBSD: if_bnx.c,v 1.56 2014/07/01 17:11:35 msaitoh Exp $	*/
 /*	$OpenBSD: if_bnx.c,v 1.85 2009/11/09 14:32:41 dlg Exp $ */
 
 /*-
- * Copyright (c) 2006 Broadcom Corporation
+ * Copyright (c) 2006-2010 Broadcom Corporation
  *	David Christensen <davidch@broadcom.com>.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@
 #if 0
 __FBSDID("$FreeBSD: src/sys/dev/bce/if_bce.c,v 1.3 2006/04/13 14:12:26 ru Exp $");
 #endif
-__KERNEL_RCSID(0, "$NetBSD: if_bnx.c,v 1.53 2014/06/17 21:37:20 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bnx.c,v 1.56 2014/07/01 17:11:35 msaitoh Exp $");
 
 /*
  * The following controllers are supported by this driver:
@@ -48,7 +48,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_bnx.c,v 1.53 2014/06/17 21:37:20 msaitoh Exp $");
  *   BCM5716  C0
  *
  * The following controllers are not supported by this driver:
- *
  *   BCM5706C A0, A1
  *   BCM5706S A0, A1
  *   BCM5708C A0, B0
@@ -74,7 +73,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_bnx.c,v 1.53 2014/06/17 21:37:20 msaitoh Exp $");
 /* BNX Debug Options                                                        */
 /****************************************************************************/
 #ifdef BNX_DEBUG
-	u_int32_t bnx_debug = /*BNX_WARN*/ BNX_VERBOSE_SEND;
+	uint32_t bnx_debug = /*BNX_WARN*/ BNX_VERBOSE_SEND;
 
 	/*          0 = Never              */
 	/*          1 = 1 in 2,147,483,648 */
@@ -314,9 +313,9 @@ void	bnx_breakpoint(struct bnx_softc *);
 /****************************************************************************/
 /* BNX Register/Memory Access Routines                                      */
 /****************************************************************************/
-u_int32_t	bnx_reg_rd_ind(struct bnx_softc *, u_int32_t);
-void	bnx_reg_wr_ind(struct bnx_softc *, u_int32_t, u_int32_t);
-void	bnx_ctx_wr(struct bnx_softc *, u_int32_t, u_int32_t, u_int32_t);
+uint32_t	bnx_reg_rd_ind(struct bnx_softc *, uint32_t);
+void	bnx_reg_wr_ind(struct bnx_softc *, uint32_t, uint32_t);
+void	bnx_ctx_wr(struct bnx_softc *, uint32_t, uint32_t, uint32_t);
 int	bnx_miibus_read_reg(device_t, int, int);
 void	bnx_miibus_write_reg(device_t, int, int, int);
 void	bnx_miibus_statchg(struct ifnet *);
@@ -328,18 +327,18 @@ int	bnx_acquire_nvram_lock(struct bnx_softc *);
 int	bnx_release_nvram_lock(struct bnx_softc *);
 void	bnx_enable_nvram_access(struct bnx_softc *);
 void	bnx_disable_nvram_access(struct bnx_softc *);
-int	bnx_nvram_read_dword(struct bnx_softc *, u_int32_t, u_int8_t *,
-	    u_int32_t);
+int	bnx_nvram_read_dword(struct bnx_softc *, uint32_t, uint8_t *,
+	    uint32_t);
 int	bnx_init_nvram(struct bnx_softc *);
-int	bnx_nvram_read(struct bnx_softc *, u_int32_t, u_int8_t *, int);
+int	bnx_nvram_read(struct bnx_softc *, uint32_t, uint8_t *, int);
 int	bnx_nvram_test(struct bnx_softc *);
 #ifdef BNX_NVRAM_WRITE_SUPPORT
 int	bnx_enable_nvram_write(struct bnx_softc *);
 void	bnx_disable_nvram_write(struct bnx_softc *);
-int	bnx_nvram_erase_page(struct bnx_softc *, u_int32_t);
-int	bnx_nvram_write_dword(struct bnx_softc *, u_int32_t, u_int8_t *,
-	    u_int32_t);
-int	bnx_nvram_write(struct bnx_softc *, u_int32_t, u_int8_t *, int);
+int	bnx_nvram_erase_page(struct bnx_softc *, uint32_t);
+int	bnx_nvram_write_dword(struct bnx_softc *, uint32_t, uint8_t *,
+	    uint32_t);
+int	bnx_nvram_write(struct bnx_softc *, uint32_t, uint8_t *, int);
 #endif
 
 /****************************************************************************/
@@ -354,20 +353,22 @@ void	bnx_release_resources(struct bnx_softc *);
 /****************************************************************************/
 /* BNX Firmware Synchronization and Load                                    */
 /****************************************************************************/
-int	bnx_fw_sync(struct bnx_softc *, u_int32_t);
-void	bnx_load_rv2p_fw(struct bnx_softc *, u_int32_t *, u_int32_t,
-	    u_int32_t);
+int	bnx_fw_sync(struct bnx_softc *, uint32_t);
+void	bnx_load_rv2p_fw(struct bnx_softc *, uint32_t *, uint32_t,
+	    uint32_t);
 void	bnx_load_cpu_fw(struct bnx_softc *, struct cpu_reg *,
 	    struct fw_info *);
 void	bnx_init_cpus(struct bnx_softc *);
 
+static void bnx_print_adapter_info(struct bnx_softc *);
+static void bnx_probe_pci_caps(struct bnx_softc *);
 void	bnx_stop(struct ifnet *, int);
-int	bnx_reset(struct bnx_softc *, u_int32_t);
+int	bnx_reset(struct bnx_softc *, uint32_t);
 int	bnx_chipinit(struct bnx_softc *);
 int	bnx_blockinit(struct bnx_softc *);
-static int	bnx_add_buf(struct bnx_softc *, struct mbuf *, u_int16_t *,
-	    u_int16_t *, u_int32_t *);
-int	bnx_get_buf(struct bnx_softc *, u_int16_t *, u_int16_t *, u_int32_t *);
+static int	bnx_add_buf(struct bnx_softc *, struct mbuf *, uint16_t *,
+	    uint16_t *, uint32_t *);
+int	bnx_get_buf(struct bnx_softc *, uint16_t *, uint16_t *, uint32_t *);
 
 int	bnx_init_tx_chain(struct bnx_softc *);
 void	bnx_init_tx_context(struct bnx_softc *);
@@ -446,6 +447,99 @@ bnx_probe(device_t parent, cfdata_t match, void *aux)
 }
 
 /****************************************************************************/
+/* PCI Capabilities Probe Function.                                         */
+/*                                                                          */
+/* Walks the PCI capabiites list for the device to find what features are   */
+/* supported.                                                               */
+/*                                                                          */
+/* Returns:                                                                 */
+/*   None.                                                                  */
+/****************************************************************************/
+static void
+bnx_print_adapter_info(struct bnx_softc *sc)
+{
+
+	aprint_normal_dev(sc->bnx_dev, "ASIC BCM%x %c%d %s(0x%08x)\n",
+	    BNXNUM(sc), 'A' + BNXREV(sc), BNXMETAL(sc),
+	    (BNX_CHIP_BOND_ID(sc) == BNX_CHIP_BOND_ID_SERDES_BIT)
+	    ? "Serdes " : "", sc->bnx_chipid);
+	    
+	/* Bus info. */
+	if (sc->bnx_flags & BNX_PCIE_FLAG) {
+		aprint_normal_dev(sc->bnx_dev, "PCIe x%d ",
+		    sc->link_width);
+		switch (sc->link_speed) {
+		case 1: aprint_normal("2.5Gbps\n"); break;
+		case 2:	aprint_normal("5Gbps\n"); break;
+		default: aprint_normal("Unknown link speed\n");
+		}
+	} else {
+		aprint_normal_dev(sc->bnx_dev, "PCI%s %dbit %dMHz\n",
+		    ((sc->bnx_flags & BNX_PCIX_FLAG) ? "-X" : ""),
+		    (sc->bnx_flags & BNX_PCI_32BIT_FLAG) ? 32 : 64,
+		    sc->bus_speed_mhz);
+	}
+
+	aprint_normal_dev(sc->bnx_dev,
+	    "Coal (RX:%d,%d,%d,%d; TX:%d,%d,%d,%d)\n",
+	    sc->bnx_rx_quick_cons_trip_int,
+	    sc->bnx_rx_quick_cons_trip,
+	    sc->bnx_rx_ticks_int,
+	    sc->bnx_rx_ticks,
+	    sc->bnx_tx_quick_cons_trip_int,
+	    sc->bnx_tx_quick_cons_trip,
+	    sc->bnx_tx_ticks_int,
+	    sc->bnx_tx_ticks);
+}
+
+
+/****************************************************************************/
+/* PCI Capabilities Probe Function.                                         */
+/*                                                                          */
+/* Walks the PCI capabiites list for the device to find what features are   */
+/* supported.                                                               */
+/*                                                                          */
+/* Returns:                                                                 */
+/*   None.                                                                  */
+/****************************************************************************/
+static void
+bnx_probe_pci_caps(struct bnx_softc *sc)
+{
+	struct pci_attach_args *pa = &(sc->bnx_pa);
+	pcireg_t reg;
+
+	/* Check if PCI-X capability is enabled. */
+	if (pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_PCIX, &reg,
+		NULL) != 0) {
+		sc->bnx_cap_flags |= BNX_PCIX_CAPABLE_FLAG;
+	}
+
+	/* Check if PCIe capability is enabled. */
+	if (pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_PCIEXPRESS, &reg,
+		NULL) != 0) {
+		pcireg_t link_status = pci_conf_read(pa->pa_pc, pa->pa_tag,
+		    reg + PCIE_LCSR);
+		DBPRINT(sc, BNX_INFO_LOAD, "PCIe link_status = "
+		    "0x%08X\n",	link_status);
+		sc->link_speed = (link_status & PCIE_LCSR_LINKSPEED) >> 16;
+		sc->link_width = (link_status & PCIE_LCSR_NLW) >> 20;
+		sc->bnx_cap_flags |= BNX_PCIE_CAPABLE_FLAG;
+		sc->bnx_flags |= BNX_PCIE_FLAG;
+	}
+
+	/* Check if MSI capability is enabled. */
+	if (pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_MSI, &reg,
+		NULL) != 0)
+		sc->bnx_cap_flags |= BNX_MSI_CAPABLE_FLAG;
+
+	/* Check if MSI-X capability is enabled. */
+	if (pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_MSIX, &reg,
+		NULL) != 0)
+		sc->bnx_cap_flags |= BNX_MSIX_CAPABLE_FLAG;
+}
+
+
+/****************************************************************************/
 /* Device attach function.                                                  */
 /*                                                                          */
 /* Allocates device resources, performs secondary chip identification,      */
@@ -465,9 +559,9 @@ bnx_attach(device_t parent, device_t self, void *aux)
 	pci_chipset_tag_t	pc = pa->pa_pc;
 	pci_intr_handle_t	ih;
 	const char 		*intrstr = NULL;
-	u_int32_t		command;
+	uint32_t		command;
 	struct ifnet		*ifp;
-	u_int32_t		val;
+	uint32_t		val;
 	int			mii_flags = MIIF_FORCEANEG;
 	pcireg_t		memtype;
 	char intrbuf[PCI_INTRSTR_LEN];
@@ -553,10 +647,12 @@ bnx_attach(device_t parent, device_t self, void *aux)
 	sc->bnx_flags = 0;
 	sc->bnx_phy_flags = 0;
 
+	bnx_probe_pci_caps(sc);
+
 	/* Get PCI bus information (speed and type). */
 	val = REG_RD(sc, BNX_PCICFG_MISC_STATUS);
 	if (val & BNX_PCICFG_MISC_STATUS_PCIX_DET) {
-		u_int32_t clkreg;
+		uint32_t clkreg;
 
 		sc->bnx_flags |= BNX_PCIX_FLAG;
 
@@ -756,6 +852,8 @@ bnx_attach(device_t parent, device_t self, void *aux)
 	else
 		aprint_error_dev(self, "couldn't establish power handler\n");
 
+	/* Finally, print some useful adapter info */
+	bnx_print_adapter_info(sc);
 	/* Print some important debugging info. */
 	DBRUN(BNX_INFO, bnx_dump_driver_state(sc));
 
@@ -832,8 +930,8 @@ bnx_detach(device_t dev, int flags)
 /* Returns:                                                                 */
 /*   The value of the register.                                             */
 /****************************************************************************/
-u_int32_t
-bnx_reg_rd_ind(struct bnx_softc *sc, u_int32_t offset)
+uint32_t
+bnx_reg_rd_ind(struct bnx_softc *sc, uint32_t offset)
 {
 	struct pci_attach_args	*pa = &(sc->bnx_pa);
 
@@ -841,7 +939,7 @@ bnx_reg_rd_ind(struct bnx_softc *sc, u_int32_t offset)
 	    offset);
 #ifdef BNX_DEBUG
 	{
-		u_int32_t val;
+		uint32_t val;
 		val = pci_conf_read(pa->pa_pc, pa->pa_tag,
 		    BNX_PCICFG_REG_WINDOW);
 		DBPRINT(sc, BNX_EXCESSIVE, "%s(); offset = 0x%08X, "
@@ -864,7 +962,7 @@ bnx_reg_rd_ind(struct bnx_softc *sc, u_int32_t offset)
 /*   Nothing.                                                               */
 /****************************************************************************/
 void
-bnx_reg_wr_ind(struct bnx_softc *sc, u_int32_t offset, u_int32_t val)
+bnx_reg_wr_ind(struct bnx_softc *sc, uint32_t offset, uint32_t val)
 {
 	struct pci_attach_args  *pa = &(sc->bnx_pa);
 
@@ -886,11 +984,11 @@ bnx_reg_wr_ind(struct bnx_softc *sc, u_int32_t offset, u_int32_t val)
 /*   Nothing.                                                               */
 /****************************************************************************/
 void
-bnx_ctx_wr(struct bnx_softc *sc, u_int32_t cid_addr, u_int32_t ctx_offset,
-    u_int32_t ctx_val)
+bnx_ctx_wr(struct bnx_softc *sc, uint32_t cid_addr, uint32_t ctx_offset,
+    uint32_t ctx_val)
 {
-	u_int32_t idx, offset = ctx_offset + cid_addr;
-	u_int32_t val, retry_cnt = 5;
+	uint32_t idx, offset = ctx_offset + cid_addr;
+	uint32_t val, retry_cnt = 5;
 
 	if (BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5709) {
 		REG_WR(sc, BNX_CTX_CTX_DATA, ctx_val);
@@ -929,7 +1027,7 @@ int
 bnx_miibus_read_reg(device_t dev, int phy, int reg)
 {
 	struct bnx_softc	*sc = device_private(dev);
-	u_int32_t		val;
+	uint32_t		val;
 	int			i;
 
 	/* Make sure we are accessing the correct PHY address. */
@@ -987,7 +1085,7 @@ bnx_miibus_read_reg(device_t dev, int phy, int reg)
 
 	DBPRINT(sc, BNX_EXCESSIVE,
 	    "%s(): phy = %d, reg = 0x%04X, val = 0x%04X\n", __func__, phy,
-	    (u_int16_t) reg & 0xffff, (u_int16_t) val & 0xffff);
+	    (uint16_t) reg & 0xffff, (uint16_t) val & 0xffff);
 
 	if (sc->bnx_phy_flags & BNX_PHY_INT_MODE_AUTO_POLLING_FLAG) {
 		val = REG_RD(sc, BNX_EMAC_MDIO_MODE);
@@ -1014,7 +1112,7 @@ void
 bnx_miibus_write_reg(device_t dev, int phy, int reg, int val)
 {
 	struct bnx_softc	*sc = device_private(dev);
-	u_int32_t		val1;
+	uint32_t		val1;
 	int			i;
 
 	/* Make sure we are accessing the correct PHY address. */
@@ -1026,7 +1124,7 @@ bnx_miibus_write_reg(device_t dev, int phy, int reg, int val)
 
 	DBPRINT(sc, BNX_EXCESSIVE, "%s(): phy = %d, reg = 0x%04X, "
 	    "val = 0x%04X\n", __func__,
-	    phy, (u_int16_t) reg & 0xffff, (u_int16_t) val & 0xffff);
+	    phy, (uint16_t) reg & 0xffff, (uint16_t) val & 0xffff);
 
 	/*
 	 * The BCM5709S PHY is an IEEE Clause 45 PHY
@@ -1155,7 +1253,7 @@ bnx_miibus_statchg(struct ifnet *ifp)
 int
 bnx_acquire_nvram_lock(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 	int			j;
 
 	DBPRINT(sc, BNX_VERBOSE, "Acquiring NVRAM lock.\n");
@@ -1192,7 +1290,7 @@ int
 bnx_release_nvram_lock(struct bnx_softc *sc)
 {
 	int			j;
-	u_int32_t		val;
+	uint32_t		val;
 
 	DBPRINT(sc, BNX_VERBOSE, "Releasing NVRAM lock.\n");
 
@@ -1227,7 +1325,7 @@ bnx_release_nvram_lock(struct bnx_softc *sc)
 int
 bnx_enable_nvram_write(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 
 	DBPRINT(sc, BNX_VERBOSE, "Enabling NVRAM write.\n");
 
@@ -1270,7 +1368,7 @@ bnx_enable_nvram_write(struct bnx_softc *sc)
 void
 bnx_disable_nvram_write(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 
 	DBPRINT(sc, BNX_VERBOSE,  "Disabling NVRAM write.\n");
 
@@ -1291,7 +1389,7 @@ bnx_disable_nvram_write(struct bnx_softc *sc)
 void
 bnx_enable_nvram_access(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 
 	DBPRINT(sc, BNX_VERBOSE, "Enabling NVRAM access.\n");
 
@@ -1312,7 +1410,7 @@ bnx_enable_nvram_access(struct bnx_softc *sc)
 void
 bnx_disable_nvram_access(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 
 	DBPRINT(sc, BNX_VERBOSE, "Disabling NVRAM access.\n");
 
@@ -1334,9 +1432,9 @@ bnx_disable_nvram_access(struct bnx_softc *sc)
 /*   0 on success, positive value on failure.                               */
 /****************************************************************************/
 int
-bnx_nvram_erase_page(struct bnx_softc *sc, u_int32_t offset)
+bnx_nvram_erase_page(struct bnx_softc *sc, uint32_t offset)
 {
-	u_int32_t		cmd;
+	uint32_t		cmd;
 	int			j;
 
 	/* Buffered flash doesn't require an erase. */
@@ -1359,7 +1457,7 @@ bnx_nvram_erase_page(struct bnx_softc *sc, u_int32_t offset)
 
 	/* Wait for completion. */
 	for (j = 0; j < NVRAM_TIMEOUT_COUNT; j++) {
-		u_int32_t val;
+		uint32_t val;
 
 		DELAY(5);
 
@@ -1387,10 +1485,10 @@ bnx_nvram_erase_page(struct bnx_softc *sc, u_int32_t offset)
 /*   0 on success and the 32 bit value read, positive value on failure.     */
 /****************************************************************************/
 int
-bnx_nvram_read_dword(struct bnx_softc *sc, u_int32_t offset,
-    u_int8_t *ret_val, u_int32_t cmd_flags)
+bnx_nvram_read_dword(struct bnx_softc *sc, uint32_t offset,
+    uint8_t *ret_val, uint32_t cmd_flags)
 {
-	u_int32_t		cmd;
+	uint32_t		cmd;
 	int			i, rc = 0;
 
 	/* Build the command word. */
@@ -1413,7 +1511,7 @@ bnx_nvram_read_dword(struct bnx_softc *sc, u_int32_t offset,
 
 	/* Wait for completion. */
 	for (i = 0; i < NVRAM_TIMEOUT_COUNT; i++) {
-		u_int32_t val;
+		uint32_t val;
 
 		DELAY(5);
 
@@ -1449,10 +1547,10 @@ bnx_nvram_read_dword(struct bnx_softc *sc, u_int32_t offset,
 /*   0 on success, positive value on failure.                               */
 /****************************************************************************/
 int
-bnx_nvram_write_dword(struct bnx_softc *sc, u_int32_t offset, u_int8_t *val,
-    u_int32_t cmd_flags)
+bnx_nvram_write_dword(struct bnx_softc *sc, uint32_t offset, uint8_t *val,
+    uint32_t cmd_flags)
 {
-	u_int32_t		cmd, val32;
+	uint32_t		cmd, val32;
 	int			j;
 
 	/* Build the command word. */
@@ -1505,7 +1603,7 @@ bnx_nvram_write_dword(struct bnx_softc *sc, u_int32_t offset, u_int8_t *val,
 int
 bnx_init_nvram(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 	int			j, entry_count, rc = 0;
 	struct flash_spec	*flash;
 
@@ -1544,7 +1642,7 @@ bnx_init_nvram(struct bnx_softc *sc)
 		}
 	} else {
 		/* Flash interface not yet reconfigured. */
-		u_int32_t mask;
+		uint32_t mask;
 
 		DBPRINT(sc,BNX_INFO_LOAD,
 			"bnx_init_nvram(): Flash was NOT reconfigured.\n");
@@ -1615,11 +1713,11 @@ bnx_init_nvram_get_flash_size:
 /*   0 on success and the data read, positive value on failure.             */
 /****************************************************************************/
 int
-bnx_nvram_read(struct bnx_softc *sc, u_int32_t offset, u_int8_t *ret_buf,
+bnx_nvram_read(struct bnx_softc *sc, uint32_t offset, uint8_t *ret_buf,
     int buf_size)
 {
 	int			rc = 0;
-	u_int32_t		cmd_flags, offset32, len32, extra;
+	uint32_t		cmd_flags, offset32, len32, extra;
 
 	if (buf_size == 0)
 		return 0;
@@ -1638,8 +1736,8 @@ bnx_nvram_read(struct bnx_softc *sc, u_int32_t offset, u_int8_t *ret_buf,
 	cmd_flags = 0;
 
 	if (offset32 & 3) {
-		u_int8_t buf[4];
-		u_int32_t pre_len;
+		uint8_t buf[4];
+		uint32_t pre_len;
 
 		offset32 &= ~3;
 		pre_len = 4 - (offset & 3);
@@ -1669,7 +1767,7 @@ bnx_nvram_read(struct bnx_softc *sc, u_int32_t offset, u_int8_t *ret_buf,
 	}
 
 	if (len32 == 4) {
-		u_int8_t buf[4];
+		uint8_t buf[4];
 
 		if (cmd_flags)
 			cmd_flags = BNX_NVM_COMMAND_LAST;
@@ -1681,7 +1779,7 @@ bnx_nvram_read(struct bnx_softc *sc, u_int32_t offset, u_int8_t *ret_buf,
 
 		memcpy(ret_buf, buf, 4 - extra);
 	} else if (len32 > 0) {
-		u_int8_t buf[4];
+		uint8_t buf[4];
 
 		/* Read the first word. */
 		if (cmd_flags)
@@ -1733,11 +1831,11 @@ bnx_nvram_read(struct bnx_softc *sc, u_int32_t offset, u_int8_t *ret_buf,
 /*   0 on success, positive value on failure.                               */
 /****************************************************************************/
 int
-bnx_nvram_write(struct bnx_softc *sc, u_int32_t offset, u_int8_t *data_buf,
+bnx_nvram_write(struct bnx_softc *sc, uint32_t offset, uint8_t *data_buf,
     int buf_size)
 {
-	u_int32_t		written, offset32, len32;
-	u_int8_t		*buf, start[4], end[4];
+	uint32_t		written, offset32, len32;
+	uint8_t		*buf, start[4], end[4];
 	int			rc = 0;
 	int			align_start, align_end;
 
@@ -1754,7 +1852,7 @@ bnx_nvram_write(struct bnx_softc *sc, u_int32_t offset, u_int8_t *data_buf,
 	}
 
 	if (len32 & 3) {
-	       	if ((len32 > 4) || !align_start) {
+		if ((len32 > 4) || !align_start) {
 			align_end = 4 - (len32 & 3);
 			len32 += align_end;
 			if ((rc = bnx_nvram_read(sc, offset32 + len32 - 4,
@@ -1779,10 +1877,10 @@ bnx_nvram_write(struct bnx_softc *sc, u_int32_t offset, u_int8_t *data_buf,
 
 	written = 0;
 	while ((written < len32) && (rc == 0)) {
-		u_int32_t page_start, page_end, data_start, data_end;
-		u_int32_t addr, cmd_flags;
+		uint32_t page_start, page_end, data_start, data_end;
+		uint32_t addr, cmd_flags;
 		int i;
-		u_int8_t flash_buffer[264];
+		uint8_t flash_buffer[264];
 
 	    /* Find the page_start addr */
 		page_start = offset32 + written;
@@ -1920,10 +2018,10 @@ nvram_write_end:
 int
 bnx_nvram_test(struct bnx_softc *sc)
 {
-	u_int32_t		buf[BNX_NVRAM_SIZE / 4];
-	u_int8_t		*data = (u_int8_t *) buf;
+	uint32_t		buf[BNX_NVRAM_SIZE / 4];
+	uint8_t		*data = (uint8_t *) buf;
 	int			rc = 0;
-	u_int32_t		magic, csum;
+	uint32_t		magic, csum;
 
 	/*
 	 * Check that the device NVRAM is valid by reading
@@ -1982,9 +2080,9 @@ bnx_get_media(struct bnx_softc *sc)
 	sc->bnx_phy_addr = 1;
 
 	if (BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5709) {
-		u_int32_t val = REG_RD(sc, BNX_MISC_DUAL_MEDIA_CTRL);
-		u_int32_t bond_id = val & BNX_MISC_DUAL_MEDIA_CTRL_BOND_ID;
-		u_int32_t strap;
+		uint32_t val = REG_RD(sc, BNX_MISC_DUAL_MEDIA_CTRL);
+		uint32_t bond_id = val & BNX_MISC_DUAL_MEDIA_CTRL_BOND_ID;
+		uint32_t strap;
 
 		/*
 		 * The BCM5709S is software configurable
@@ -2040,7 +2138,7 @@ bnx_get_media(struct bnx_softc *sc)
 		sc->bnx_phy_flags |= BNX_PHY_SERDES_FLAG;
 
 	if (sc->bnx_phy_flags & BNX_PHY_SERDES_FLAG) {
-		u_int32_t val;
+		uint32_t val;
 
 		sc->bnx_flags |= BNX_NO_WOL_FLAG;
 
@@ -2265,7 +2363,7 @@ bnx_dma_alloc(struct bnx_softc *sc)
 
 	/* DRC - Fix for 64 bit addresses. */
 	DBPRINT(sc, BNX_INFO, "status_block_paddr = 0x%08X\n",
-		(u_int32_t) sc->status_block_paddr);
+		(uint32_t) sc->status_block_paddr);
 
 	/* BCM5709 uses host memory as cache for context memory. */
 	if (BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5709) {
@@ -2356,7 +2454,7 @@ bnx_dma_alloc(struct bnx_softc *sc)
 
 	/* DRC - Fix for 64 bit address. */
 	DBPRINT(sc,BNX_INFO, "stats_block_paddr = 0x%08X\n",
-	    (u_int32_t) sc->stats_block_paddr);
+	    (uint32_t) sc->stats_block_paddr);
 
 	/*
 	 * Allocate DMA memory for the TX buffer descriptor chain,
@@ -2405,7 +2503,7 @@ bnx_dma_alloc(struct bnx_softc *sc)
 
 		/* DRC - Fix for 64 bit systems. */
 		DBPRINT(sc, BNX_INFO, "tx_bd_chain_paddr[%d] = 0x%08X\n",
-		    i, (u_int32_t) sc->tx_bd_chain_paddr[i]);
+		    i, (uint32_t) sc->tx_bd_chain_paddr[i]);
 	}
 
 	/*
@@ -2463,7 +2561,7 @@ bnx_dma_alloc(struct bnx_softc *sc)
 
 		/* DRC - Fix for 64 bit systems. */
 		DBPRINT(sc, BNX_INFO, "rx_bd_chain_paddr[%d] = 0x%08X\n",
-		    i, (u_int32_t) sc->rx_bd_chain_paddr[i]);
+		    i, (uint32_t) sc->rx_bd_chain_paddr[i]);
 		bus_dmamap_sync(sc->bnx_dmatag, sc->rx_bd_chain_map[i],
 		    0, BNX_RX_CHAIN_PAGE_SZ,
 		    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
@@ -2526,10 +2624,10 @@ bnx_release_resources(struct bnx_softc *sc)
 /*   0 for success, positive value for failure.                             */
 /****************************************************************************/
 int
-bnx_fw_sync(struct bnx_softc *sc, u_int32_t msg_data)
+bnx_fw_sync(struct bnx_softc *sc, uint32_t msg_data)
 {
 	int			i, rc = 0;
-	u_int32_t		val;
+	uint32_t		val;
 
 	/* Don't waste any time if we've timed out before. */
 	if (sc->bnx_fw_timed_out) {
@@ -2582,11 +2680,11 @@ bnx_fw_sync_exit:
 /*   Nothing.                                                               */
 /****************************************************************************/
 void
-bnx_load_rv2p_fw(struct bnx_softc *sc, u_int32_t *rv2p_code,
-    u_int32_t rv2p_code_len, u_int32_t rv2p_proc)
+bnx_load_rv2p_fw(struct bnx_softc *sc, uint32_t *rv2p_code,
+    uint32_t rv2p_code_len, uint32_t rv2p_proc)
 {
 	int			i;
-	u_int32_t		val;
+	uint32_t		val;
 
 	/* Set the page size used by RV2P. */
 	if (rv2p_proc == RV2P_PROC2) {
@@ -2629,8 +2727,8 @@ void
 bnx_load_cpu_fw(struct bnx_softc *sc, struct cpu_reg *cpu_reg,
     struct fw_info *fw)
 {
-	u_int32_t		offset;
-	u_int32_t		val;
+	uint32_t		offset;
+	uint32_t		val;
 
 	/* Halt the CPU. */
 	val = REG_RD_IND(sc, cpu_reg->mode);
@@ -3122,7 +3220,7 @@ bnx_init_context(struct bnx_softc *sc)
 	if (BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5709) {
 		/* DRC: Replace this constant value with a #define. */
 		int i, retry_cnt = 10;
-		u_int32_t val;
+		uint32_t val;
 
 		/*
 		 * BCM5709 context memory may be cached
@@ -3142,23 +3240,20 @@ bnx_init_context(struct bnx_softc *sc)
 			DELAY(2);
 		}
 
-
 		/* ToDo: Consider returning an error here. */
 
 		for (i = 0; i < sc->ctx_pages; i++) {
 			int j;
 
-
 			/* Set the physaddr of the context memory cache. */
-			val = (u_int32_t)(sc->ctx_segs[i].ds_addr);
+			val = (uint32_t)(sc->ctx_segs[i].ds_addr);
 			REG_WR(sc, BNX_CTX_HOST_PAGE_TBL_DATA0, val |
 				BNX_CTX_HOST_PAGE_TBL_DATA0_VALID);
-			val = (u_int32_t)
-			    ((u_int64_t)sc->ctx_segs[i].ds_addr >> 32);
+			val = (uint32_t)
+			    ((uint64_t)sc->ctx_segs[i].ds_addr >> 32);
 			REG_WR(sc, BNX_CTX_HOST_PAGE_TBL_DATA1, val);
 			REG_WR(sc, BNX_CTX_HOST_PAGE_TBL_CTRL, i |
 				BNX_CTX_HOST_PAGE_TBL_CTRL_WRITE_REQ);
-
 
 			/* Verify that the context memory write was successful. */
 			for (j = 0; j < retry_cnt; j++) {
@@ -3171,7 +3266,7 @@ bnx_init_context(struct bnx_softc *sc)
 			/* ToDo: Consider returning an error here. */
 		}
 	} else {
-		u_int32_t vcid_addr, offset;
+		uint32_t vcid_addr, offset;
 
 		/*
 		 * For the 5706/5708, context memory is local to
@@ -3206,7 +3301,7 @@ bnx_init_context(struct bnx_softc *sc)
 void
 bnx_get_mac_addr(struct bnx_softc *sc)
 {
-	u_int32_t		mac_lo = 0, mac_hi = 0;
+	uint32_t		mac_lo = 0, mac_hi = 0;
 
 	/*
 	 * The NetXtreme II bootcode populates various NIC
@@ -3245,8 +3340,8 @@ bnx_get_mac_addr(struct bnx_softc *sc)
 void
 bnx_set_mac_addr(struct bnx_softc *sc)
 {
-	u_int32_t		val;
-	const u_int8_t		*mac_addr = CLLADDR(sc->bnx_ec.ec_if.if_sadl);
+	uint32_t		val;
+	const uint8_t		*mac_addr = CLLADDR(sc->bnx_ec.ec_if.if_sadl);
 
 	DBPRINT(sc, BNX_INFO, "Setting Ethernet address = "
 	    "%s\n", ether_sprintf(sc->eaddr));
@@ -3309,10 +3404,10 @@ bnx_stop(struct ifnet *ifp, int disable)
 }
 
 int
-bnx_reset(struct bnx_softc *sc, u_int32_t reset_code)
+bnx_reset(struct bnx_softc *sc, uint32_t reset_code)
 {
 	struct pci_attach_args	*pa = &(sc->bnx_pa);
-	u_int32_t		val;
+	uint32_t		val;
 	int			i, rc = 0;
 
 	DBPRINT(sc, BNX_VERBOSE_RESET, "Entering %s()\n", __func__);
@@ -3413,7 +3508,7 @@ int
 bnx_chipinit(struct bnx_softc *sc)
 {
 	struct pci_attach_args	*pa = &(sc->bnx_pa);
-	u_int32_t		val;
+	uint32_t		val;
 	int			rc = 0;
 
 	DBPRINT(sc, BNX_VERBOSE_RESET, "Entering %s()\n", __func__);
@@ -3521,7 +3616,7 @@ bnx_chipinit_exit:
 int
 bnx_blockinit(struct bnx_softc *sc)
 {
-	u_int32_t		reg, val;
+	uint32_t		reg, val;
 	int 			rc = 0;
 
 	DBPRINT(sc, BNX_VERBOSE_RESET, "Entering %s()\n", __func__);
@@ -3542,15 +3637,15 @@ bnx_blockinit(struct bnx_softc *sc)
 	REG_WR(sc, BNX_HC_ATTN_BITS_ENABLE, STATUS_ATTN_BITS_LINK_STATE);
 
 	/* Program the physical address of the status block. */
-	REG_WR(sc, BNX_HC_STATUS_ADDR_L, (u_int32_t)(sc->status_block_paddr));
+	REG_WR(sc, BNX_HC_STATUS_ADDR_L, (uint32_t)(sc->status_block_paddr));
 	REG_WR(sc, BNX_HC_STATUS_ADDR_H,
-	    (u_int32_t)((u_int64_t)sc->status_block_paddr >> 32));
+	    (uint32_t)((uint64_t)sc->status_block_paddr >> 32));
 
 	/* Program the physical address of the statistics block. */
 	REG_WR(sc, BNX_HC_STATISTICS_ADDR_L,
-	    (u_int32_t)(sc->stats_block_paddr));
+	    (uint32_t)(sc->stats_block_paddr));
 	REG_WR(sc, BNX_HC_STATISTICS_ADDR_H,
-	    (u_int32_t)((u_int64_t)sc->stats_block_paddr >> 32));
+	    (uint32_t)((uint64_t)sc->stats_block_paddr >> 32));
 
 	/* Program various host coalescing parameters. */
 	REG_WR(sc, BNX_HC_TX_QUICK_CONS_TRIP, (sc->bnx_tx_quick_cons_trip_int
@@ -3635,17 +3730,17 @@ bnx_blockinit_exit:
 }
 
 static int
-bnx_add_buf(struct bnx_softc *sc, struct mbuf *m_new, u_int16_t *prod,
-    u_int16_t *chain_prod, u_int32_t *prod_bseq)
+bnx_add_buf(struct bnx_softc *sc, struct mbuf *m_new, uint16_t *prod,
+    uint16_t *chain_prod, uint32_t *prod_bseq)
 {
 	bus_dmamap_t		map;
 	struct rx_bd		*rxbd;
-	u_int32_t		addr;
+	uint32_t		addr;
 	int i;
 #ifdef BNX_DEBUG
-	u_int16_t debug_chain_prod =	*chain_prod;
+	uint16_t debug_chain_prod =	*chain_prod;
 #endif
-	u_int16_t first_chain_prod;
+	uint16_t first_chain_prod;
 
 	m_new->m_len = m_new->m_pkthdr.len = sc->mbuf_alloc_size;
 
@@ -3686,9 +3781,9 @@ bnx_add_buf(struct bnx_softc *sc, struct mbuf *m_new, u_int16_t *prod,
 	 */
 	rxbd = &sc->rx_bd_chain[RX_PAGE(*chain_prod)][RX_IDX(*chain_prod)];
 
-	addr = (u_int32_t)map->dm_segs[0].ds_addr;
+	addr = (uint32_t)map->dm_segs[0].ds_addr;
 	rxbd->rx_bd_haddr_lo = addr;
-	addr = (u_int32_t)((u_int64_t)map->dm_segs[0].ds_addr >> 32);
+	addr = (uint32_t)((uint64_t)map->dm_segs[0].ds_addr >> 32);
 	rxbd->rx_bd_haddr_hi = addr;
 	rxbd->rx_bd_len = map->dm_segs[0].ds_len;
 	rxbd->rx_bd_flags = RX_BD_FLAGS_START;
@@ -3705,9 +3800,9 @@ bnx_add_buf(struct bnx_softc *sc, struct mbuf *m_new, u_int16_t *prod,
 		rxbd =
 		    &sc->rx_bd_chain[RX_PAGE(*chain_prod)][RX_IDX(*chain_prod)];
 
-		addr = (u_int32_t)map->dm_segs[i].ds_addr;
+		addr = (uint32_t)map->dm_segs[i].ds_addr;
 		rxbd->rx_bd_haddr_lo = addr;
-		addr = (u_int32_t)((u_int64_t)map->dm_segs[i].ds_addr >> 32);
+		addr = (uint32_t)((uint64_t)map->dm_segs[i].ds_addr >> 32);
 		rxbd->rx_bd_haddr_hi = addr;
 		rxbd->rx_bd_len = map->dm_segs[i].ds_len;
 		rxbd->rx_bd_flags = 0;
@@ -3725,9 +3820,9 @@ bnx_add_buf(struct bnx_softc *sc, struct mbuf *m_new, u_int16_t *prod,
 	    sizeof(struct rx_bd), BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 
 	/*
-	 * Save the mbuf, ajust the map pointer (swap map for first and
-	 * last rx_bd entry to that rx_mbuf_ptr and rx_mbuf_map matches)
-	 * and update counter.
+	 * Save the mbuf, adjust the map pointer (swap map for first and
+	 * last rx_bd entry so that rx_mbuf_ptr and rx_mbuf_map matches)
+	 * and update our counter.
 	 */
 	sc->rx_mbuf_ptr[*chain_prod] = m_new;
 	sc->rx_mbuf_map[first_chain_prod] = sc->rx_mbuf_map[*chain_prod];
@@ -3753,12 +3848,12 @@ bnx_add_buf(struct bnx_softc *sc, struct mbuf *m_new, u_int16_t *prod,
 /*   0 for success, positive value for failure.                             */
 /****************************************************************************/
 int
-bnx_get_buf(struct bnx_softc *sc, u_int16_t *prod,
-    u_int16_t *chain_prod, u_int32_t *prod_bseq)
+bnx_get_buf(struct bnx_softc *sc, uint16_t *prod,
+    uint16_t *chain_prod, uint32_t *prod_bseq)
 {
 	struct mbuf 		*m_new = NULL;
 	int			rc = 0;
-	u_int16_t min_free_bd;
+	uint16_t min_free_bd;
 
 	DBPRINT(sc, (BNX_VERBOSE_RESET | BNX_VERBOSE_RECV), "Entering %s()\n",
 	    __func__);
@@ -3767,7 +3862,7 @@ bnx_get_buf(struct bnx_softc *sc, u_int16_t *prod,
 	DBRUNIF((*chain_prod > MAX_RX_BD),
 	    aprint_error_dev(sc->bnx_dev,
 	        "RX producer out of range: 0x%04X > 0x%04X\n",
-		*chain_prod, (u_int16_t)MAX_RX_BD));
+		*chain_prod, (uint16_t)MAX_RX_BD));
 
 	DBPRINT(sc, BNX_VERBOSE_RECV, "%s(enter): prod = 0x%04X, chain_prod = "
 	    "0x%04X, prod_bseq = 0x%08X\n", __func__, *prod, *chain_prod,
@@ -3902,7 +3997,7 @@ put:
 void
 bnx_init_tx_context(struct bnx_softc *sc)
 {
-	u_int32_t val;
+	uint32_t val;
 
 	/* Initialize the context ID for an L2 TX chain. */
 	if (BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5709) {
@@ -3913,10 +4008,10 @@ bnx_init_tx_context(struct bnx_softc *sc)
 		CTX_WR(sc, GET_CID_ADDR(TX_CID), BNX_L2CTX_CMD_TYPE_XI, val);
 
 		/* Point the hardware to the first page in the chain. */
-		val = (u_int32_t)((u_int64_t)sc->tx_bd_chain_paddr[0] >> 32);
+		val = (uint32_t)((uint64_t)sc->tx_bd_chain_paddr[0] >> 32);
 		CTX_WR(sc, GET_CID_ADDR(TX_CID),
 		    BNX_L2CTX_TBDR_BHADDR_HI_XI, val);
-		val = (u_int32_t)(sc->tx_bd_chain_paddr[0]);
+		val = (uint32_t)(sc->tx_bd_chain_paddr[0]);
 		CTX_WR(sc, GET_CID_ADDR(TX_CID),
 		    BNX_L2CTX_TBDR_BHADDR_LO_XI, val);
 	} else {
@@ -3927,9 +4022,9 @@ bnx_init_tx_context(struct bnx_softc *sc)
 		CTX_WR(sc, GET_CID_ADDR(TX_CID), BNX_L2CTX_CMD_TYPE, val);
 
 		/* Point the hardware to the first page in the chain. */
-		val = (u_int32_t)((u_int64_t)sc->tx_bd_chain_paddr[0] >> 32);
+		val = (uint32_t)((uint64_t)sc->tx_bd_chain_paddr[0] >> 32);
 		CTX_WR(sc, GET_CID_ADDR(TX_CID), BNX_L2CTX_TBDR_BHADDR_HI, val);
-		val = (u_int32_t)(sc->tx_bd_chain_paddr[0]);
+		val = (uint32_t)(sc->tx_bd_chain_paddr[0]);
 		CTX_WR(sc, GET_CID_ADDR(TX_CID), BNX_L2CTX_TBDR_BHADDR_LO, val);
 	}
 }
@@ -3945,7 +4040,7 @@ int
 bnx_init_tx_chain(struct bnx_softc *sc)
 {
 	struct tx_bd		*txbd;
-	u_int32_t		addr;
+	uint32_t		addr;
 	int			i, rc = 0;
 
 	DBPRINT(sc, BNX_VERBOSE_RESET, "Entering %s()\n", __func__);
@@ -3984,9 +4079,9 @@ bnx_init_tx_chain(struct bnx_softc *sc)
 		else
 			j = i + 1;
 
-		addr = (u_int32_t)sc->tx_bd_chain_paddr[j];
+		addr = (uint32_t)sc->tx_bd_chain_paddr[j];
 		txbd->tx_bd_haddr_lo = addr;
-		addr = (u_int32_t)((u_int64_t)sc->tx_bd_chain_paddr[j] >> 32);
+		addr = (uint32_t)((uint64_t)sc->tx_bd_chain_paddr[j] >> 32);
 		txbd->tx_bd_haddr_hi = addr;
 		bus_dmamap_sync(sc->bnx_dmatag, sc->tx_bd_chain_map[i], 0,
 		    BNX_TX_CHAIN_PAGE_SZ, BUS_DMASYNC_PREWRITE);
@@ -4031,7 +4126,7 @@ bnx_free_tx_chain(struct bnx_softc *sc)
 
 		mutex_enter(&sc->tx_pkt_mtx);
 		TAILQ_INSERT_TAIL(&sc->tx_free_pkts, pkt, pkt_entry);
-        }
+	}
 
 	/* Destroy all the dmamaps we allocated for TX */
 	while ((pkt = TAILQ_FIRST(&sc->tx_free_pkts)) != NULL) {
@@ -4075,14 +4170,14 @@ bnx_free_tx_chain(struct bnx_softc *sc)
 void
 bnx_init_rx_context(struct bnx_softc *sc)
 {
-	u_int32_t val;
+	uint32_t val;
 
 	/* Initialize the context ID for an L2 RX chain. */
 	val = BNX_L2CTX_CTX_TYPE_CTX_BD_CHN_TYPE_VALUE |
 		BNX_L2CTX_CTX_TYPE_SIZE_L2 | (0x02 << 8);
 
 	if (BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5709) {
-		u_int32_t lo_water, hi_water;
+		uint32_t lo_water, hi_water;
 
 		lo_water = BNX_L2CTX_RX_LO_WATER_MARK_DEFAULT;
 		hi_water = USABLE_RX_BD / 4;
@@ -4107,9 +4202,9 @@ bnx_init_rx_context(struct bnx_softc *sc)
 	}
 
 	/* Point the hardware to the first page in the chain. */
-	val = (u_int32_t)((u_int64_t)sc->rx_bd_chain_paddr[0] >> 32);
+	val = (uint32_t)((uint64_t)sc->rx_bd_chain_paddr[0] >> 32);
 	CTX_WR(sc, GET_CID_ADDR(RX_CID), BNX_L2CTX_NX_BDHADDR_HI, val);
-	val = (u_int32_t)(sc->rx_bd_chain_paddr[0]);
+	val = (uint32_t)(sc->rx_bd_chain_paddr[0]);
 	CTX_WR(sc, GET_CID_ADDR(RX_CID), BNX_L2CTX_NX_BDHADDR_LO, val);
 }
 
@@ -4124,8 +4219,8 @@ bnx_init_rx_chain(struct bnx_softc *sc)
 {
 	struct rx_bd		*rxbd;
 	int			i, rc = 0;
-	u_int16_t		prod, chain_prod;
-	u_int32_t		prod_bseq, addr;
+	uint16_t		prod, chain_prod;
+	uint32_t		prod_bseq, addr;
 
 	DBPRINT(sc, BNX_VERBOSE_RESET, "Entering %s()\n", __func__);
 
@@ -4151,9 +4246,9 @@ bnx_init_rx_chain(struct bnx_softc *sc)
 			j = i + 1;
 
 		/* Setup the chain page pointers. */
-		addr = (u_int32_t)((u_int64_t)sc->rx_bd_chain_paddr[j] >> 32);
+		addr = (uint32_t)((uint64_t)sc->rx_bd_chain_paddr[j] >> 32);
 		rxbd->rx_bd_haddr_hi = addr;
-		addr = (u_int32_t)sc->rx_bd_chain_paddr[j];
+		addr = (uint32_t)sc->rx_bd_chain_paddr[j];
 		rxbd->rx_bd_haddr_lo = addr;
 		bus_dmamap_sync(sc->bnx_dmatag, sc->rx_bd_chain_map[i],
 		    0, BNX_RX_CHAIN_PAGE_SZ,
@@ -4244,7 +4339,7 @@ bnx_free_rx_chain(struct bnx_softc *sc)
 void
 bnx_phy_intr(struct bnx_softc *sc)
 {
-	u_int32_t		new_link_state, old_link_state;
+	uint32_t		new_link_state, old_link_state;
 
 	bus_dmamap_sync(sc->bnx_dmatag, sc->status_map, 0, BNX_STATUS_BLK_SZ,
 	    BUS_DMASYNC_POSTREAD);
@@ -4287,9 +4382,9 @@ bnx_rx_intr(struct bnx_softc *sc)
 {
 	struct status_block	*sblk = sc->status_block;
 	struct ifnet		*ifp = &sc->bnx_ec.ec_if;
-	u_int16_t		hw_cons, sw_cons, sw_chain_cons;
-	u_int16_t		sw_prod, sw_chain_prod;
-	u_int32_t		sw_prod_bseq;
+	uint16_t		hw_cons, sw_cons, sw_chain_cons;
+	uint16_t		sw_prod, sw_chain_prod;
+	uint32_t		sw_prod_bseq;
 	struct l2_fhdr		*l2fhdr;
 	int			i;
 
@@ -4335,7 +4430,7 @@ bnx_rx_intr(struct bnx_softc *sc)
 		struct mbuf *m;
 		struct rx_bd *rxbd __diagused;
 		unsigned int len;
-		u_int32_t status;
+		uint32_t status;
 
 		/* Convert the producer/consumer indices to an actual
 		 * rx_bd index.
@@ -4605,7 +4700,7 @@ bnx_tx_intr(struct bnx_softc *sc)
 	struct ifnet		*ifp = &sc->bnx_ec.ec_if;
 	struct bnx_pkt		*pkt;
 	bus_dmamap_t		map;
-	u_int16_t		hw_tx_cons, sw_tx_cons, sw_tx_chain_cons;
+	uint16_t		hw_tx_cons, sw_tx_cons, sw_tx_chain_cons;
 
 	DBRUNIF(1, sc->tx_interrupts++);
 	bus_dmamap_sync(sc->bnx_dmatag, sc->status_map, 0, BNX_STATUS_BLK_SZ,
@@ -4734,7 +4829,7 @@ bnx_disable_intr(struct bnx_softc *sc)
 void
 bnx_enable_intr(struct bnx_softc *sc)
 {
-	u_int32_t		val;
+	uint32_t		val;
 
 	REG_WR(sc, BNX_PCICFG_INT_ACK_CMD, BNX_PCICFG_INT_ACK_CMD_INDEX_VALID |
 	    BNX_PCICFG_INT_ACK_CMD_MASK_INT | sc->last_status_idx);
@@ -4754,7 +4849,7 @@ int
 bnx_init(struct ifnet *ifp)
 {
 	struct bnx_softc	*sc = ifp->if_softc;
-	u_int32_t		ether_mtu;
+	uint32_t		ether_mtu;
 	int			s, error = 0;
 
 	DBPRINT(sc, BNX_VERBOSE_RESET, "Entering %s()\n", __func__);
@@ -4849,12 +4944,12 @@ bnx_tx_encap(struct bnx_softc *sc, struct mbuf *m)
 	struct bnx_pkt		*pkt;
 	bus_dmamap_t		map;
 	struct tx_bd		*txbd = NULL;
-	u_int16_t		vlan_tag = 0, flags = 0;
-	u_int16_t		chain_prod, prod;
+	uint16_t		vlan_tag = 0, flags = 0;
+	uint16_t		chain_prod, prod;
 #ifdef BNX_DEBUG
-	u_int16_t		debug_prod;
+	uint16_t		debug_prod;
 #endif
-	u_int32_t		addr, prod_bseq;
+	uint32_t		addr, prod_bseq;
 	int			i, error;
 	struct m_tag		*mtag;
 	static struct work	bnx_wk; /* Dummy work. Statically allocated. */
@@ -4934,9 +5029,9 @@ bnx_tx_encap(struct bnx_softc *sc, struct mbuf *m)
 		chain_prod = TX_CHAIN_IDX(prod);
 		txbd = &sc->tx_bd_chain[TX_PAGE(chain_prod)][TX_IDX(chain_prod)];
 
-		addr = (u_int32_t)map->dm_segs[i].ds_addr;
+		addr = (uint32_t)map->dm_segs[i].ds_addr;
 		txbd->tx_bd_haddr_lo = addr;
-		addr = (u_int32_t)((u_int64_t)map->dm_segs[i].ds_addr >> 32);
+		addr = (uint32_t)((uint64_t)map->dm_segs[i].ds_addr >> 32);
 		txbd->tx_bd_haddr_hi = addr;
 		txbd->tx_bd_mss_nbytes = map->dm_segs[i].ds_len;
 		txbd->tx_bd_vlan_tag = vlan_tag;
@@ -5006,7 +5101,7 @@ bnx_start(struct ifnet *ifp)
 	struct mbuf		*m_head = NULL;
 	int			count = 0;
 #ifdef BNX_DEBUG
-	u_int16_t		tx_chain_prod;
+	uint16_t		tx_chain_prod;
 #endif
 
 	/* If there's no link or the transmit queue is empty then just exit. */
@@ -5182,7 +5277,7 @@ bnx_intr(void *xsc)
 {
 	struct bnx_softc	*sc;
 	struct ifnet		*ifp;
-	u_int32_t		status_attn_bits;
+	uint32_t		status_attn_bits;
 	const struct status_block *sblk;
 
 	sc = xsc;
@@ -5258,7 +5353,8 @@ bnx_intr(void *xsc)
 		    sc->hw_tx_cons)
 			bnx_tx_intr(sc);
 
-		/* Save the status block index value for use during the
+		/*
+		 * Save the status block index value for use during the
 		 * next interrupt.
 		 */
 		sc->last_status_idx = sblk->status_idx;
@@ -5306,8 +5402,8 @@ bnx_iff(struct bnx_softc *sc)
 	struct ifnet		*ifp = &ec->ec_if;
 	struct ether_multi	*enm;
 	struct ether_multistep	step;
-	u_int32_t		hashes[NUM_MC_HASH_REGISTERS] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-	u_int32_t		rx_mode, sort_mode;
+	uint32_t		hashes[NUM_MC_HASH_REGISTERS] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	uint32_t		rx_mode, sort_mode;
 	int			h, i;
 
 	/* Initialize receive mode default settings. */
@@ -5431,44 +5527,44 @@ bnx_stats_update(struct bnx_softc *sc)
 	 * Update the sysctl statistics from the
 	 * hardware statistics.
 	 */
-	sc->stat_IfHCInOctets = ((u_int64_t)stats->stat_IfHCInOctets_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCInOctets_lo;
+	sc->stat_IfHCInOctets = ((uint64_t)stats->stat_IfHCInOctets_hi << 32) +
+	    (uint64_t) stats->stat_IfHCInOctets_lo;
 
 	sc->stat_IfHCInBadOctets =
-	    ((u_int64_t) stats->stat_IfHCInBadOctets_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCInBadOctets_lo;
+	    ((uint64_t) stats->stat_IfHCInBadOctets_hi << 32) +
+	    (uint64_t) stats->stat_IfHCInBadOctets_lo;
 
 	sc->stat_IfHCOutOctets =
-	    ((u_int64_t) stats->stat_IfHCOutOctets_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCOutOctets_lo;
+	    ((uint64_t) stats->stat_IfHCOutOctets_hi << 32) +
+	    (uint64_t) stats->stat_IfHCOutOctets_lo;
 
 	sc->stat_IfHCOutBadOctets =
-	    ((u_int64_t) stats->stat_IfHCOutBadOctets_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCOutBadOctets_lo;
+	    ((uint64_t) stats->stat_IfHCOutBadOctets_hi << 32) +
+	    (uint64_t) stats->stat_IfHCOutBadOctets_lo;
 
 	sc->stat_IfHCInUcastPkts =
-	    ((u_int64_t) stats->stat_IfHCInUcastPkts_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCInUcastPkts_lo;
+	    ((uint64_t) stats->stat_IfHCInUcastPkts_hi << 32) +
+	    (uint64_t) stats->stat_IfHCInUcastPkts_lo;
 
 	sc->stat_IfHCInMulticastPkts =
-	    ((u_int64_t) stats->stat_IfHCInMulticastPkts_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCInMulticastPkts_lo;
+	    ((uint64_t) stats->stat_IfHCInMulticastPkts_hi << 32) +
+	    (uint64_t) stats->stat_IfHCInMulticastPkts_lo;
 
 	sc->stat_IfHCInBroadcastPkts =
-	    ((u_int64_t) stats->stat_IfHCInBroadcastPkts_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCInBroadcastPkts_lo;
+	    ((uint64_t) stats->stat_IfHCInBroadcastPkts_hi << 32) +
+	    (uint64_t) stats->stat_IfHCInBroadcastPkts_lo;
 
 	sc->stat_IfHCOutUcastPkts =
-	   ((u_int64_t) stats->stat_IfHCOutUcastPkts_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCOutUcastPkts_lo;
+	   ((uint64_t) stats->stat_IfHCOutUcastPkts_hi << 32) +
+	    (uint64_t) stats->stat_IfHCOutUcastPkts_lo;
 
 	sc->stat_IfHCOutMulticastPkts =
-	    ((u_int64_t) stats->stat_IfHCOutMulticastPkts_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCOutMulticastPkts_lo;
+	    ((uint64_t) stats->stat_IfHCOutMulticastPkts_hi << 32) +
+	    (uint64_t) stats->stat_IfHCOutMulticastPkts_lo;
 
 	sc->stat_IfHCOutBroadcastPkts =
-	    ((u_int64_t) stats->stat_IfHCOutBroadcastPkts_hi << 32) +
-	    (u_int64_t) stats->stat_IfHCOutBroadcastPkts_lo;
+	    ((uint64_t) stats->stat_IfHCOutBroadcastPkts_hi << 32) +
+	    (uint64_t) stats->stat_IfHCOutBroadcastPkts_lo;
 
 	sc->stat_emac_tx_stat_dot3statsinternalmactransmiterrors =
 	    stats->stat_emac_tx_stat_dot3statsinternalmactransmiterrors;
@@ -5591,16 +5687,16 @@ bnx_tick(void *xsc)
 {
 	struct bnx_softc	*sc = xsc;
 	struct mii_data		*mii;
-	u_int32_t		msg;
-	u_int16_t		prod, chain_prod;
-	u_int32_t		prod_bseq;
+	uint32_t		msg;
+	uint16_t		prod, chain_prod;
+	uint32_t		prod_bseq;
 	int s = splnet();
 
 	/* Tell the firmware that the driver is still running. */
 #ifdef BNX_DEBUG
-	msg = (u_int32_t)BNX_DRV_MSG_DATA_PULSE_CODE_ALWAYS_ALIVE;
+	msg = (uint32_t)BNX_DRV_MSG_DATA_PULSE_CODE_ALWAYS_ALIVE;
 #else
-	msg = (u_int32_t)++sc->bnx_fw_drv_pulse_wr_seq;
+	msg = (uint32_t)++sc->bnx_fw_drv_pulse_wr_seq;
 #endif
 	REG_WR_IND(sc, sc->bnx_shmem_base + BNX_DRV_PULSE_MB, msg);
 
@@ -5789,11 +5885,11 @@ bnx_dump_tx_chain(struct bnx_softc *sc, int tx_prod, int count)
 
 	BNX_PRINTF(sc,
 	    "page size      = 0x%08X, tx chain pages        = 0x%08X\n",
-	    (u_int32_t)BCM_PAGE_SIZE, (u_int32_t) TX_PAGES);
+	    (uint32_t)BCM_PAGE_SIZE, (uint32_t) TX_PAGES);
 
 	BNX_PRINTF(sc,
 	    "tx_bd per page = 0x%08X, usable tx_bd per page = 0x%08X\n",
-	    (u_int32_t)TOTAL_TX_BD_PER_PAGE, (u_int32_t)USABLE_TX_BD_PER_PAGE);
+	    (uint32_t)TOTAL_TX_BD_PER_PAGE, (uint32_t)USABLE_TX_BD_PER_PAGE);
 
 	BNX_PRINTF(sc, "total tx_bd    = 0x%08X\n", TOTAL_TX_BD);
 
@@ -5834,11 +5930,11 @@ bnx_dump_rx_chain(struct bnx_softc *sc, int rx_prod, int count)
 
 	BNX_PRINTF(sc,
 	    "page size      = 0x%08X, rx chain pages        = 0x%08X\n",
-	    (u_int32_t)BCM_PAGE_SIZE, (u_int32_t)RX_PAGES);
+	    (uint32_t)BCM_PAGE_SIZE, (uint32_t)RX_PAGES);
 
 	BNX_PRINTF(sc,
 	    "rx_bd per page = 0x%08X, usable rx_bd per page = 0x%08X\n",
-	    (u_int32_t)TOTAL_RX_BD_PER_PAGE, (u_int32_t)USABLE_RX_BD_PER_PAGE);
+	    (uint32_t)TOTAL_RX_BD_PER_PAGE, (uint32_t)USABLE_RX_BD_PER_PAGE);
 
 	BNX_PRINTF(sc, "total rx_bd    = 0x%08X\n", TOTAL_RX_BD);
 
@@ -6298,7 +6394,7 @@ bnx_dump_driver_state(struct bnx_softc *sc)
 void
 bnx_dump_hw_state(struct bnx_softc *sc)
 {
-	u_int32_t		val1;
+	uint32_t		val1;
 	int			i;
 
 	aprint_debug_dev(sc->bnx_dev,

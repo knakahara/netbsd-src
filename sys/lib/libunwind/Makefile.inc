@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.7 2014/06/13 21:31:20 matt Exp $
+#	$NetBSD: Makefile.inc,v 1.9 2014/06/30 20:42:31 joerg Exp $
 
 .PATH:	${NETBSDSRCDIR}/sys/lib/libunwind
 
@@ -11,3 +11,7 @@ COPTS.libunwind.cxx+=	${${ACTIVE_CXX} == "gcc":? -std=c++0x : -std=c++11 }
 COPTS.libunwind.cxx+=	-funwind-tables -fno-rtti
 COPTS.libunwind.cxx+=	-fno-exceptions -fvisibility=hidden
 COPTS.libunwind.cxx+=	-Wno-old-style-cast
+
+.if ${MACHINE_CPU} == "arm"
+AFLAGS.unwind_registers.S+=	${${ACTIVE_CC} == "clang":? -no-integrated-as :}
+.endif

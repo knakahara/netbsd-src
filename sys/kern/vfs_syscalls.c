@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_syscalls.c,v 1.484 2014/06/14 11:37:35 njoly Exp $	*/
+/*	$NetBSD: vfs_syscalls.c,v 1.487 2014/06/30 17:51:31 maxv Exp $	*/
 
 /*-
  * Copyright (c) 2008, 2009 The NetBSD Foundation, Inc.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.484 2014/06/14 11:37:35 njoly Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.487 2014/06/30 17:51:31 maxv Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_fileassoc.h"
@@ -764,7 +764,7 @@ do_sys_quotactl_put(struct mount *mp, const struct quotakey *key_u,
 }
 
 static int
-do_sys_quotactl_delete(struct mount *mp, const struct quotakey *key_u)
+do_sys_quotactl_del(struct mount *mp, const struct quotakey *key_u)
 {
 	struct quotakey key_k;
 	int error;
@@ -774,7 +774,7 @@ do_sys_quotactl_delete(struct mount *mp, const struct quotakey *key_u)
 		return error;
 	}
 
-	return vfs_quotactl_delete(mp, &key_k);
+	return vfs_quotactl_del(mp, &key_k);
 }
 
 static int
@@ -1003,8 +1003,8 @@ do_sys_quotactl(const char *path_u, const struct quotactl_args *args)
 				args->u.put.qc_key,
 				args->u.put.qc_val);
 		break;
-	    case QUOTACTL_DELETE:
-		error = do_sys_quotactl_delete(mp, args->u.remove.qc_key);
+	    case QUOTACTL_DEL:
+		error = do_sys_quotactl_del(mp, args->u.del.qc_key);
 		break;
 	    case QUOTACTL_CURSOROPEN:
 		error = do_sys_quotactl_cursoropen(mp,
@@ -1706,9 +1706,6 @@ vfs__fhfree(fhandle_t *fhp)
 {
 	size_t fhsize;
 
-	if (fhp == NULL) {
-		return;
-	}
 	fhsize = FHANDLE_SIZE(fhp);
 	kmem_free(fhp, fhsize);
 }
@@ -1756,7 +1753,6 @@ vfs_composefh_alloc(struct vnode *vp, fhandle_t **fhpp)
 	size_t fidsize;
 	int error;
 
-	*fhpp = NULL;
 	mp = vp->v_mount;
 	fidsize = 0;
 	error = VFS_VPTOFH(vp, NULL, &fidsize);
@@ -1826,7 +1822,6 @@ vfs_copyinfh_alloc(const void *ufhp, size_t fhsize, fhandle_t **fhpp)
 	fhandle_t *fhp;
 	int error;
 
-	*fhpp = NULL;
 	if (fhsize > FHANDLE_SIZE_MAX) {
 		return EINVAL;
 	}
@@ -1915,7 +1910,7 @@ sys___getfh30(struct lwp *l, const struct sys___getfh30_args *uap, register_t *r
 	error = vfs_composefh_alloc(vp, &fh);
 	vput(vp);
 	if (error != 0) {
-		goto out;
+		return error;
 	}
 	error = copyin(SCARG(uap, fh_size), &usz, sizeof(size_t));
 	if (error != 0) {
@@ -2701,17 +2696,10 @@ do_sys_unlinkat(struct lwp *l, int fdat, const char *arg, int flags,
 		goto abort;
 	}
 
-
 #if NVERIEXEC > 0
 	/* Handle remove requests for veriexec entries. */
 	if ((error = veriexec_removechk(curlwp, nd.ni_vp, pathstring)) != 0) {
-		VOP_ABORTOP(nd.ni_dvp, &nd.ni_cnd);
-		if (nd.ni_dvp == vp)
-			vrele(nd.ni_dvp);
-		else
-			vput(nd.ni_dvp);
-		vput(vp);
-		goto out;
+		goto abort;
 	}
 #endif /* NVERIEXEC > 0 */
 	

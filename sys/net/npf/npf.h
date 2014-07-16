@@ -1,4 +1,4 @@
-/*	$NetBSD: npf.h,v 1.40 2014/05/30 23:26:06 rmind Exp $	*/
+/*	$NetBSD: npf.h,v 1.42 2014/06/29 00:05:24 rmind Exp $	*/
 
 /*-
  * Copyright (c) 2009-2014 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
 
-#define	NPF_VERSION		13
+#define	NPF_VERSION		14
 
 /*
  * Public declarations and definitions.
@@ -67,6 +67,8 @@ typedef uint8_t			npf_netmask_t;
 #define	BPF_MW_L4OFF		1
 #define	BPF_MW_L4PROTO		2
 #endif
+/* The number of words used. */
+#define	NPF_BPF_NWORDS		3
 
 #if defined(_KERNEL)
 
