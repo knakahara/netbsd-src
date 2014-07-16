@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_ip.c,v 1.127 2014/07/01 05:49:18 rtr Exp $	*/
+/*	$NetBSD: raw_ip.c,v 1.134 2014/07/14 13:39:18 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -65,7 +65,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_ip.c,v 1.127 2014/07/01 05:49:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_ip.c,v 1.134 2014/07/14 13:39:18 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_compat_netbsd.h"
@@ -567,9 +567,50 @@ rip_detach(struct socket *so)
 }
 
 static int
+rip_accept(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	panic("rip_accept");
+	/* NOT REACHED */
+	return EOPNOTSUPP;
+}
+
+static int
 rip_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return in_control(so, cmd, nam, ifp);
+}
+
+static int
+rip_stat(struct socket *so, struct stat *ub)
+{
+	KASSERT(solocked(so));
+
+	/* stat: don't bother with a blocksize. */
+	return 0;
+}
+
+static int
+rip_peeraddr(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+	KASSERT(sotoinpcb(so) != NULL);
+	KASSERT(nam != NULL);
+
+	in_setpeeraddr(sotoinpcb(so), nam);
+	return 0;
+}
+
+static int
+rip_sockaddr(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+	KASSERT(sotoinpcb(so) != NULL);
+	KASSERT(nam != NULL);
+
+	in_setsockaddr(sotoinpcb(so), nam);
+	return 0;
 }
 
 int
@@ -581,7 +622,11 @@ rip_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
 
 	s = splsoftnet();
 	if (req == PRU_PURGEIF) {
@@ -675,13 +720,6 @@ rip_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	}
 		break;
 
-	case PRU_SENSE:
-		/*
-		 * stat: don't bother with a blocksize.
-		 */
-		splx(s);
-		return (0);
-
 	case PRU_RCVOOB:
 		error = EOPNOTSUPP;
 		break;
@@ -690,14 +728,6 @@ rip_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		m_freem(control);
 		m_freem(m);
 		error = EOPNOTSUPP;
-		break;
-
-	case PRU_SOCKADDR:
-		in_setsockaddr(inp, nam);
-		break;
-
-	case PRU_PEERADDR:
-		in_setpeeraddr(inp, nam);
 		break;
 
 	default:
@@ -711,13 +741,21 @@ rip_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 PR_WRAP_USRREQS(rip)
 #define	rip_attach	rip_attach_wrapper
 #define	rip_detach	rip_detach_wrapper
+#define	rip_accept	rip_accept_wrapper
 #define	rip_ioctl	rip_ioctl_wrapper
+#define	rip_stat	rip_stat_wrapper
+#define	rip_peeraddr	rip_peeraddr_wrapper
+#define	rip_sockaddr	rip_sockaddr_wrapper
 #define	rip_usrreq	rip_usrreq_wrapper
 
 const struct pr_usrreqs rip_usrreqs = {
 	.pr_attach	= rip_attach,
 	.pr_detach	= rip_detach,
+	.pr_accept	= rip_accept,
 	.pr_ioctl	= rip_ioctl,
+	.pr_stat	= rip_stat,
+	.pr_peeraddr	= rip_peeraddr,
+	.pr_sockaddr	= rip_sockaddr,
 	.pr_generic	= rip_usrreq,
 };
 

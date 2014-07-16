@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.65 2014/07/02 05:23:20 htodd Exp $
+# $NetBSD: mi,v 1.71 2014/07/09 13:50:48 alnsn Exp $
 
 ./etc/mtree/set.debug                           comp-sys-root
 ./usr/lib/i18n/libBIG5_g.a			comp-c-debuglib		debuglib
@@ -75,6 +75,7 @@
 ./usr/lib/libheimntlm_g.a			comp-c-debuglib		debuglib,kerberos
 ./usr/lib/libhx509_g.a				comp-c-debuglib		debuglib,kerberos
 ./usr/lib/libiberty_g.a				comp-c-debuglib		debuglib,binutils
+./usr/lib/libirs_g.a				comp-c-debuglib		debuglib
 ./usr/lib/libintl_g.a				comp-c-debuglib		debuglib
 ./usr/lib/libipsec_g.a				comp-c-debuglib		debuglib
 ./usr/lib/libisc_g.a				comp-c-debuglib		debuglib
@@ -477,6 +478,7 @@
 ./usr/libdata/debug/usr/bin/db.debug		comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/dc.debug		comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/deroff.debug	comp-util-debug		debug
+./usr/libdata/debug/usr/bin/delv.debug		comp-bind-bin		debug
 ./usr/libdata/debug/usr/bin/diff.debug		comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/diff3.debug		comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/dig.debug		comp-netutil-debug	debug
@@ -1000,6 +1002,7 @@
 ./usr/libdata/debug/usr/sbin/dhcrelay.debug	comp-dhcpd-debug	debug
 ./usr/libdata/debug/usr/sbin/diskpart.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/dnssec-dsfromkey.debug	comp-bind-debug		debug
+./usr/libdata/debug/usr/sbin/dnssec-importkey.debug	comp-bind-debug		debug
 ./usr/libdata/debug/usr/sbin/dnssec-keyfromlabel.debug	comp-bind-debug		debug
 ./usr/libdata/debug/usr/sbin/dnssec-keygen.debug	comp-bind-debug		debug
 ./usr/libdata/debug/usr/sbin/dnssec-revoke.debug	comp-bind-debug		debug
@@ -1143,6 +1146,7 @@
 ./usr/libdata/debug/usr/sbin/postmulti.debug	comp-postfix-debug	postfix,debug
 ./usr/libdata/debug/usr/sbin/postqueue.debug	comp-postfix-debug	postfix,debug
 ./usr/libdata/debug/usr/sbin/postsuper.debug	comp-postfix-debug	postfix,debug
+./usr/libdata/debug/usr/sbin/posttls-finger.debug	comp-postfix-debug	postfix,debug
 ./usr/libdata/debug/usr/sbin/powerd.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/pppd.debug		comp-ppp-debug		debug
 ./usr/libdata/debug/usr/sbin/pppdump.debug	comp-ppp-debug		debug
@@ -1774,6 +1778,7 @@
 ./usr/libdata/debug/usr/tests/lib/libbluetooth/t_sdp_match.debug	tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libbluetooth/t_sdp_put.debug		tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libbluetooth/t_sdp_set.debug		tests-lib-debug		debug,atf
+./usr/libdata/debug/usr/tests/lib/libbpfjit/t_bpfjit.debug		tests-lib-debug		debug,atf,sljit
 ./usr/libdata/debug/usr/tests/lib/libbpfjit/t_extmem.debug		tests-lib-debug		debug,atf,sljit
 ./usr/libdata/debug/usr/tests/lib/libbpfjit/t_cop.debug			tests-lib-debug		debug,atf,sljit
 ./usr/libdata/debug/usr/tests/lib/libc/c063/t_faccessat.debug		tests-lib-debug		debug,atf
@@ -2123,7 +2128,12 @@
 ./usr/libdata/debug/usr/tests/libexec/ld.elf_so/t_dlvsym.debug		tests-libexec-debug	debug,atf,pic
 ./usr/libdata/debug/usr/tests/net/bpf/t_bpf.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/bpf/t_div-by-zero.debug		tests-net-debug		debug,atf,rump
+./usr/libdata/debug/usr/tests/net/bpf/t_mbuf.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/bpfilter/t_bpfilter.debug		tests-net-debug		debug,atf,rump
+./usr/libdata/debug/usr/tests/net/bpfjit/t_bpfjit.debug		tests-net-debug		debug,atf,sljit,rump
+./usr/libdata/debug/usr/tests/net/bpfjit/t_cop.debug		tests-net-debug		debug,atf,sljit,rump
+./usr/libdata/debug/usr/tests/net/bpfjit/t_extmem.debug		tests-net-debug		debug,atf,sljit,rump
+./usr/libdata/debug/usr/tests/net/bpfjit/t_mbuf.debug		tests-net-debug		debug,atf,sljit,rump
 ./usr/libdata/debug/usr/tests/net/carp/t_basic.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/fdpass/fdpass32.debug		tests-net-debug		debug,atf
 ./usr/libdata/debug/usr/tests/net/fdpass/fdpass64.debug		tests-net-debug		debug,atf

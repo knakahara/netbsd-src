@@ -1,4 +1,4 @@
-/*	$NetBSD: hci_socket.c,v 1.26 2014/07/01 05:49:18 rtr Exp $	*/
+/*	$NetBSD: hci_socket.c,v 1.32 2014/07/09 14:41:42 rtr Exp $	*/
 
 /*-
  * Copyright (c) 2005 Iain Hibbert.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hci_socket.c,v 1.26 2014/07/01 05:49:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hci_socket.c,v 1.32 2014/07/09 14:41:42 rtr Exp $");
 
 /* load symbolic names */
 #ifdef BLUETOOTH_DEBUG
@@ -484,13 +484,67 @@ hci_detach(struct socket *so)
 }
 
 static int
-hci_ioctl(struct socket *up, u_long cmd, void *nam, struct ifnet *ifp)
+hci_accept(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+hci_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	int err;
 	mutex_enter(bt_lock);
 	err = hci_ioctl_pcb(cmd, nam);
 	mutex_exit(bt_lock);
 	return err;
+}
+
+static int
+hci_stat(struct socket *so, struct stat *ub)
+{
+	KASSERT(solocked(so));
+
+	return 0;
+}
+
+static int
+hci_peeraddr(struct socket *so, struct mbuf *nam)
+{
+	struct hci_pcb *pcb = (struct hci_pcb *)so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(pcb != NULL);
+	KASSERT(nam != NULL);
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	memset(sa, 0, sizeof(struct sockaddr_bt));
+	nam->m_len =
+	sa->bt_len = sizeof(struct sockaddr_bt);
+	sa->bt_family = AF_BLUETOOTH;
+	bdaddr_copy(&sa->bt_bdaddr, &pcb->hp_raddr);
+	return 0;
+}
+
+static int
+hci_sockaddr(struct socket *so, struct mbuf *nam)
+{
+	struct hci_pcb *pcb = (struct hci_pcb *)so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(pcb != NULL);
+	KASSERT(nam != NULL);
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	memset(sa, 0, sizeof(struct sockaddr_bt));
+	nam->m_len =
+	sa->bt_len = sizeof(struct sockaddr_bt);
+	sa->bt_family = AF_BLUETOOTH;
+	bdaddr_copy(&sa->bt_bdaddr, &pcb->hp_laddr);
+	return 0;
 }
 
 /*
@@ -514,7 +568,11 @@ hci_usrreq(struct socket *up, int req, struct mbuf *m,
 	DPRINTFN(2, "%s\n", prurequests[req]);
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
 
 	switch(req) {
 	case PRU_PURGEIF:
@@ -581,28 +639,6 @@ hci_usrreq(struct socket *up, int req, struct mbuf *m,
 		soisconnected(up);
 		return 0;
 
-	case PRU_PEERADDR:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-
-		memset(sa, 0, sizeof(struct sockaddr_bt));
-		nam->m_len =
-		sa->bt_len = sizeof(struct sockaddr_bt);
-		sa->bt_family = AF_BLUETOOTH;
-		bdaddr_copy(&sa->bt_bdaddr, &pcb->hp_raddr);
-		return 0;
-
-	case PRU_SOCKADDR:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-
-		memset(sa, 0, sizeof(struct sockaddr_bt));
-		nam->m_len =
-		sa->bt_len = sizeof(struct sockaddr_bt);
-		sa->bt_family = AF_BLUETOOTH;
-		bdaddr_copy(&sa->bt_bdaddr, &pcb->hp_laddr);
-		return 0;
-
 	case PRU_SHUTDOWN:
 		socantsendmore(up);
 		break;
@@ -628,14 +664,10 @@ hci_usrreq(struct socket *up, int req, struct mbuf *m,
 
 		return hci_send(pcb, m, (sa ? &sa->bt_bdaddr : &pcb->hp_raddr));
 
-	case PRU_SENSE:
-		return 0;		/* (no sense - Doh!) */
-
 	case PRU_RCVD:
 	case PRU_RCVOOB:
 		return EOPNOTSUPP;	/* (no release) */
 
-	case PRU_ACCEPT:
 	case PRU_CONNECT2:
 	case PRU_LISTEN:
 	case PRU_SENDOOB:
@@ -868,12 +900,20 @@ PR_WRAP_USRREQS(hci)
 
 #define	hci_attach		hci_attach_wrapper
 #define	hci_detach		hci_detach_wrapper
+#define	hci_accept		hci_accept_wrapper
 #define	hci_ioctl		hci_ioctl_wrapper
+#define	hci_stat		hci_stat_wrapper
+#define	hci_peeraddr		hci_peeraddr_wrapper
+#define	hci_sockaddr		hci_sockaddr_wrapper
 #define	hci_usrreq		hci_usrreq_wrapper
 
 const struct pr_usrreqs hci_usrreqs = {
 	.pr_attach	= hci_attach,
 	.pr_detach	= hci_detach,
+	.pr_accept	= hci_accept,
 	.pr_ioctl	= hci_ioctl,
+	.pr_stat	= hci_stat,
+	.pr_peeraddr	= hci_peeraddr,
+	.pr_sockaddr	= hci_sockaddr,
 	.pr_generic	= hci_usrreq,
 };

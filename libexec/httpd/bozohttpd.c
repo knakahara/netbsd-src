@@ -1,4 +1,4 @@
-/*	$NetBSD: bozohttpd.c,v 1.51 2014/07/01 13:41:21 shm Exp $	*/
+/*	$NetBSD: bozohttpd.c,v 1.54 2014/07/08 14:06:17 mrg Exp $	*/
 
 /*	$eterna: bozohttpd.c,v 1.178 2011/11/18 09:21:15 mrg Exp $	*/
 
@@ -109,7 +109,7 @@
 #define INDEX_HTML		"index.html"
 #endif
 #ifndef SERVER_SOFTWARE
-#define SERVER_SOFTWARE		"bozohttpd/20140516"
+#define SERVER_SOFTWARE		"bozohttpd/20140708"
 #endif
 #ifndef DIRECT_ACCESS_FILE
 #define DIRECT_ACCESS_FILE	".bzdirect"
@@ -935,7 +935,12 @@ check_direct_access(bozo_httpreq_t *request)
 		bozo_check_special_files(request, basename);
 	}
 
-	snprintf(dirfile, sizeof(dirfile), "%s/%s", dir, DIRECT_ACCESS_FILE);
+	if ((size_t)snprintf(dirfile, sizeof(dirfile), "%s/%s", dir,
+	  DIRECT_ACCESS_FILE) >= sizeof(dirfile)) {
+		bozo_http_error(request->hr_httpd, 404, request,
+		  "directfile path too long");
+		return 0;
+	}
 	if (stat(dirfile, &sb) < 0 ||
 	    (fp = fopen(dirfile, "r")) == NULL)
 		return 0;
@@ -1127,7 +1132,7 @@ use_slashdir:
 /*
  * checks to see if this request has a valid .bzredirect file.  returns
  * 0 when no redirection happend, or 1 when handle_redirect() has been
- * called.
+ * called, -1 on error.
  */
 static int
 check_bzredirect(bozo_httpreq_t *request)
@@ -1142,7 +1147,12 @@ check_bzredirect(bozo_httpreq_t *request)
 	 * if this pathname is really a directory, but doesn't end in /,
 	 * use it as the directory to look for the redir file.
 	 */
-	snprintf(dir, sizeof(dir), "%s", request->hr_file + 1);
+	if((size_t)snprintf(dir, sizeof(dir), "%s", request->hr_file + 1) >=
+	  sizeof(dir)) {
+		bozo_http_error(request->hr_httpd, 404, request,
+		  "file path too long");
+		return -1;
+	}
 	debug((request->hr_httpd, DEBUG_FAT, "check_bzredirect: dir %s", dir));
 	basename = strrchr(dir, '/');
 
@@ -1156,13 +1166,23 @@ check_bzredirect(bozo_httpreq_t *request)
 		bozo_check_special_files(request, basename);
 	}
 
-	snprintf(redir, sizeof(redir), "%s/%s", dir, REDIRECT_FILE);
+	if ((size_t)snprintf(redir, sizeof(redir), "%s/%s", dir,
+	  REDIRECT_FILE) >= sizeof(redir)) {
+		bozo_http_error(request->hr_httpd, 404, request,
+		  "redirectfile path too long");
+		return -1;
+	}
 	if (lstat(redir, &sb) == 0) {
 		if (!S_ISLNK(sb.st_mode))
 			return 0;
 		absolute = 0;
 	} else {
-		snprintf(redir, sizeof(redir), "%s/%s", dir, ABSREDIRECT_FILE);
+		if((size_t)snprintf(redir, sizeof(redir), "%s/%s", dir,
+		  ABSREDIRECT_FILE) >= sizeof(redir)) {
+			bozo_http_error(request->hr_httpd, 404, request,
+			  "redirectfile path too long");
+			return -1;
+		}
 		if (lstat(redir, &sb) < 0 || !S_ISLNK(sb.st_mode))
 			return 0;
 		absolute = 1;
@@ -1186,9 +1206,14 @@ check_bzredirect(bozo_httpreq_t *request)
 	/* now we have the link pointer, redirect to the real place */
 	if (absolute)
 		finalredir = redirpath;
-	else
-		snprintf(finalredir = redir, sizeof(redir), "/%s/%s", dir,
-			 redirpath);
+	else {
+		if ((size_t)snprintf(finalredir = redir, sizeof(redir), "/%s/%s",
+		  dir, redirpath) >= sizeof(redir)) {
+			bozo_http_error(request->hr_httpd, 404, request,
+			  "redirect path too long");
+			return -1;
+		}
+	}
 
 	debug((request->hr_httpd, DEBUG_FAT,
 	       "check_bzredirect: new redir %s", finalredir));
@@ -1307,8 +1332,12 @@ transform_request(bozo_httpreq_t *request, int *isindex)
 		goto bad_done;
 	}
 
-	if (check_bzredirect(request))
+	switch(check_bzredirect(request)) {
+	case -1:
+		goto bad_done;
+	case 1:
 		return 0;
+	}
 
 	if (httpd->untrustedref) {
 		int to_indexhtml = 0;
@@ -1533,15 +1562,21 @@ bozo_process_request(bozo_httpreq_t *request)
 
 	if (fd < 0) {
 		debug((httpd, DEBUG_FAT, "open failed: %s", strerror(errno)));
-		if (errno == EPERM)
+		switch(errno) {
+		case EPERM:
 			(void)bozo_http_error(httpd, 403, request,
 						"no permission to open file");
-		else if (errno == ENOENT) {
+			break;
+		case ENAMETOOLONG:
+			/*FALLTHROUGH*/
+		case ENOENT:
 			if (!bozo_dir_index(request, file, isindex))
 				(void)bozo_http_error(httpd, 404, request,
 							"no file");
-		} else
+			break;
+		default:
 			(void)bozo_http_error(httpd, 500, request, "open file");
+		}
 		goto cleanup_nofd;
 	}
 	if (fstat(fd, &sb) < 0) {

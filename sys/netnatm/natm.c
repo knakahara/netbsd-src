@@ -1,4 +1,4 @@
-/*	$NetBSD: natm.c,v 1.29 2014/07/01 05:49:19 rtr Exp $	*/
+/*	$NetBSD: natm.c,v 1.37 2014/07/09 14:41:42 rtr Exp $	*/
 
 /*
  * Copyright (c) 1996 Charles D. Cranor and Washington University.
@@ -30,9 +30,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: natm.c,v 1.29 2014/07/01 05:49:19 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: natm.c,v 1.37 2014/07/09 14:41:42 rtr Exp $");
 
 #include <sys/param.h>
+#include <sys/kmem.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/domain.h>
@@ -60,6 +61,7 @@ u_long natm0_recvspace = 16*1024;
 static int
 natm_attach(struct socket *so, int proto)
 {
+	int error = 0;
 	struct natmpcb *npcb;
 
 	KASSERT(so->so_pcb == NULL);
@@ -76,7 +78,7 @@ natm_attach(struct socket *so, int proto)
 	npcb = npcb_alloc(true);
 	npcb->npcb_socket = so;
 	so->so_pcb = npcb;
-	return 0;
+	return error;
 }
 
 static void
@@ -96,11 +98,23 @@ natm_detach(struct socket *so)
 }
 
 static int
+natm_accept(struct socket *so, struct mbuf *nam)
+{
+	KASSERt(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
 natm_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
-  int error = 0;
+  int error = 0, s;
+  struct natmpcb *npcb;
+  struct atm_rawioctl ario;
 
   s = SPLSOFTNET();
+
+  npcb = (struct natmpcb *) so->so_pcb;
 
   /*
    * raw atm ioctl.   comes in as a SIOCRAWATM.   we convert it to
@@ -131,6 +145,42 @@ done:
   return(error);
 }
 
+static int
+natm_stat(struct socket *so, struct stat *ub)
+{
+  KASSERT(solocked(so));
+
+  return 0;
+}
+
+static int
+natm_peeraddr(struct socket *so, struct mbuf *nam)
+{
+  struct natmpcb *npcb = (struct natmpcb *) so->so_pcb;
+  struct sockaddr_natm *snatm;
+
+  KASSERT(solocked(so));
+  KASSERT(pcb != NULL);
+  KASSERT(nam != NULL);
+
+  snatm = mtod(nam, struct sockaddr_natm *);
+  memset(snatm, 0, sizeof(*snatm));
+  nam->m_len = snatm->snatm_len = sizeof(*snatm);
+  snatm->snatm_family = AF_NATM;
+  memcpy(snatm->snatm_if, npcb->npcb_ifp->if_xname, sizeof(snatm->snatm_if));
+  snatm->snatm_vci = npcb->npcb_vci;
+  snatm->snatm_vpi = npcb->npcb_vpi;
+  return 0;
+}
+
+static int
+natm_sockaddr(struct socket *so, struct mbuf *nam)
+{
+  KASSERT(solocked(so));
+
+  return EOPNOTSUPP;
+}
+
 /*
  * user requests
  */
@@ -144,13 +194,16 @@ natm_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
   struct sockaddr_natm *snatm;
   struct atm_pseudoioctl api;
   struct atm_pseudohdr *aph;
-  struct atm_rawioctl ario;
   struct ifnet *ifp;
   int proto = so->so_proto->pr_protocol;
 
   KASSERT(req != PRU_ATTACH);
   KASSERT(req != PRU_DETACH);
+  KASSERT(req != PRU_ACCEPT);
   KASSERT(req != PRU_CONTROL);
+  KASSERT(req != PRU_SENSE);
+  KASSERT(req != PRU_PEERADDR);
+  KASSERT(req != PRU_SOCKADDR);
 
   s = SPLSOFTNET();
 
@@ -287,23 +340,8 @@ natm_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 
       break;
 
-    case PRU_SENSE:			/* return status into m */
-      /* return zero? */
-      break;
-
-    case PRU_PEERADDR:			/* fetch peer's address */
-      snatm = mtod(nam, struct sockaddr_natm *);
-      memset(snatm, 0, sizeof(*snatm));
-      nam->m_len = snatm->snatm_len = sizeof(*snatm);
-      snatm->snatm_family = AF_NATM;
-      memcpy(snatm->snatm_if, npcb->npcb_ifp->if_xname, sizeof(snatm->snatm_if));
-      snatm->snatm_vci = npcb->npcb_vci;
-      snatm->snatm_vpi = npcb->npcb_vpi;
-      break;
-
     case PRU_BIND:			/* bind socket to address */
     case PRU_LISTEN:			/* listen for connection */
-    case PRU_ACCEPT:			/* accept connection from peer */
     case PRU_CONNECT2:			/* connect two sockets */
     case PRU_ABORT:			/* abort (fast DISCONNECT, DETATCH) */
 					/* (only happens if LISTEN socket) */
@@ -314,7 +352,6 @@ natm_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
     case PRU_SENDOOB:			/* send out of band data */
     case PRU_PROTORCV:			/* receive from below */
     case PRU_PROTOSEND:			/* send to below */
-    case PRU_SOCKADDR:			/* fetch socket's address */
 #ifdef DIAGNOSTIC
       printf("natm: PRU #%d unsupported\n", req);
 #endif
@@ -410,12 +447,20 @@ m->m_pkthdr.rcvif = NULL;	/* null it out to be safe */
 PR_WRAP_USRREQS(natm)
 #define	natm_attach	natm_attach_wrapper
 #define	natm_detach	natm_detach_wrapper
+#define	natm_accept	natm_accept_wrapper
 #define	natm_ioctl	natm_ioctl_wrapper
+#define	natm_stat	natm_stat_wrapper
+#define	natm_peeraddr	natm_peeraddr_wrapper
+#define	natm_sockaddr	natm_sockaddr_wrapper
 #define	natm_usrreq	natm_usrreq_wrapper
 
 const struct pr_usrreqs natm_usrreqs = {
 	.pr_attach	= natm_attach,
 	.pr_detach	= natm_detach,
+	.pr_accept	= natm_accept,
 	.pr_ioctl	= natm_ioctl,
+	.pr_stat	= natm_stat,
+	.pr_peeraddr	= natm_peeraddr,
+	.pr_sockaddr	= natm_sockaddr,
 	.pr_generic	= natm_usrreq,
 };

@@ -1,4 +1,4 @@
-/*	$NetBSD: rfcomm_socket.c,v 1.18 2014/07/01 05:49:18 rtr Exp $	*/
+/*	$NetBSD: rfcomm_socket.c,v 1.24 2014/07/09 14:41:42 rtr Exp $	*/
 
 /*-
  * Copyright (c) 2006 Itronix Inc.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rfcomm_socket.c,v 1.18 2014/07/01 05:49:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rfcomm_socket.c,v 1.24 2014/07/09 14:41:42 rtr Exp $");
 
 /* load symbolic names */
 #ifdef BLUETOOTH_DEBUG
@@ -125,9 +125,64 @@ rfcomm_detach(struct socket *so)
 }
 
 static int
-rfcomm_ioctl(struct socket *up, u_long cmd, void *nam, struct ifnet *ifp)
+rfcomm_accept(struct socket *so, struct mbuf *nam)
+{
+	struct rfcomm_dlc *pcb = so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(nam != NULL);
+
+	if (pcb == NULL)
+		return EINVAL;
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	nam->m_len = sizeof(struct sockaddr_bt);
+	return rfcomm_peeraddr_pcb(pcb, sa);
+}
+
+static int
+rfcomm_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return EPASSTHROUGH;
+}
+
+static int
+rfcomm_stat(struct socket *so, struct stat *ub)
+{
+	KASSERT(solocked(so));
+
+	return 0;
+}
+
+static int
+rfcomm_peeraddr(struct socket *so, struct mbuf *nam)
+{
+	struct rfcomm_dlc *pcb = so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(pcb != NULL);
+	KASSERT(nam != NULL);
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	nam->m_len = sizeof(struct sockaddr_bt);
+	return rfcomm_peeraddr_pcb(pcb, sa);
+}
+
+static int
+rfcomm_sockaddr(struct socket *so, struct mbuf *nam)
+{
+	struct rfcomm_dlc *pcb = so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(pcb != NULL);
+	KASSERT(nam != NULL);
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	nam->m_len = sizeof(struct sockaddr_bt);
+	return rfcomm_sockaddr_pcb(pcb, sa);
 }
 
 /*
@@ -157,7 +212,11 @@ rfcomm_usrreq(struct socket *up, int req, struct mbuf *m,
 	DPRINTFN(2, "%s\n", prurequests[req]);
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
 
 	switch (req) {
 	case PRU_PURGEIF:
@@ -204,18 +263,6 @@ rfcomm_usrreq(struct socket *up, int req, struct mbuf *m,
 		soisconnecting(up);
 		return rfcomm_connect(pcb, sa);
 
-	case PRU_PEERADDR:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-		nam->m_len = sizeof(struct sockaddr_bt);
-		return rfcomm_peeraddr(pcb, sa);
-
-	case PRU_SOCKADDR:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-		nam->m_len = sizeof(struct sockaddr_bt);
-		return rfcomm_sockaddr(pcb, sa);
-
 	case PRU_SHUTDOWN:
 		socantsendmore(up);
 		break;
@@ -234,9 +281,6 @@ rfcomm_usrreq(struct socket *up, int req, struct mbuf *m,
 
 		return rfcomm_send(pcb, m0);
 
-	case PRU_SENSE:
-		return 0;		/* (no release) */
-
 	case PRU_RCVD:
 		return rfcomm_rcvd(pcb, sbspace(&up->so_rcv));
 
@@ -245,12 +289,6 @@ rfcomm_usrreq(struct socket *up, int req, struct mbuf *m,
 
 	case PRU_LISTEN:
 		return rfcomm_listen(pcb);
-
-	case PRU_ACCEPT:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-		nam->m_len = sizeof(struct sockaddr_bt);
-		return rfcomm_peeraddr(pcb, sa);
 
 	case PRU_CONNECT2:
 	case PRU_SENDOOB:
@@ -429,12 +467,20 @@ PR_WRAP_USRREQS(rfcomm)
 
 #define	rfcomm_attach		rfcomm_attach_wrapper
 #define	rfcomm_detach		rfcomm_detach_wrapper
+#define	rfcomm_accept		rfcomm_accept_wrapper
 #define	rfcomm_ioctl		rfcomm_ioctl_wrapper
+#define	rfcomm_stat		rfcomm_stat_wrapper
+#define	rfcomm_peeraddr		rfcomm_peeraddr_wrapper
+#define	rfcomm_sockaddr		rfcomm_sockaddr_wrapper
 #define	rfcomm_usrreq		rfcomm_usrreq_wrapper
 
 const struct pr_usrreqs rfcomm_usrreqs = {
 	.pr_attach	= rfcomm_attach,
 	.pr_detach	= rfcomm_detach,
+	.pr_accept	= rfcomm_accept,
 	.pr_ioctl	= rfcomm_ioctl,
+	.pr_stat	= rfcomm_stat,
+	.pr_peeraddr	= rfcomm_peeraddr,
+	.pr_sockaddr	= rfcomm_sockaddr,
 	.pr_generic	= rfcomm_usrreq,
 };

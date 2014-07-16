@@ -1,4 +1,4 @@
-/*	$NetBSD: ddp_usrreq.c,v 1.47 2014/07/01 05:49:18 rtr Exp $	 */
+/*	$NetBSD: ddp_usrreq.c,v 1.53 2014/07/09 14:41:42 rtr Exp $	 */
 
 /*
  * Copyright (c) 1990,1991 Regents of The University of Michigan.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ddp_usrreq.c,v 1.47 2014/07/01 05:49:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ddp_usrreq.c,v 1.53 2014/07/09 14:41:42 rtr Exp $");
 
 #include "opt_mbuftrace.h"
 
@@ -84,7 +84,11 @@ ddp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *addr,
 
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
 
 	ddp = sotoddpcb(so);
 
@@ -105,10 +109,6 @@ ddp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *addr,
 	switch (req) {
 	case PRU_BIND:
 		error = at_pcbsetaddr(ddp, addr, l);
-		break;
-
-	case PRU_SOCKADDR:
-		at_sockaddr(ddp, addr);
 		break;
 
 	case PRU_CONNECT:
@@ -171,7 +171,6 @@ ddp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *addr,
 
 	case PRU_LISTEN:
 	case PRU_CONNECT2:
-	case PRU_ACCEPT:
 	case PRU_SENDOOB:
 	case PRU_FASTTIMO:
 	case PRU_SLOWTIMO:
@@ -186,13 +185,6 @@ ddp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *addr,
 		 * Don't mfree. Good architecture...
 		 */
 		return (EOPNOTSUPP);
-
-	case PRU_SENSE:
-		/*
-		 * 1. Don't return block size.
-		 * 2. Don't mfree.
-		 */
-		return (0);
 
 	default:
 		error = EOPNOTSUPP;
@@ -479,9 +471,45 @@ ddp_detach(struct socket *so)
 }
 
 static int
+ddp_accept(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
 ddp_ioctl(struct socket *so, u_long cmd, void *addr, struct ifnet *ifp)
 {
 	return at_control(cmd, addr, ifp);
+}
+
+static int
+ddp_stat(struct socket *so, struct stat *ub)
+{
+	KASSERT(solocked(so));
+
+	/* stat: don't bother with a blocksize. */
+	return 0;
+}
+
+static int
+ddp_peeraddr(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+ddp_sockaddr(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+	KASSERT(sotoddpcb(so) != NULL);
+	KASSERT(nam != NULL);
+
+	at_sockaddr(sotoddpcb(so), nam);
+	return 0;
 }
 
 /*
@@ -557,13 +585,21 @@ ddp_init(void)
 PR_WRAP_USRREQS(ddp)
 #define	ddp_attach	ddp_attach_wrapper
 #define	ddp_detach	ddp_detach_wrapper
+#define	ddp_accept	ddp_accept_wrapper
 #define	ddp_ioctl	ddp_ioctl_wrapper
+#define	ddp_stat	ddp_stat_wrapper
+#define	ddp_peeraddr	ddp_peeraddr_wrapper
+#define	ddp_sockaddr	ddp_sockaddr_wrapper
 #define	ddp_usrreq	ddp_usrreq_wrapper
 
 const struct pr_usrreqs ddp_usrreqs = {
 	.pr_attach	= ddp_attach,
 	.pr_detach	= ddp_detach,
+	.pr_accept	= ddp_accept,
 	.pr_ioctl	= ddp_ioctl,
+	.pr_stat	= ddp_stat,
+	.pr_peeraddr	= ddp_peeraddr,
+	.pr_sockaddr	= ddp_sockaddr,
 	.pr_generic	= ddp_usrreq,
 };
 

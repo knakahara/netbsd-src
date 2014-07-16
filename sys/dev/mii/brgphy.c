@@ -1,4 +1,4 @@
-/*	$NetBSD: brgphy.c,v 1.72 2014/06/18 06:35:19 msaitoh Exp $	*/
+/*	$NetBSD: brgphy.c,v 1.76 2014/07/02 22:35:10 msaitoh Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: brgphy.c,v 1.72 2014/06/18 06:35:19 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: brgphy.c,v 1.76 2014/07/02 22:35:10 msaitoh Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -173,6 +173,9 @@ static const struct mii_phydesc brgphys[] = {
 
 	{ MII_OUI_BROADCOM,		MII_MODEL_BROADCOM_BCM5705,
 	  MII_STR_BROADCOM_BCM5705 },
+
+	{ MII_OUI_BROADCOM,		MII_MODEL_BROADCOM_BCM5706,
+	  MII_STR_BROADCOM_BCM5706 },
 
 	{ MII_OUI_BROADCOM,		MII_MODEL_BROADCOM_BCM5714,
 	  MII_STR_BROADCOM_BCM5714 },
@@ -311,11 +314,22 @@ brgphyattach(device_t parent, device_t self, void *aux)
 	}
 
 	if (sc->mii_flags & MIIF_HAVEFIBER) {
-		if (_BNX_CHIP_NUM(bsc->sc_chipid) == BNX_CHIP_NUM_5708)
+		if ((sc->mii_mpd_oui == MII_OUI_BROADCOM2)
+		    && sc->mii_mpd_model == MII_MODEL_BROADCOM2_BCM5708S)
 			sc->mii_funcs = &brgphy_5708s_funcs;
-		else if (_BNX_CHIP_NUM(bsc->sc_chipid) == BNX_CHIP_NUM_5709)
-			sc->mii_funcs = &brgphy_5709s_funcs;
-		else
+		else if ((sc->mii_mpd_oui == MII_OUI_BROADCOM2)
+		    && (sc->mii_mpd_model ==  MII_MODEL_BROADCOM2_BCM5709S)) {
+			if (bsc->sc_isbnx)
+				sc->mii_funcs = &brgphy_5709s_funcs;
+			else {
+				/*
+				 * XXX
+				 * 5720S and 5709S shares the same PHY id.
+				 * Assume 5720S PHY if parent device is bge(4).
+				 */
+				sc->mii_funcs = &brgphy_5708s_funcs;
+			}
+		} else
 			sc->mii_funcs = &brgphy_fiber_funcs;
 	} else
 		sc->mii_funcs = &brgphy_copper_funcs;
@@ -327,40 +341,35 @@ brgphyattach(device_t parent, device_t self, void *aux)
 		sc->mii_extcapabilities = PHY_READ(sc, MII_EXTSR);
 
 	aprint_normal_dev(self, "");
-	if ((sc->mii_capabilities & BMSR_MEDIAMASK) == 0 &&
-	    (sc->mii_extcapabilities & EXTSR_MEDIAMASK) == 0)
-		aprint_error("no media present");
-	else {
-		if (sc->mii_flags & MIIF_HAVEFIBER) {
-			sc->mii_flags |= MIIF_NOISOLATE | MIIF_NOLOOP;
+	if (sc->mii_flags & MIIF_HAVEFIBER) {
+		sc->mii_flags |= MIIF_NOISOLATE | MIIF_NOLOOP;
 
+		/*
+		 * Set the proper bits for capabilities so that the
+		 * correct media get selected by mii_phy_add_media()
+		 */
+		sc->mii_capabilities |= BMSR_ANEG;
+		sc->mii_capabilities &= ~BMSR_100T4;
+		sc->mii_extcapabilities |= EXTSR_1000XFDX;
+
+		if (bsc->sc_isbnx) {
 			/*
-			 * Set the proper bits for capabilities so that the
-			 * correct media get selected by mii_phy_add_media()
+			 * 2.5Gb support is a software enabled feature
+			 * on the BCM5708S and BCM5709S controllers.
 			 */
-			sc->mii_capabilities |= BMSR_ANEG;
-			sc->mii_capabilities &= ~BMSR_100T4;
-			sc->mii_extcapabilities |= EXTSR_1000XFDX;
-
-			if (bsc->sc_isbnx) {
-				/*
-				 * 2.5Gb support is a software enabled feature
-				 * on the BCM5708S and BCM5709S controllers.
-				 */
 #define	ADD(m, c)	ifmedia_add(&mii->mii_media, (m), (c), NULL)
-				if (bsc->sc_phyflags
-				    & BNX_PHY_2_5G_CAPABLE_FLAG) {
-					ADD(IFM_MAKEWORD(IFM_ETHER, IFM_2500_SX,
-					    IFM_FDX, sc->mii_inst), 0);
-					aprint_normal("2500baseSX-FDX, ");
+			if (bsc->sc_phyflags
+			    & BNX_PHY_2_5G_CAPABLE_FLAG) {
+				ADD(IFM_MAKEWORD(IFM_ETHER, IFM_2500_SX,
+					IFM_FDX, sc->mii_inst), 0);
+				aprint_normal("2500baseSX-FDX, ");
 #undef ADD
-				}
 			}
 		}
-		mii_phy_add_media(sc);
 	}
-	aprint_normal("\n");
+	mii_phy_add_media(sc);
 
+	aprint_normal("\n");
 }
 
 static int
@@ -371,9 +380,7 @@ brgphy_service(struct mii_softc *sc, struct mii_data *mii, int cmd)
 
 	switch (cmd) {
 	case MII_POLLSTAT:
-		/*
-		 * If we're not polling our PHY instance, just return.
-		 */
+		/* If we're not polling our PHY instance, just return. */
 		if (IFM_INST(ife->ifm_media) != sc->mii_inst)
 			return (0);
 		break;
@@ -389,9 +396,7 @@ brgphy_service(struct mii_softc *sc, struct mii_data *mii, int cmd)
 			return (0);
 		}
 
-		/*
-		 * If the interface is not up, don't do anything.
-		 */
+		/* If the interface is not up, don't do anything. */
 		if ((mii->mii_ifp->if_flags & IFF_UP) == 0)
 			break;
 
@@ -448,21 +453,15 @@ setit:
 		break;
 
 	case MII_TICK:
-		/*
-		 * If we're not currently selected, just return.
-		 */
+		/* If we're not currently selected, just return. */
 		if (IFM_INST(ife->ifm_media) != sc->mii_inst)
 			return (0);
 
-		/*
-		 * Is the interface even up?
-		 */
+		/* Is the interface even up? */
 		if ((mii->mii_ifp->if_flags & IFF_UP) == 0)
 			return 0;
 
-		/*
-		 * Only used for autonegotiation.
-		 */
+		/* Only used for autonegotiation. */
 		if ((IFM_SUBTYPE(ife->ifm_media) != IFM_AUTO) &&
 		    (IFM_SUBTYPE(ife->ifm_media) != IFM_1000_T)) {
 			sc->mii_ticks = 0;
@@ -487,9 +486,7 @@ setit:
 		if (sc->mii_ticks++ == 0)
 			break;
 
-		/*
-		 * Only retry autonegotiation every mii_anegticks seconds.
-		 */
+		/* Only retry autonegotiation every mii_anegticks seconds. */
 		KASSERT(sc->mii_anegticks != 0);
 		if (sc->mii_ticks <= sc->mii_anegticks)
 			break;
@@ -824,10 +821,8 @@ brgphy_mii_phy_auto(struct mii_softc *sc)
 			ktcr |= GTCR_MAN_MS | GTCR_ADV_MS;
 		PHY_WRITE(sc, MII_100T2CR, ktcr);
 		ktcr = PHY_READ(sc, MII_100T2CR);
-		DELAY(1000);
 	}
 	PHY_WRITE(sc, MII_ANAR, anar);
-	DELAY(1000);
 
 	/* Start autonegotiation */
 	PHY_WRITE(sc, MII_BMCR, BMCR_AUTOEN | BMCR_STARTNEG);
@@ -839,7 +834,7 @@ brgphy_mii_phy_auto(struct mii_softc *sc)
 void
 brgphy_loop(struct mii_softc *sc)
 {
-	u_int32_t bmsr;
+	uint32_t bmsr;
 	int i;
 
 	PHY_WRITE(sc, MII_BMCR, BMCR_LOOP);
@@ -1248,7 +1243,7 @@ brgphy_disable_early_dac(struct mii_softc *sc)
 static void
 brgphy_jumbo_settings(struct mii_softc *sc)
 {
-	u_int32_t val;
+	uint32_t val;
 
 	/* Set Jumbo frame settings in the PHY. */
 	if ((sc->mii_mpd_oui == MII_OUI_BROADCOM)
@@ -1270,7 +1265,7 @@ brgphy_jumbo_settings(struct mii_softc *sc)
 static void
 brgphy_eth_wirespeed(struct mii_softc *sc)
 {
-	u_int32_t val;
+	uint32_t val;
 
 	/* Enable Ethernet@Wirespeed */
 	PHY_WRITE(sc, BRGPHY_MII_AUXCTL, 0x7007);

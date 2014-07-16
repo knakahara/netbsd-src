@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs.h,v 1.1187 2014/06/23 17:32:05 msaitoh Exp $	*/
+/*	$NetBSD: pcidevs.h,v 1.1190 2014/07/08 17:45:44 msaitoh Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.1194 2014/06/23 17:31:40 msaitoh Exp
+ *	NetBSD: pcidevs,v 1.1197 2014/07/08 17:45:12 msaitoh Exp
  */
 
 /*
@@ -2591,7 +2591,11 @@
 #define	PCI_PRODUCT_INTEL_SRCS28X	0x0409		/* SATA RAID Controller */
 #define	PCI_PRODUCT_INTEL_HASWELL_IGD	0x0402		/* Haswell Integrated Graphics Device */
 #define	PCI_PRODUCT_INTEL_HASWELL_IGD_1	0x0412		/* Haswell Integrated Graphics Device */
-#define	PCI_PRODUCT_INTEL_I347AT4	0x0438		/* I347-AT4 Gigabit Network Connection */
+#define	PCI_PRODUCT_INTEL_DH89XX_QA	0x0434		/* DH89xx QuiskAssit */
+#define	PCI_PRODUCT_INTEL_DH89XXCC_SGMII	0x0438		/* DH89XXCC SGMII */
+#define	PCI_PRODUCT_INTEL_DH89XXCC_SERDES	0x043a		/* DH89XXCC SerDes */
+#define	PCI_PRODUCT_INTEL_DH89XXCC_BPLANE	0x043c		/* DH89XXCC backplane */
+#define	PCI_PRODUCT_INTEL_DH89XXCC_SFP	0x0440		/* DH89XXCC SFP */
 #define	PCI_PRODUCT_INTEL_PCEB	0x0482		/* 82375EB/SB PCI-EISA Bridge */
 #define	PCI_PRODUCT_INTEL_CDC	0x0483		/* 82424ZX Cache and DRAM Controller */
 #define	PCI_PRODUCT_INTEL_SIO	0x0484		/* 82378ZB System I/O */
@@ -3041,7 +3045,19 @@
 #define	PCI_PRODUCT_INTEL_C2000_SGMII	0x1f41		/* C2000 Ethernet(SGMII) */
 #define	PCI_PRODUCT_INTEL_C2000_DUMMYGBE	0x1f42		/* C2000 Ethernet(Dummy function) */
 #define	PCI_PRODUCT_INTEL_C2000_25GBE	0x1f45		/* C2000 Ethernet(2.5Gbe) */
-#define	PCI_PRODUCT_INTEL_DH89XX_SMB	0x2330		/* DH89xx SMBus Controller */
+#define	PCI_PRODUCT_INTEL_DH89XX_LPC	0x2310		/* DH89xx LPC Controller */
+#define	PCI_PRODUCT_INTEL_DH89XX_SATA_1	0x2323		/* DH89xx SATA Controller */
+#define	PCI_PRODUCT_INTEL_DH89XX_SATA_2	0x2326		/* DH89xx SATA Controller */
+#define	PCI_PRODUCT_INTEL_DH89XX_SMB	0x2330		/* DH89xx SMBus Host Controller */
+#define	PCI_PRODUCT_INTEL_DH89XX_THERMAL	0x2332		/* DH89xx Thermal Subsystem */
+#define	PCI_PRODUCT_INTEL_DH89XX_USB	0x2334		/* DH89xx USB EHCI */
+#define	PCI_PRODUCT_INTEL_DH89XX_PCIE_1	0x2342		/* DH89xx PCIe Root Port */
+#define	PCI_PRODUCT_INTEL_DH89XX_PCIE_2	0x2344		/* DH89xx PCIe Root Port */
+#define	PCI_PRODUCT_INTEL_DH89XX_PCIE_3	0x2346		/* DH89xx PCIe Root Port */
+#define	PCI_PRODUCT_INTEL_DH89XX_PCIE_4	0x2348		/* DH89xx PCIe Root Port */
+#define	PCI_PRODUCT_INTEL_DH89XX_WDT	0x2360		/* DH89xx Watchdog Timer for Core Reset */
+#define	PCI_PRODUCT_INTEL_DH89XX_MEI_1	0x2364		/* DH89xx MEI Controller */
+#define	PCI_PRODUCT_INTEL_DH89XX_MEI_2	0x2365		/* DH89xx MEI Controller */
 #define	PCI_PRODUCT_INTEL_82801AA_LPC	0x2410		/* 82801AA LPC Interface Bridge */
 #define	PCI_PRODUCT_INTEL_82801AA_IDE	0x2411		/* 82801AA IDE Controller */
 #define	PCI_PRODUCT_INTEL_82801AA_USB	0x2412		/* 82801AA USB Controller */
@@ -3352,7 +3368,10 @@
 #define	PCI_PRODUCT_INTEL_82Q33_IGD_1	0x29d3		/* 82Q35 Integrated Graphics Device */
 #define	PCI_PRODUCT_INTEL_82Q33_KT	0x29d7		/* 82Q33 KT */
 #define	PCI_PRODUCT_INTEL_82X38_HB	0x29e0		/* 82X38 Host Bridge */
+#define	PCI_PRODUCT_INTEL_82X38_PCIE_1	0x29e1		/* 82X38 Host-Primary PCIe Bridge */
+#define	PCI_PRODUCT_INTEL_82X38_HECI	0x29e4		/* 82X38 HECI */
 #define	PCI_PRODUCT_INTEL_82X38_KT	0x29e7		/* 82X38 KT */
+#define	PCI_PRODUCT_INTEL_82X38_PCIE_2	0x29e9		/* 82X38 Host-Secondary PCIe Bridge */
 #define	PCI_PRODUCT_INTEL_3200_HB	0x29f0		/* 3200/3210 Host */
 #define	PCI_PRODUCT_INTEL_3200_PCIE	0x29f1		/* 3200/3210 PCIE */
 #define	PCI_PRODUCT_INTEL_3200_KT	0x29f7		/* 3200 KT */
@@ -4868,9 +4887,16 @@
 #define	PCI_PRODUCT_RATOC_REXPCI31	0x0853		/* REX PCI-31/33 SCSI */
 
 /* RDC Semiconductor products */
-#define	PCI_PRODUCT_RDC_IDE	0x1011		/* RDC IDE controller */
-#define	PCI_PRODUCT_RDC_PCIB	0x6036		/* RDC PCI-ISA bridge */
-#define	PCI_PRODUCT_RDC_R6040	0x6040		/* RDC R6040 10/100 Ethernet */
+#define	PCI_PRODUCT_RDC_R1010_IDE	0x1010		/* R1010 IDE controller */
+#define	PCI_PRODUCT_RDC_R1011_IDE	0x1011		/* R1011 IDE controller */
+#define	PCI_PRODUCT_RDC_R1012_IDE	0x1012		/* R1012 IDE controller */
+#define	PCI_PRODUCT_RDC_R6021_HB	0x6021		/* R6021 Host */
+#define	PCI_PRODUCT_RDC_R6025_HB	0x6025		/* R6025 Host */
+#define	PCI_PRODUCT_RDC_R6031_ISA	0x6031		/* R6031 PCI-ISA bridge */
+#define	PCI_PRODUCT_RDC_PCIB	0x6036		/* R6036 PCI-ISA bridge */
+#define	PCI_PRODUCT_RDC_R6040	0x6040		/* R6040 10/100 Ethernet */
+#define	PCI_PRODUCT_RDC_R6060_OHCI	0x6060		/* R6060 USB OHCI */
+#define	PCI_PRODUCT_RDC_R6061_EHCI	0x6061		/* R6061 USB EHCI */
 
 /* Realtek products */
 #define	PCI_PRODUCT_REALTEK_RTS5209	0x5209		/* RTS5209 PCI-E Card Reader */

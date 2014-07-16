@@ -1,4 +1,4 @@
-/* $NetBSD: lfs_user.h,v 1.5 2013/06/08 21:13:19 dholland Exp $ */
+/* $NetBSD: lfs_user.h,v 1.7 2014/07/13 02:44:21 dholland Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.

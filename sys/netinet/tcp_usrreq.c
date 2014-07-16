@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_usrreq.c,v 1.180 2014/07/01 05:49:18 rtr Exp $	*/
+/*	$NetBSD: tcp_usrreq.c,v 1.188 2014/07/14 13:20:41 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -99,7 +99,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.180 2014/07/01 05:49:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.188 2014/07/14 13:20:41 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -156,6 +156,27 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.180 2014/07/01 05:49:18 rtr Exp $")
 
 #include "opt_tcp_space.h"
 
+static int  
+tcp_debug_capture(struct tcpcb *tp, int req)  
+{
+#ifdef KPROF
+	tcp_acounts[tp->t_state][req]++;
+#endif
+#ifdef TCP_DEBUG
+	return tp->t_state;
+#endif
+	return 0;
+}
+
+static inline void
+tcp_debug_trace(struct socket *so, struct tcpcb *tp, int ostate, int req)
+{        
+#ifdef TCP_DEBUG
+	if (tp && (so->so_options & SO_DEBUG))
+		tcp_trace(TA_USER, ostate, tp, NULL, req);
+#endif
+}
+
 /*
  * Process a TCP user request for TCP tb.  If this is a send request
  * then m is the mbuf chain of send data.  If this is a timer expiration
@@ -172,14 +193,16 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	struct tcpcb *tp = NULL;
 	int s;
 	int error = 0;
-#ifdef TCP_DEBUG
 	int ostate = 0;
-#endif
 	int family;	/* family of the socket */
 
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
 
 	family = so->so_proto->pr_domain->dom_family;
 
@@ -242,11 +265,11 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	 * a (struct inpcb) pointed at by the socket, and this
 	 * structure will point at a subsidary (struct tcpcb).
 	 */
-	if ((inp == NULL
+	if (inp == NULL
 #ifdef INET6
 	    && in6p == NULL
 #endif
-	    ) && req != PRU_SENSE)
+	    )
 	{
 		error = EINVAL;
 		goto release;
@@ -255,24 +278,14 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	if (inp) {
 		tp = intotcpcb(inp);
 		/* WHAT IF TP IS 0? */
-#ifdef KPROF
-		tcp_acounts[tp->t_state][req]++;
-#endif
-#ifdef TCP_DEBUG
-		ostate = tp->t_state;
-#endif
+		ostate = tcp_debug_capture(tp, req);
 	}
 #endif
 #ifdef INET6
 	if (in6p) {
 		tp = in6totcpcb(in6p);
 		/* WHAT IF TP IS 0? */
-#ifdef KPROF
-		tcp_acounts[tp->t_state][req]++;
-#endif
-#ifdef TCP_DEBUG
-		ostate = tp->t_state;
-#endif
+		ostate = tcp_debug_capture(tp, req);
 	}
 #endif
 
@@ -413,22 +426,6 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		break;
 
 	/*
-	 * Accept a connection.  Essentially all the work is
-	 * done at higher levels; just return the address
-	 * of the peer, storing through addr.
-	 */
-	case PRU_ACCEPT:
-#ifdef INET
-		if (inp)
-			in_setpeeraddr(inp, nam);
-#endif
-#ifdef INET6
-		if (in6p)
-			in6_setpeeraddr(in6p, nam);
-#endif
-		break;
-
-	/*
 	 * Mark the connection as being incapable of further output.
 	 */
 	case PRU_SHUTDOWN:
@@ -475,20 +472,7 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		tp = tcp_drop(tp, ECONNABORTED);
 		break;
 
-	case PRU_SENSE:
-		/*
-		 * stat: don't bother with a blocksize.
-		 */
-		splx(s);
-		return (0);
-
 	case PRU_RCVOOB:
-		if (control && control->m_len) {
-			m_freem(control);
-			m_freem(m);
-			error = EINVAL;
-			break;
-		}
 		if ((so->so_oobmark == 0 &&
 		    (so->so_state & SS_RCVATMARK) == 0) ||
 		    so->so_options & SO_OOBINLINE ||
@@ -527,35 +511,11 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		tp->t_force = 0;
 		break;
 
-	case PRU_SOCKADDR:
-#ifdef INET
-		if (inp)
-			in_setsockaddr(inp, nam);
-#endif
-#ifdef INET6
-		if (in6p)
-			in6_setsockaddr(in6p, nam);
-#endif
-		break;
-
-	case PRU_PEERADDR:
-#ifdef INET
-		if (inp)
-			in_setpeeraddr(inp, nam);
-#endif
-#ifdef INET6
-		if (in6p)
-			in6_setpeeraddr(in6p, nam);
-#endif
-		break;
-
 	default:
 		panic("tcp_usrreq");
 	}
-#ifdef TCP_DEBUG
-	if (tp && (so->so_options & SO_DEBUG))
-		tcp_trace(TA_USER, ostate, tp, NULL, req);
-#endif
+
+	tcp_debug_trace(so, tp, ostate, req);
 
 release:
 	splx(s);
@@ -943,6 +903,72 @@ tcp_detach(struct socket *so)
 }
 
 static int
+tcp_accept(struct socket *so, struct mbuf *nam)
+{
+	struct inpcb *inp = NULL;
+#ifdef INET6
+	struct in6pcb *in6p = NULL;
+#endif
+	struct tcpcb *tp = NULL;
+	int ostate = 0;
+
+	KASSERT(solocked(so));
+
+	switch (so->so_proto->pr_domain->dom_family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		return EAFNOSUPPORT;
+	}
+
+	/*
+	 * When a TCP is attached to a socket, then there will be
+	 * a (struct inpcb) pointed at by the socket, and this
+	 * structure will point at a subsidary (struct tcpcb).
+	 */
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+	{
+		return EINVAL;
+	}
+
+	/*
+	 * Accept a connection.  Essentially all the work is
+	 * done at higher levels; just return the address
+	 * of the peer, storing through addr.
+	 */
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		KASSERT(tp != NULL);
+		ostate = tcp_debug_capture(tp, PRU_ACCEPT);
+		in_setpeeraddr(inp, nam);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		KASSERT(tp != NULL);
+		ostate = tcp_debug_capture(tp, PRU_ACCEPT);
+		in6_setpeeraddr(in6p, nam);
+	}
+#endif
+	tcp_debug_trace(so, tp, ostate, PRU_ACCEPT);
+	return 0;
+}
+
+static int
 tcp_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	switch (so->so_proto->pr_domain->dom_family) {
@@ -957,6 +983,119 @@ tcp_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 	default:
 		return EAFNOSUPPORT;
 	}
+}
+
+static int
+tcp_stat(struct socket *so, struct stat *ub)
+{
+	KASSERT(solocked(so));
+
+	/* stat: don't bother with a blocksize.  */
+	return 0;
+}
+
+static int
+tcp_peeraddr(struct socket *so, struct mbuf *nam)
+{
+	struct inpcb *inp = NULL;
+#ifdef INET6
+	struct in6pcb *in6p = NULL;
+#endif
+	struct tcpcb *tp = NULL;
+	int ostate = 0;
+
+	switch (so->so_proto->pr_domain->dom_family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		return EAFNOSUPPORT;
+	}
+
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+		return EINVAL;
+
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		ostate = tcp_debug_capture(tp, PRU_PEERADDR);
+		in_setpeeraddr(inp, nam);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		ostate = tcp_debug_capture(tp, PRU_PEERADDR);
+		in6_setpeeraddr(in6p, nam);
+	}
+#endif
+
+	tcp_debug_trace(so, tp, ostate, PRU_PEERADDR);
+
+	return 0;
+}
+
+static int
+tcp_sockaddr(struct socket *so, struct mbuf *nam)
+{
+	struct inpcb *inp = NULL;
+#ifdef INET6
+	struct in6pcb *in6p = NULL;
+#endif
+	struct tcpcb *tp = NULL;
+	int ostate = 0;
+
+	switch (so->so_proto->pr_domain->dom_family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		return EAFNOSUPPORT;
+	}
+
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+		return EINVAL;
+
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		ostate = tcp_debug_capture(tp, PRU_SOCKADDR);
+		in_setsockaddr(inp, nam);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		ostate = tcp_debug_capture(tp, PRU_SOCKADDR);
+		in6_setsockaddr(in6p, nam);
+	}
+#endif
+
+	tcp_debug_trace(so, tp, ostate, PRU_SOCKADDR);
+
+	return 0;
 }
 
 /*
@@ -2195,12 +2334,20 @@ tcp_usrreq_init(void)
 PR_WRAP_USRREQS(tcp)
 #define	tcp_attach	tcp_attach_wrapper
 #define	tcp_detach	tcp_detach_wrapper
+#define	tcp_accept	tcp_accept_wrapper
 #define	tcp_ioctl	tcp_ioctl_wrapper
+#define	tcp_stat	tcp_stat_wrapper
+#define	tcp_peeraddr	tcp_peeraddr_wrapper
+#define	tcp_sockaddr	tcp_sockaddr_wrapper
 #define	tcp_usrreq	tcp_usrreq_wrapper
 
 const struct pr_usrreqs tcp_usrreqs = {
 	.pr_attach	= tcp_attach,
 	.pr_detach	= tcp_detach,
+	.pr_accept	= tcp_accept,
 	.pr_ioctl	= tcp_ioctl,
+	.pr_stat	= tcp_stat,
+	.pr_peeraddr	= tcp_peeraddr,
+	.pr_sockaddr	= tcp_sockaddr,
 	.pr_generic	= tcp_usrreq,
 };

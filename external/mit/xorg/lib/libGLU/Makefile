@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.13 2014/06/14 20:49:37 mrg Exp $
+#	$NetBSD: Makefile,v 1.15 2014/07/14 00:22:46 riz Exp $
 
 NOLINT=		1	# XTODO: tess.ln SIGSEGVs lint :(
 
@@ -97,4 +97,4 @@ COPTS.tobezier.cc+=	-Wno-error
 COPTS.sampleCompTop.cc+=	-O0
 .endif
 
-CWARNFLAGS.clang+=	-Wno-parentheses
+CWARNFLAGS.clang+=	-Wno-parentheses -Wno-tautological-compare

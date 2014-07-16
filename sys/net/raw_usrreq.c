@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_usrreq.c,v 1.40 2014/06/22 08:10:18 rtr Exp $	*/
+/*	$NetBSD: raw_usrreq.c,v 1.43 2014/07/09 14:41:42 rtr Exp $	*/
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_usrreq.c,v 1.40 2014/06/22 08:10:18 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_usrreq.c,v 1.43 2014/07/09 14:41:42 rtr Exp $");
 
 #include <sys/param.h>
 #include <sys/mbuf.h>
@@ -162,7 +162,11 @@ raw_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
 
 	s = splsoftnet();
 	KERNEL_LOCK(1, NULL);
@@ -237,13 +241,6 @@ raw_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 			raw_disconnect(rp);
 		break;
 
-	case PRU_SENSE:
-		/*
-		 * stat: don't bother with a blocksize.
-		 */
-		error = 0;
-		break;
-
 	/*
 	 * Not supported.
 	 */
@@ -255,22 +252,6 @@ raw_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		m_freem(control);
 		m_freem(m);
 		error = EOPNOTSUPP;
-		break;
-
-	case PRU_SOCKADDR:
-		if (rp->rcb_laddr == NULL) {
-			error = EINVAL;
-			break;
-		}
-		raw_setsockaddr(rp, nam);
-		break;
-
-	case PRU_PEERADDR:
-		if (rp->rcb_faddr == NULL) {
-			error = ENOTCONN;
-			break;
-		}
-		raw_setpeeraddr(rp, nam);
 		break;
 
 	default:
