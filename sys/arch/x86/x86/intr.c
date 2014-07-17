@@ -636,7 +636,7 @@ intr_get_next_cpu(void)
 
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
-		       int *index, int is_msi)
+		       int *index)
 {
 	int slot, i;
 	struct intrsource *isp;
@@ -651,7 +651,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		slot = -1;
 
 		/* avoid reserved slots for legacy interrupts. */
-		if (is_msi)
+		if (is_msi_irq(pin))
 			start = NUM_LEGACY_IRQS;
 
 		/*
@@ -689,8 +689,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
  */
 static int __noinline
 intr_allocate_slot(struct pic *pic, int pin, int level,
-		   struct cpu_info **cip, int *index, int *idt_slot,
-		   int is_msi)
+		   struct cpu_info **cip, int *index, int *idt_slot)
 {
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci, *lci;
@@ -729,7 +728,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 		 * Must be directed to BP.
 		 */
 		ci = &cpu_info_primary;
-		error = intr_allocate_slot_cpu(ci, pic, pin, &slot, is_msi);
+		error = intr_allocate_slot_cpu(ci, pic, pin, &slot);
 	} else {
 		/*
 		 * Find least loaded AP/BP and try to allocate there.
@@ -748,10 +747,10 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 			ci = &cpu_info_primary;
 #endif
 		}
-		if (is_msi)
+		if (is_msi_irq(pin))
 			ci = intr_get_next_cpu();
 		KASSERT(ci != NULL);
-		error = intr_allocate_slot_cpu(ci, pic, pin, &slot, is_msi);
+		error = intr_allocate_slot_cpu(ci, pic, pin, &slot);
 
 		/*
 		 * If that did not work, allocate anywhere.
@@ -763,7 +762,7 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 					continue;
 				}
 				error = intr_allocate_slot_cpu(ci, pic,
-				    pin, &slot, is_msi);
+				    pin, &slot);
 				if (error == 0) {
 					break;
 				}
@@ -917,11 +916,6 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 #endif /* MULTIPROCESSOR */
 	uint64_t where;
 
-	/* should use is_msi_irq()? */
-	bool is_msi = ((pin & APIC_INT_VIA_MSG) != 0);
-
-	pin &= ~APIC_INT_VIA_MSG;
-
 #ifdef DIAGNOSTIC
 	if (legacy_irq != -1 && (legacy_irq < 0 || legacy_irq > 15))
 		panic("%s: bad legacy IRQ value", __func__);
@@ -936,7 +930,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 		return NULL;
 	}
 
-	if (!is_msi) {
+	if (!is_msi_irq(pin)) {
 		if (intr_allocate_io_intrsource(pin) == NULL) {
 			printf("%s: can't allocate io_intersource\n", __func__);
 			return NULL;
@@ -944,8 +938,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	}
 
 	mutex_enter(&cpu_lock);
-	error = intr_allocate_slot(pic, pin, level, &ci,
-				   &slot, &idt_vec, is_msi);
+	error = intr_allocate_slot(pic, pin, level, &ci, &slot, &idt_vec);
 	if (error != 0) {
 		mutex_exit(&cpu_lock);
 		kmem_free(ih, sizeof(*ih));
@@ -1168,8 +1161,8 @@ intr_string(int ih, char *buf, size_t len)
 	if (ih == 0)
 		panic("%s: bogus handle 0x%x", __func__, ih);
 
-	if (ih & APIC_INT_VIA_MSG) {
-		snprintf(buf, len, "msi/msi-x %d", ih & ~APIC_INT_VIA_MSG);
+	if (is_msi_irq(ih)) {
+		snprintf(buf, len, "msi/msi-x %d", ih);
 		return buf;
 	}
 

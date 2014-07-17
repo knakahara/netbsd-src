@@ -227,7 +227,6 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 
 	for (i = 0; i < *count; i++) {
 		set_msi_pci_attach_args(vectors[i], pa);
-		vectors[i] |= APIC_INT_VIA_MSG;
 	}
 
 	*ihps = vectors;
@@ -253,11 +252,6 @@ pci_msi_common_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	irq = -1;
 	pin = ih & (~MPSAFE_MASK); /* hint to search pcitag_t */
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
-
-	if ((ih & APIC_INT_VIA_MSG) == 0) {
-		aprint_normal("invalid MSI/MSI-X ih: 0x%x\n", ih);
-		return NULL;
-	}
 
 	return intr_establish(irq, pic, pin, IST_EDGE, level, func, arg,
 	    mpsafe);
@@ -325,7 +319,6 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 		mh.mth_table_index = i;
 		set_msix_table_handler(vectors[i], &mh);
 		set_msi_pci_attach_args(vectors[i], pa);
-		vectors[i] |= APIC_INT_VIA_MSG;
 	}
 
 	*ihps = vectors;
