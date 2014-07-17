@@ -617,8 +617,7 @@ intr_free_msix_vectors(int *vectors, int count)
 /*
  * return "next" cpu for round-robin assigning
  * ignore SPCF_NOINTR
- * XXXX
- * should be per a device
+ * should be per a device?
  */
 static struct cpu_info *
 msi_next_cpu(void)

@@ -79,7 +79,6 @@ msi_addroute(struct pic *pic, struct cpu_info *ci,
 		panic("%s: no msi capability", __func__);
 
 	/*
-	 * XXXX
 	 * see OpenBSD's cpu_attach().
 	 * OpenBSD's ci->ci_apicid is equal to NetBSD's ci_cpuid.
 	 * What's mean OpenBSD's ci->ci_cpuid? the value is sc->sc_dev.dv_unit.
@@ -113,7 +112,7 @@ msi_delroute(struct pic *pic, struct cpu_info *ci,
 	pcireg_t reg;
 	int off;
 
-	/* XXXX must use PBA (Pending Bit Array) */
+	/* should use Mask Bits? */
 	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, &reg) == 0)
 		panic("%s: no msi capability", __func__);
 	pci_conf_write(pc, tag, off, reg & ~PCI_MSI_CTL_MSI_ENABLE);
@@ -158,7 +157,6 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 		PCI_MSIX_TABLE_ENTRY_SIZE * mth->mth_table_index;
 
 	/*
-	 * XXXX
 	 * see OpenBSD's cpu_attach().
 	 * OpenBSD's ci->ci_apicid is equal to NetBSD's ci_cpuid.
 	 * What's mean OpenBSD's ci->ci_cpuid? the value is sc->sc_dev.dv_unit.
@@ -193,10 +191,26 @@ msix_delroute(struct pic *pic, struct cpu_info *ci,
 	pcitag_t tag = pa->pa_tag;
 	pcireg_t reg;
 	int off;
+	uint64_t table_off;
+
+	struct msix_table_handler *mth;
+
+	uint64_t entry_base;
+	pcireg_t tbl;
+
+	mth = get_msix_table_handler(pin);
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, &reg) == 0)
 		panic("%s: no msix capability", __func__);
-	pci_conf_write(pc, tag, off, reg & ~PCI_MSIX_CTL_ENABLE);
+	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
+	table_off = tbl & PCI_MSIX_TBLOFFSET_MASK;
+
+	entry_base = table_off +
+		PCI_MSIX_TABLE_ENTRY_SIZE * mth->mth_table_index;
+
+	bus_space_write_4(mth->mth_tag, mth->mth_handle,
+	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, 0);
+	BUS_SPACE_WRITE_FLUSH(mth->mth_tag, mth->mth_handle);
 }
 
 static struct pic msix_pic = {
