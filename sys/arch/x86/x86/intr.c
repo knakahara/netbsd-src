@@ -482,7 +482,7 @@ out:
 }
 
 static int
-find_free_msi_vectors(int count)
+find_continuous_vectors(int count)
 {
 	int first;
 	int i, j;
@@ -490,14 +490,14 @@ find_free_msi_vectors(int count)
 	i = FIRST_MSI_INT;
 	__cpu_simple_lock(&io_interrupt_sources_lock);
 	while (i < NUM_IO_INTS) {
-		if (io_interrupt_sources[i] != NULL) {
+		if (intr_get_io_intrsource(i) != NULL) {
 			i++;
 			continue;
 		}
 
 		first = i;
 		for (j = 0; j < count; j++) {
-			if (io_interrupt_sources[first + j] != NULL)
+			if (intr_get_io_intrsource(first + j) != NULL)
 				break;
 		}
 		if (j != count) {
@@ -525,7 +525,7 @@ intr_allocate_msi_common_vectors(int *count, int (*next_count)(int))
 	struct intrsource *isp;
 
 	for (; *count > 0; *count = (*next_count)(*count)) {
-		first = find_free_msi_vectors(*count);
+		first = find_continuous_vectors(*count);
 		if (first == -1)
 			continue;
 
