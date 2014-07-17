@@ -416,7 +416,22 @@ intr_scan_bus(int bus, int pin, int *handle)
 }
 #endif
 
+static bool
+is_msi_irq(int irq)
+{
+	if (FIRST_MSI_INT <= irq && irq < FIRST_MSI_INT + NUM_MSI_INTS)
+		return true;
+
+	return false;
+}
+
 static struct intrsource *
+intr_get_io_intrsource(int irq)
+{
+	return io_interrupt_sources[irq];
+}
+
+struct intrsource *
 intr_allocate_io_intrsource(int irq)
 {
 	struct intrsource *isp = NULL;
@@ -426,14 +441,19 @@ intr_allocate_io_intrsource(int irq)
 
 	__cpu_simple_lock(&io_interrupt_sources_lock);
 
-	if (io_interrupt_sources[irq] != NULL)
+	if (io_interrupt_sources[irq] != NULL) {
+		/* normal interrupts can share IRQ */
+		if (!is_msi_irq(irq))
+			isp = io_interrupt_sources[irq];
+
+		/* MSI/MSI-X cannot share IRQ, return NULL */
 		goto out;
+	}
 
 	isp = kmem_zalloc(sizeof(*isp), KM_NOSLEEP);
 	if (isp == NULL) {
 		goto out;
 	}
-
 	io_interrupt_sources[irq] = isp;
 
 out:
@@ -441,7 +461,7 @@ out:
 	return isp;
 }
 
-static void
+void
 intr_free_io_intrsource(int irq)
 {
 	if (irq > NUM_IO_INTS)
@@ -459,35 +479,6 @@ intr_free_io_intrsource(int irq)
 out:
 	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	return;
-}
-
-static struct intrsource *
-intr_occupy_io_intrsource(int irq)
-{
-	__cpu_simple_lock(&io_interrupt_sources_lock);
-
-	if (io_interrupt_sources[irq] != NULL) {
-		__cpu_simple_unlock(&io_interrupt_sources_lock);
-		return io_interrupt_sources[irq];
-	}
-
-	__cpu_simple_unlock(&io_interrupt_sources_lock);
-	return intr_allocate_io_intrsource(irq);
-}
-
-static void
-intr_unoccupy_io_intrsource(int irq)
-{
-	/*
-	 * XXXX
-	 * future work, IRQ interrupt should do intr_allocate_io_intersource()
-	 * in pci_intr_map(), as IRQ interrupt set affinity easily.
-	 * after done it, this special case is removed.
-	 */
-	if (irq >= FIRST_MSI_INT)
-		return;
-
-	return intr_free_io_intrsource(irq);
 }
 
 static int
@@ -680,10 +671,8 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
-		isp = intr_occupy_io_intrsource(pin);
-		if (isp == NULL) {
-			return ENOMEM;
-		}
+		isp = intr_get_io_intrsource(pin);
+		KASSERT(isp != NULL);
 		snprintf(isp->is_evname, sizeof (isp->is_evname),
 		    "pin %d", pin);
 		evcnt_attach_dynamic(&isp->is_evcnt, EVCNT_TYPE_INTR, NULL,
@@ -797,7 +786,6 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 	}
 	if (idtvec == 0) {
 		evcnt_detach(&ci->ci_isources[slot]->is_evcnt);
-		intr_unoccupy_io_intrsource(pin);
 		ci->ci_isources[slot] = NULL;
 		return EBUSY;
 	}
@@ -812,16 +800,13 @@ static void
 intr_source_free(struct cpu_info *ci, int slot, struct pic *pic, int idtvec)
 {
 	struct intrsource *isp;
-	int pin;
 
 	isp = ci->ci_isources[slot];
-	pin = isp->is_pin;
 
 	if (isp->is_handlers != NULL)
 		return;
 	ci->ci_isources[slot] = NULL;
 	evcnt_detach(&isp->is_evcnt);
-	intr_free_io_intrsource(pin);
 	ci->ci_isources[slot] = NULL;
 	if (pic != &i8259_pic)
 		idt_vec_free(idtvec);
@@ -932,6 +917,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 #endif /* MULTIPROCESSOR */
 	uint64_t where;
 
+	/* should use is_msi_irq()? */
 	bool is_msi = ((pin & APIC_INT_VIA_MSG) != 0);
 
 	pin &= ~APIC_INT_VIA_MSG;
@@ -948,6 +934,13 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	if (ih == NULL) {
 		printf("%s: can't allocate handler info\n", __func__);
 		return NULL;
+	}
+
+	if (!is_msi) {
+		if (intr_allocate_io_intrsource(pin) == NULL) {
+			printf("%s: can't allocate io_intersource\n", __func__);
+			return NULL;
+		}
 	}
 
 	mutex_enter(&cpu_lock);
@@ -990,6 +983,8 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 			mutex_exit(&cpu_lock);
 			kmem_free(ih, sizeof(*ih));
 			intr_source_free(ci, slot, pic, idt_vec);
+			/* IST_PULSE is not MSI/MSI-X */
+			intr_free_io_intrsource(pin);
 			printf("%s: pic %s pin %d: can't share "
 			       "type %d with %d\n",
 				__func__, pic->pic_name, pin,
@@ -1137,6 +1132,7 @@ intr_disestablish(struct intrhand *ih)
 {
 	struct cpu_info *ci;
 	uint64_t where;
+	int irq;
 
 	/*
 	 * Count the removal for load balancing.
@@ -1145,6 +1141,7 @@ intr_disestablish(struct intrhand *ih)
 	 */
 	mutex_enter(&cpu_lock);
 	ci = ih->ih_cpu;
+	irq = ci->ci_isources[ih->ih_slot]->is_pin;
 	(ci->ci_nintrhand)--;
 	KASSERT(ci->ci_nintrhand >= 0);
 	if (ci == curcpu() || !mp_online) {
@@ -1154,6 +1151,10 @@ intr_disestablish(struct intrhand *ih)
 		xc_wait(where);
 	}	
 	mutex_exit(&cpu_lock);
+
+	if (!is_msi_irq(irq))
+		intr_free_io_intrsource(irq);
+
 	kmem_free(ih, sizeof(*ih));
 }
 

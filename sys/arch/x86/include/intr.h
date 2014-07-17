@@ -182,6 +182,9 @@ int intr_find_mpmapping(int, int, int *);
 struct pic *intr_findpic(int);
 void intr_printconfig(void);
 
+struct intrsource *intr_allocate_io_intrsource(int);
+void intr_free_io_intrsource(int);
+
 int *intr_allocate_msi_vectors(int *);
 void intr_free_msi_vectors(int *, int);
 int *intr_allocate_msix_vectors(int *);
