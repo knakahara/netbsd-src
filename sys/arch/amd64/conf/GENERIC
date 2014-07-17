@@ -269,6 +269,7 @@ options 	MPBIOS_SCANPCI		# MPBIOS configures PCI roots
 #options 	PCI_INTR_FIXUP		# PCI interrupt routing via ACPI
 #options 	PCI_BUS_FIXUP		# fixup PCI bus numbering
 #options 	PCI_ADDR_FIXUP		# fixup PCI I/O addresses
+#options 	PCI_MSI_ASSIGN_RR	# assign MSI to CPU round-robin
 #options 	ACPI_ACTIVATE_DEV	# If set, activate inactive devices
 options 	VGA_POST		# in-kernel support for VGA POST
 

@@ -138,6 +138,7 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include "opt_intrdebug.h"
 #include "opt_multiprocessor.h"
 #include "opt_acpi.h"
+#include "opt_pcimsi.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -612,6 +613,7 @@ intr_free_msix_vectors(int *vectors, int count)
 	return intr_free_msi_vectors(vectors, count);
 }
 
+#ifdef PCI_MSI_ASSIGN_RR
 /*
  * return "next" cpu for round-robin assigning
  * ignore SPCF_NOINTR
@@ -619,7 +621,7 @@ intr_free_msix_vectors(int *vectors, int count)
  * should be per a device
  */
 static struct cpu_info *
-intr_get_next_cpu(void)
+msi_next_cpu(void)
 {
 	static struct cpu_info *assigned = &cpu_info_primary;
 
@@ -633,6 +635,7 @@ intr_get_next_cpu(void)
 
 	return assigned;
 }
+#endif /* PCI_MSI_ASSIGN_RR */
 
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
@@ -747,8 +750,10 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 			ci = &cpu_info_primary;
 #endif
 		}
+#ifdef PCI_MSI_ASSIGN_RR
 		if (is_msi_irq(pin))
-			ci = intr_get_next_cpu();
+			ci = msi_next_cpu();
+#endif
 		KASSERT(ci != NULL);
 		error = intr_allocate_slot_cpu(ci, pic, pin, &slot);
 
