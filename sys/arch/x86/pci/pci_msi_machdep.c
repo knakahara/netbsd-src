@@ -209,7 +209,7 @@ msix_delroute(struct pic *pic, struct cpu_info *ci,
 		PCI_MSIX_TABLE_ENTRY_SIZE * mth->mth_table_index;
 
 	bus_space_write_4(mth->mth_tag, mth->mth_handle,
-	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, 0);
+	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, 1);
 	BUS_SPACE_WRITE_FLUSH(mth->mth_tag, mth->mth_handle);
 }
 
