@@ -315,6 +315,12 @@ pci_msi_common_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	    mpsafe);
 }
 
+void
+pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
+{
+	intr_disestablish(cookie);
+}
+
 /* XXXX tentative function name */
 static int
 pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
@@ -473,6 +479,7 @@ pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 void
 pci_msi_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
+	pci_msi_common_disestablish(pc, cookie);
 }
 
 /*
@@ -542,6 +549,7 @@ pci_msix_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 void
 pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
+	pci_msi_common_disestablish(pc, cookie);
 }
 
 /* XXXX not yet implement MSI-X remap */
