@@ -54,15 +54,40 @@ get_msix_table_handler(int vector)
 	return &msix_table_handlers[vector - FIRST_MSI_INT];
 }
 
-
+#define MSI_MSICTL_ENABLE 1
+#define MSI_MSICTL_DISABLE 0
 static void
-msi_common_hwmask(struct pic *pic, int pin)
+msi_set_msictl_enablebit(struct pic *pic, int pin, int flag)
 {
+	pci_chipset_tag_t pc = NULL;
+	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
+	pcitag_t tag = pa->pa_tag;
+	pcireg_t ctl;
+	int off;
+
+	/* should use Mask Bits? */
+	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) == 0)
+		panic("%s: no msi capability", __func__);
+
+	ctl = pci_conf_read(pc, tag, off + PCI_MSI_CTL);
+	if (flag == MSI_MSICTL_ENABLE)
+		ctl |= PCI_MSI_CTL_MSI_ENABLE;
+	else
+		ctl &= ~PCI_MSI_CTL_MSI_ENABLE;
+
+	pci_conf_write(pc, tag, off, ctl);
 }
 
 static void
-msi_common_hwunmask(struct pic *pic, int pin)
+msi_hwmask(struct pic *pic, int pin)
 {
+	msi_set_msictl_enablebit(pic, pin, MSI_MSICTL_DISABLE);
+}
+
+static void
+msi_hwunmask(struct pic *pic, int pin)
+{
+	msi_set_msictl_enablebit(pic, pin, MSI_MSICTL_ENABLE);
 }
 
 static void
@@ -106,16 +131,7 @@ static void
 msi_delroute(struct pic *pic, struct cpu_info *ci,
 	     int pin, int vec, int type)
 {
-	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
-	pcitag_t tag = pa->pa_tag;
-	pcireg_t reg;
-	int off;
-
-	/* should use Mask Bits? */
-	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, &reg) == 0)
-		panic("%s: no msi capability", __func__);
-	pci_conf_write(pc, tag, off, reg & ~PCI_MSI_CTL_MSI_ENABLE);
+	msi_hwmask(pic, pin);
 }
 
 static struct pic msi_pic = {
@@ -124,12 +140,64 @@ static struct pic msi_pic = {
 	.pic_vecbase = 0,
 	.pic_apicid = 0,
 	.pic_lock = __SIMPLELOCK_UNLOCKED,
-	.pic_hwmask = msi_common_hwmask,
-	.pic_hwunmask = msi_common_hwunmask,
+	.pic_hwmask = msi_hwmask,
+	.pic_hwunmask = msi_hwunmask,
 	.pic_addroute = msi_addroute,
 	.pic_delroute = msi_delroute,
 	.pic_edge_stubs = ioapic_edge_stubs,
 };
+
+#define MSIX_VECCTL_HWMASK 1
+#define MSIX_VECCTL_HWUNMASK 0
+static void
+msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
+{
+	pci_chipset_tag_t pc = NULL;
+	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
+	pcitag_t tag = pa->pa_tag;
+	pcireg_t reg;
+	int off;
+	uint64_t table_off;
+
+	struct msix_table_handler *mth;
+
+	uint64_t entry_base;
+	uint32_t vecctl;
+	pcireg_t tbl;
+
+	mth = get_msix_table_handler(pin);
+
+	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, &reg) == 0)
+		panic("%s: no msix capability", __func__);
+	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
+	table_off = tbl & PCI_MSIX_TBLOFFSET_MASK;
+
+	entry_base = table_off +
+		PCI_MSIX_TABLE_ENTRY_SIZE * mth->mth_table_index;
+
+	vecctl = bus_space_read_4(mth->mth_tag, mth->mth_handle,
+	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL);
+	if (flag == MSIX_VECCTL_HWMASK)
+		vecctl |= PCI_MSIX_VECTCTL_HWMASK_MASK;
+	else
+		vecctl &= ~PCI_MSIX_VECTCTL_HWMASK_MASK;
+
+	bus_space_write_4(mth->mth_tag, mth->mth_handle,
+	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, vecctl);
+	BUS_SPACE_WRITE_FLUSH(mth->mth_tag, mth->mth_handle);
+}
+
+static void
+msix_hwmask(struct pic *pic, int pin)
+{
+	msix_set_vecctl_mask(pic, pin, MSIX_VECCTL_HWMASK);
+}
+
+static void
+msix_hwunmask(struct pic *pic, int pin)
+{
+	msix_set_vecctl_mask(pic, pin, MSIX_VECCTL_HWUNMASK);
+}
 
 static void
 msix_addroute(struct pic *pic, struct cpu_info *ci,
@@ -186,31 +254,7 @@ static void
 msix_delroute(struct pic *pic, struct cpu_info *ci,
 	     int pin, int vec, int type)
 {
-	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
-	pcitag_t tag = pa->pa_tag;
-	pcireg_t reg;
-	int off;
-	uint64_t table_off;
-
-	struct msix_table_handler *mth;
-
-	uint64_t entry_base;
-	pcireg_t tbl;
-
-	mth = get_msix_table_handler(pin);
-
-	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, &reg) == 0)
-		panic("%s: no msix capability", __func__);
-	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
-	table_off = tbl & PCI_MSIX_TBLOFFSET_MASK;
-
-	entry_base = table_off +
-		PCI_MSIX_TABLE_ENTRY_SIZE * mth->mth_table_index;
-
-	bus_space_write_4(mth->mth_tag, mth->mth_handle,
-	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, 1);
-	BUS_SPACE_WRITE_FLUSH(mth->mth_tag, mth->mth_handle);
+	msix_hwmask(pic, pin);
 }
 
 static struct pic msix_pic = {
@@ -219,8 +263,8 @@ static struct pic msix_pic = {
 	.pic_vecbase = 0,
 	.pic_apicid = 0,
 	.pic_lock = __SIMPLELOCK_UNLOCKED,
-	.pic_hwmask = msi_common_hwmask,
-	.pic_hwunmask = msi_common_hwunmask,
+	.pic_hwmask = msix_hwmask,
+	.pic_hwunmask = msix_hwunmask,
 	.pic_addroute = msix_addroute,
 	.pic_delroute = msix_delroute,
 	.pic_edge_stubs = ioapic_edge_stubs,
