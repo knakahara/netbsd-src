@@ -315,7 +315,7 @@ pci_msi_common_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	    mpsafe);
 }
 
-void
+static void
 pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
 	intr_disestablish(cookie);
