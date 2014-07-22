@@ -86,6 +86,8 @@ struct intrsource {
 	int is_idtvec;
 	int is_minlevel;
 	char is_evname[32];		/* event counter name */
+	char xname[16];			/* device name (same as device_xname(struct device) */
+	int active;
 };
 
 #define IS_LEGACY	0x0001		/* legacy ISA irq source */
@@ -173,6 +175,7 @@ struct pcibus_attach_args;
 
 void intr_default_setup(void);
 void x86_nmi(void);
+void *intr_establish_xname(int, struct pic *, int, int, int, int (*)(void *), void *, bool, const char *);
 void *intr_establish(int, struct pic *, int, int, int, int (*)(void *), void *, bool);
 void intr_disestablish(struct intrhand *);
 void intr_add_pcibus(struct pcibus_attach_args *);
@@ -181,6 +184,7 @@ void cpu_intr_init(struct cpu_info *);
 int intr_find_mpmapping(int, int, int *);
 struct pic *intr_findpic(int);
 void intr_printconfig(void);
+void intr_kernfs_init(void);
 
 struct intrsource *intr_allocate_io_intrsource(int);
 void intr_free_io_intrsource(int);

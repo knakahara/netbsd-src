@@ -316,6 +316,8 @@ mainbus_attach(device_t parent, device_t self, void *aux)
 
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");
+
+	intr_kernfs_init();
 }
 
 /* scan for new children */

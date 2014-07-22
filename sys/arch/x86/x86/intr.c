@@ -152,6 +152,12 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/atomic.h>
 #include <sys/xcall.h>
 
+#include <sys/stat.h>
+#include <sys/dirent.h>
+#include <sys/malloc.h>
+#include <sys/vnode.h>
+#include <miscfs/kernfs/kernfs.h>
+
 #include <uvm/uvm_extern.h>
 
 #include <machine/i8259.h>
@@ -725,8 +731,9 @@ intr_establish_xcall(void *arg1, void *arg2)
 }
 
 void *
-intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
-	       int (*handler)(void *), void *arg, bool known_mpsafe)
+intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int level,
+		     int (*handler)(void *), void *arg, bool known_mpsafe,
+		     const char *xname)
 {
 	struct intrhand **p, *q, *ih;
 	struct cpu_info *ci;
@@ -792,6 +799,8 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 
 	source->is_pin = pin;
 	source->is_pic = pic;
+	strncpy(source->xname, xname, sizeof(source->xname));
+	source->active = 1;
 
 	switch (source->is_type) {
 	case IST_NONE:
@@ -881,6 +890,14 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 #endif
 
 	return (ih);
+}
+
+void *
+intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
+	       int (*handler)(void *), void *arg, bool known_mpsafe)
+{
+	return intr_establish_xname(legacy_irq, pic, pin, type,
+	    level, handler, arg, known_mpsafe, "unknown");
 }
 
 /*
@@ -1454,4 +1471,243 @@ cpu_intr_count(struct cpu_info *ci)
 	KASSERT(ci->ci_nintrhand >= 0);
 
 	return ci->ci_nintrhand;
+}
+
+static int intr_kernfs_read(void *);
+static int intr_kernfs_getattr(void *);
+static int intr_kernfs_open(void *);
+static int intr_kernfs_close(void *);
+
+static int intr_kernfs_loadcnt(char *, int);
+
+static const struct kernfs_fileop intr_kernfs_fileops[] = {
+  { .kf_fileop = KERNFS_FILEOP_OPEN, .kf_vop = intr_kernfs_open },
+  { .kf_fileop = KERNFS_FILEOP_CLOSE, .kf_vop = intr_kernfs_close },
+  { .kf_fileop = KERNFS_FILEOP_READ, .kf_vop = intr_kernfs_read },
+  { .kf_fileop = KERNFS_FILEOP_GETATTR, .kf_vop = intr_kernfs_getattr },
+};
+
+#define INTERRUPTS_SIZE 4096
+
+static int
+intr_kernfs_open(void *v)
+{
+	struct vop_open_args /* {
+		struct vnode *a_vp;
+		int a_mode;
+		struct ucred *a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+	char *buf;
+	int err;
+
+	buf= malloc(INTERRUPTS_SIZE * sizeof(char), M_TEMP, M_WAITOK);
+	if (buf == NULL)
+		return ENOMEM;
+
+	err = intr_kernfs_loadcnt(buf, INTERRUPTS_SIZE);
+	if (err)
+		return err;
+
+	kfs->kfs_v = buf;
+
+	return 0;
+}
+
+static int
+intr_kernfs_close(void *v)
+{
+	struct vop_close_args /* {
+		struct vnode *a_vp;
+		int a_fflag;
+		struct ucred *a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+
+	char *buf = kfs->kfs_v;
+
+	free(buf, M_TEMP);
+	kfs->kfs_v = NULL;
+
+	return 0;
+}
+
+static int
+intr_kernfs_read(void *v)
+{
+	struct vop_read_args /* {
+		struct vnode *a_vp;
+		struct uio *a_uio;
+		int  a_ioflag;
+		struct ucred *a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+	char *buf = kfs->kfs_v;
+	struct uio *uio = ap->a_uio;
+	int err;
+
+	if (uio->uio_offset >= strlen(buf))
+		return 0;
+	err = uiomove(buf, strlen(buf), uio);
+
+	return err;
+}
+
+static int
+intr_kernfs_getattr(void *v)
+{
+	struct vop_getattr_args /* {
+		struct vnode *a_vp;
+		struct vattr *a_vap;
+		kauth_cred_t a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+	struct vattr *vap = ap->a_vap;
+
+	char *buf = kfs->kfs_v;
+	char *tmp;
+	size_t size = 0;
+	int err;
+
+	vap->va_nlink = 1;
+
+	if (buf != NULL) {
+		size = strlen(buf);
+	}
+	else {
+		tmp = malloc(INTERRUPTS_SIZE * sizeof(char), M_TEMP, M_WAITOK);
+		if (tmp != NULL) {
+			err = intr_kernfs_loadcnt(tmp, INTERRUPTS_SIZE);
+			if (err == 0)
+				size = strlen(tmp);
+
+			free(tmp, M_TEMP);
+		}
+	}
+	vap->va_bytes = vap->va_size = size;
+
+	return 0;
+}
+
+void
+intr_kernfs_init(void)
+{
+	kernfs_entry_t *dkt;
+	kfstype kfst;
+
+	kfst = KERNFS_ALLOCTYPE(intr_kernfs_fileops);
+	KERNFS_ALLOCENTRY(dkt, M_TEMP, M_WAITOK);
+	KERNFS_INITENTRY(dkt, DT_REG, "interrupts", NULL, kfst, VREG,
+			 S_IRUSR|S_IRGRP|S_IROTH);
+	kernfs_addentry(NULL, dkt);
+}
+
+
+#define MAX_IRQ 0xff
+
+struct cpu_intrcnt {
+	cpuid_t cpuid;
+	uint64_t intrcnt;
+	int active;
+};
+
+static int
+intr_kernfs_loadcnt(char *buf, int length)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+
+	int ret;
+	int counted_cpu = 0;
+	char *buf_end;
+	int i;
+	int irq;
+	struct cpu_intrcnt *cpu_intr = NULL;
+	char xname[16];
+
+	if (buf == NULL) {
+		ret = EINVAL;
+		goto out;
+	}
+	if (length < 0) {
+		ret = EINVAL;
+		goto out;
+	}
+
+	buf_end = buf + length;
+
+#define FILL_BUF(cur, end, fmt, ...) do{				\
+		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
+		if (ret < 0) {						\
+			ret = EIO; /* XXXX reasonable? */		\
+			goto out;					\
+		}							\
+		cur += ret;						\
+		if (cur > end) {					\
+			ret = EINVAL;					\
+			goto out;					\
+		}							\
+	}while(0)
+
+	/* print header */
+	FILL_BUF(buf, buf_end, " IRQ");
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		FILL_BUF(buf, buf_end, "\t  CPU#%02lu", ci->ci_cpuid);
+		counted_cpu += 1;
+	}
+	*(buf++) = '\n';
+
+	cpu_intr = malloc(sizeof(*cpu_intr) * counted_cpu, M_TEMP, M_WAITOK);
+	if (cpu_intr == NULL) {
+		ret = ENOMEM;
+		goto out;
+	}
+	memset(cpu_intr, 0, sizeof(*cpu_intr) * counted_cpu);
+
+	for (irq = 0; irq <= MAX_IRQ; irq++) {
+		int found = 0;
+		int cpu_seq = 0;
+		memset(xname, 0, sizeof(xname));
+
+		for (CPU_INFO_FOREACH(cii, ci)) {
+			for (i = 0; i < ci->ci_nintrhand; i++) {
+				struct intrsource *source = ci->ci_isources[i];
+				if (source == NULL)
+					continue;
+
+				if (irq == source->is_pin) {
+					cpu_intr[cpu_seq].intrcnt = source->is_evcnt.ev_count;
+					cpu_intr[cpu_seq].active = source->active;
+					strncpy(xname, source->xname, sizeof(xname));
+					found = 1;
+				}
+			}
+			cpu_seq += 1;
+		}
+		if (!found)
+			continue;
+
+		FILL_BUF(buf, buf_end, " %3d", irq);
+		for (i = 0; i < counted_cpu; i++) {
+			if (cpu_intr[i].active) {
+				FILL_BUF(buf, buf_end, "\t%8lu*", cpu_intr[i].intrcnt);
+			}
+			else {
+				FILL_BUF(buf, buf_end, "\t%8lu", cpu_intr[i].intrcnt);
+			}
+		}
+		FILL_BUF(buf, buf_end, "\t%-16s", xname);
+		*(buf++) = '\n';
+	}
+
+	*(buf++) = '\0';
+
+	ret = 0;
+out:
+	if (cpu_intr != NULL)
+		free(cpu_intr, M_TEMP);
+
+	return ret;
+
+#undef FILL_BUF
 }
