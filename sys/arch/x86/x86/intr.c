@@ -151,6 +151,7 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/cpu.h>
 #include <sys/atomic.h>
 #include <sys/xcall.h>
+#include <sys/sysctl.h>
 
 #include <sys/stat.h>
 #include <sys/dirent.h>
@@ -1471,6 +1472,104 @@ cpu_intr_count(struct cpu_info *ci)
 	KASSERT(ci->ci_nintrhand >= 0);
 
 	return ci->ci_nintrhand;
+}
+
+static int
+intr_set_affinity(int irq, cpuid_t cpuid)
+{
+	return 0;
+}
+
+static char irq_cpu[16] = "";
+
+static int
+intr_irq_affinity_sysctl(SYSCTLFN_ARGS)
+{
+	int err;
+	struct sysctlnode node;
+	char *sirq;
+	char *scpu;
+	cpuid_t ncpuid;
+	int irq;
+
+	node = *rnode;
+	node.sysctl_data = irq_cpu;
+
+	(void)memcpy(node.sysctl_data, rnode->sysctl_data, sizeof(irq_cpu));
+
+	err = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (err != 0 || newp == NULL)
+		return err;
+
+	sirq = irq_cpu;
+	scpu = strchr(irq_cpu, ':');
+	if (scpu == NULL) {
+		printf("format error. must be \"irq\":\"cpuid\"\n");
+		irq_cpu[0] = '\0';
+		return EINVAL;
+	}
+	*(scpu++) = '\0';
+
+	ncpuid = strtoul(scpu, NULL, 10);
+
+	irq = (int)strtoll(sirq, NULL, 10);
+	if (irq < 0) {
+		printf("invalid irq: %d\n", irq);
+		irq_cpu[0] = '\0';
+		return EINVAL;
+	}
+
+	printf("irq=%d ncpuid=%lu\n", irq, ncpuid);
+
+	err = intr_set_affinity(irq, ncpuid);
+	if (err) {
+		printf("intr_set_affinity(%d, %lu) failed. err: %d",
+		       irq, ncpuid, err);
+		irq_cpu[0] = '\0';
+		return err;
+	}
+
+	(void)memcpy(rnode->sysctl_data, node.sysctl_data, sizeof(irq_cpu));
+
+	return 0;
+}
+
+SYSCTL_SETUP(sysctl_intr_setup, "sysctl kern.cpu_affinity")
+{
+	const struct sysctlnode *node;
+	int err;
+
+	err = sysctl_createv(clog, 0, NULL, &node,
+			     CTLFLAG_PERMANENT, CTLTYPE_NODE, "kern", NULL,
+			     NULL, 0, NULL, 0,
+			     CTL_KERN, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "kern failed, err = %d\n", err);
+		return;
+	}
+
+	err = sysctl_createv(clog, 0, &node, &node,
+			     CTLFLAG_PERMANENT, CTLTYPE_NODE, "cpu_affinity",
+			     SYSCTL_DESCR("IRQ information"),
+			     NULL, 0, NULL, 0,
+			     CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.cpu_affinity) failed, err = %d\n", err);
+		return;
+	}
+
+	err = sysctl_createv(clog, 0, &node, NULL,
+			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			     CTLTYPE_STRING, "irq", NULL,
+			     intr_irq_affinity_sysctl, 0, irq_cpu, sizeof(irq_cpu),
+			     CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.cpu_affinity.irq) failed, err = %d\n", err);
+		return;
+	}
 }
 
 static int intr_kernfs_read(void *);
