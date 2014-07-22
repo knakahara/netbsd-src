@@ -188,6 +188,9 @@ struct pic softintr_pic = {
 	.pic_lock = __SIMPLELOCK_UNLOCKED,
 };
 
+static struct intrsource *io_interrupt_sources[NUM_IO_INTS];
+static __cpu_simple_lock_t io_interrupt_sources_lock = __SIMPLELOCK_UNLOCKED;
+
 #if NIOAPIC > 0 || NACPICA > 0
 static int intr_scan_bus(int, int, int *);
 #if NPCI > 0
@@ -413,6 +416,50 @@ intr_scan_bus(int bus, int pin, int *handle)
 }
 #endif
 
+static struct intrsource *
+intr_get_io_intrsource(int irq)
+{
+	return io_interrupt_sources[irq];
+}
+
+struct intrsource *
+intr_allocate_io_intrsource(int irq)
+{
+	struct intrsource *isp;
+
+	if (irq > NUM_IO_INTS)
+		return NULL;
+
+	if (io_interrupt_sources[irq] != NULL) {
+		return NULL;
+	}
+
+	isp = kmem_zalloc(sizeof(*isp), KM_NOSLEEP);
+	if (isp == NULL) {
+		return NULL;
+	}
+	io_interrupt_sources[irq] = isp;
+
+	return isp;
+}
+
+void
+intr_free_io_intrsource(int irq)
+{
+	if (irq > NUM_IO_INTS)
+		return;
+
+	if (io_interrupt_sources[irq] == NULL) {
+		return;
+	}
+
+	kmem_free(io_interrupt_sources[irq],
+		  sizeof(*io_interrupt_sources[irq]));
+	io_interrupt_sources[irq] = NULL;
+
+	return;
+}
+
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		       int *index)
@@ -445,10 +492,10 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
-		isp = kmem_zalloc(sizeof(*isp), KM_SLEEP);
-		if (isp == NULL) {
-			return ENOMEM;
-		}
+		__cpu_simple_lock(&io_interrupt_sources_lock);
+		isp = intr_get_io_intrsource(pin);
+		__cpu_simple_unlock(&io_interrupt_sources_lock);
+		KASSERT(isp != NULL);
 		snprintf(isp->is_evname, sizeof (isp->is_evname),
 		    "pin %d", pin);
 		evcnt_attach_dynamic(&isp->is_evcnt, EVCNT_TYPE_INTR, NULL,
@@ -559,7 +606,6 @@ intr_allocate_slot(struct pic *pic, int pin, int level,
 	}
 	if (idtvec == 0) {
 		evcnt_detach(&ci->ci_isources[slot]->is_evcnt);
-		kmem_free(ci->ci_isources[slot], sizeof(*(ci->ci_isources[slot])));
 		ci->ci_isources[slot] = NULL;
 		return EBUSY;
 	}
@@ -581,7 +627,6 @@ intr_source_free(struct cpu_info *ci, int slot, struct pic *pic, int idtvec)
 		return;
 	ci->ci_isources[slot] = NULL;
 	evcnt_detach(&isp->is_evcnt);
-	kmem_free(isp, sizeof(*isp));
 	ci->ci_isources[slot] = NULL;
 	if (pic != &i8259_pic)
 		idt_vec_free(idtvec);
@@ -706,10 +751,24 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 		return NULL;
 	}
 
+	/* allocate intrsource pool, if not yet. */
+	__cpu_simple_lock(&io_interrupt_sources_lock);
+	if (intr_get_io_intrsource(pin) == NULL) {
+		if (intr_allocate_io_intrsource(pin) == NULL) {
+			__cpu_simple_unlock(&io_interrupt_sources_lock);
+			printf("%s: can't allocate io_intersource\n", __func__);
+			return NULL;
+		}
+	}
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
+
 	mutex_enter(&cpu_lock);
 	error = intr_allocate_slot(pic, pin, level, &ci, &slot, &idt_vec);
 	if (error != 0) {
 		mutex_exit(&cpu_lock);
+		__cpu_simple_lock(&io_interrupt_sources_lock);
+		intr_free_io_intrsource(pin);
+		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		kmem_free(ih, sizeof(*ih));
 		printf("failed to allocate interrupt slot for PIC %s pin %d\n",
 		    pic->pic_name, pin);
@@ -721,6 +780,9 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	if (source->is_handlers != NULL &&
 	    source->is_pic->pic_type != pic->pic_type) {
 		mutex_exit(&cpu_lock);
+		__cpu_simple_lock(&io_interrupt_sources_lock);
+		intr_free_io_intrsource(pin);
+		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		kmem_free(ih, sizeof(*ih));
 		printf("%s: can't share intr source between "
 		       "different PIC types (legacy_irq %d pin %d slot %d)\n",
@@ -743,6 +805,9 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	case IST_PULSE:
 		if (type != IST_NONE) {
 			mutex_exit(&cpu_lock);
+			__cpu_simple_lock(&io_interrupt_sources_lock);
+			intr_free_io_intrsource(pin);
+			__cpu_simple_unlock(&io_interrupt_sources_lock);
 			kmem_free(ih, sizeof(*ih));
 			intr_source_free(ci, slot, pic, idt_vec);
 			printf("%s: pic %s pin %d: can't share "
@@ -883,6 +948,20 @@ intr_disestablish_xcall(void *arg1, void *arg2)
 #endif
 }
 
+static int
+intr_num_handlers(struct intrsource *isp)
+{
+	int num = 0;
+
+	struct intrhand *ih;
+
+	for (ih = isp->is_handlers; ih != NULL; ih = ih->ih_next) {
+		num++;
+	}
+
+	return num;
+}
+
 /*
  * Deregister an interrupt handler.
  */
@@ -891,6 +970,8 @@ intr_disestablish(struct intrhand *ih)
 {
 	struct cpu_info *ci;
 	uint64_t where;
+	int irq;
+	struct intrsource *isp;
 
 	/*
 	 * Count the removal for load balancing.
@@ -900,6 +981,7 @@ intr_disestablish(struct intrhand *ih)
 	mutex_enter(&cpu_lock);
 	ci = ih->ih_cpu;
 	(ci->ci_nintrhand)--;
+	irq = ci->ci_isources[ih->ih_slot]->is_pin;
 	KASSERT(ci->ci_nintrhand >= 0);
 	if (ci == curcpu() || !mp_online) {
 		intr_disestablish_xcall(ih, NULL);
@@ -908,6 +990,13 @@ intr_disestablish(struct intrhand *ih)
 		xc_wait(where);
 	}	
 	mutex_exit(&cpu_lock);
+
+	__cpu_simple_lock(&io_interrupt_sources_lock);
+	isp = intr_get_io_intrsource(irq);
+	if (intr_num_handlers(isp) < 1) {
+		intr_free_io_intrsource(irq);
+	}
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	kmem_free(ih, sizeof(*ih));
 }
 
@@ -920,7 +1009,6 @@ intr_string(int ih, char *buf, size_t len)
 
 	if (ih == 0)
 		panic("%s: bogus handle 0x%x", __func__, ih);
-
 
 #if NIOAPIC > 0
 	if (ih & APIC_INT_VIA_APIC) {

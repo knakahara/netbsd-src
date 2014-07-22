@@ -182,6 +182,9 @@ int intr_find_mpmapping(int, int, int *);
 struct pic *intr_findpic(int);
 void intr_printconfig(void);
 
+struct intrsource *intr_allocate_io_intrsource(int);
+void intr_free_io_intrsource(int);
+
 int x86_send_ipi(struct cpu_info *, int);
 void x86_broadcast_ipi(int);
 void x86_ipi_handler(void);
