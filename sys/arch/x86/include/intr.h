@@ -71,6 +71,11 @@ struct intrstub {
 	void *ist_resume;
 };
 
+struct percpu_evcnt {
+	cpuid_t cpuid;
+	uint64_t count;
+};
+
 struct intrsource {
 	int is_maxlevel;		/* max. IPL for this source */
 	int is_pin;			/* IRQ for legacy; pin for IO APIC,
@@ -80,14 +85,15 @@ struct intrsource {
 	void *is_recurse;		/* entry for spllower */
 	void *is_resume;		/* entry for doreti */
 	lwp_t *is_lwp;			/* for soft interrupts */
-	struct evcnt is_evcnt;		/* interrupt counter */
+	struct evcnt is_evcnt;		/* interrupt counter per cpu */
 	int is_flags;			/* see below */
 	int is_type;			/* level, edge */
 	int is_idtvec;
 	int is_minlevel;
 	char is_evname[32];		/* event counter name */
-	char xname[16];			/* device name (same as device_xname(struct device) */
-	int active;
+	char is_xname[16];		/* device name (same as device_xname(struct device) */
+	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
+	int is_active_cpu;		/* active cpuid */
 };
 
 #define IS_LEGACY	0x0001		/* legacy ISA irq source */

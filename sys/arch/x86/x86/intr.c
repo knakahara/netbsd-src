@@ -433,6 +433,9 @@ struct intrsource *
 intr_allocate_io_intrsource(int irq)
 {
 	struct intrsource *isp;
+	struct percpu_evcnt *pep;
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
 
 	if (irq > NUM_IO_INTS)
 		return NULL;
@@ -445,6 +448,18 @@ intr_allocate_io_intrsource(int irq)
 	if (isp == NULL) {
 		return NULL;
 	}
+
+	pep = kmem_zalloc(sizeof(*pep) * ncpuonline, KM_NOSLEEP);
+	if (pep == NULL) {
+		kmem_free(isp, sizeof(*isp));
+		return NULL;
+	}
+	isp->is_saved_evcnt = pep;
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		pep->cpuid = ci->ci_cpuid;
+		pep++;
+	}
+
 	io_interrupt_sources[irq] = isp;
 
 	return isp;
@@ -460,6 +475,8 @@ intr_free_io_intrsource(int irq)
 		return;
 	}
 
+	kmem_free(io_interrupt_sources[irq]->is_saved_evcnt,
+		  sizeof(*io_interrupt_sources[irq]->is_saved_evcnt) * ncpuonline);
 	kmem_free(io_interrupt_sources[irq],
 		  sizeof(*io_interrupt_sources[irq]));
 	io_interrupt_sources[irq] = NULL;
@@ -507,6 +524,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		    "pin %d", pin);
 		evcnt_attach_dynamic(&isp->is_evcnt, EVCNT_TYPE_INTR, NULL,
 		    pic->pic_name, isp->is_evname);
+		isp->is_active_cpu = ci->ci_cpuid;
 		ci->ci_isources[slot] = isp;
 	}
 
@@ -800,8 +818,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 
 	source->is_pin = pin;
 	source->is_pic = pic;
-	strncpy(source->xname, xname, sizeof(source->xname));
-	source->active = 1;
+	strncpy(source->is_xname, xname, sizeof(source->is_xname));
 
 	switch (source->is_type) {
 	case IST_NONE:
@@ -1573,6 +1590,40 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 	x86_write_psl(psl);
 }
 
+static void
+intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
+{
+	uint64_t curcnt;
+	struct percpu_evcnt *pep;
+	int i;
+
+	curcnt = source->is_evcnt.ev_count;
+	pep = source->is_saved_evcnt;
+
+	for (i = 0; i < ncpuonline; i++) {
+		if (pep[i].cpuid == cpuid) {
+			pep[i].count = curcnt;
+			break;
+		}
+	}
+}
+
+static void
+intr_restore_evcnt(struct intrsource *source, cpuid_t cpuid)
+{
+	struct percpu_evcnt *pep;
+	int i;
+
+	pep = source->is_saved_evcnt;
+
+	for (i = 0; i < ncpuonline; i++) {
+		if (pep[i].cpuid == cpuid) {
+			source->is_evcnt.ev_count = pep[i].count;
+			break;
+		}
+	}
+}
+
 static int
 intr_set_affinity(int irq, cpuid_t cpuid)
 {
@@ -1651,6 +1702,7 @@ intr_set_affinity(int irq, cpuid_t cpuid)
 				   NULL, oldci);
 		xc_wait(where);
 	}
+	intr_save_evcnt(isp, oldci->ci_cpuid);
 	(*pic->pic_delroute)(pic, oldci, irq, idt_vec, isp->is_type);
 
 	/* activate new interrupt setting */
@@ -1669,6 +1721,8 @@ intr_set_affinity(int irq, cpuid_t cpuid)
 				   NULL, newci);
 		xc_wait(where);
 	}
+	intr_restore_evcnt(isp, newci->ci_cpuid);
+	isp->is_active_cpu = newci->ci_cpuid;
 	(*pic->pic_addroute)(pic, newci, irq, idt_vec, isp->is_type);
 
 	(*pic->pic_hwunmask)(pic, irq);
@@ -1900,15 +1954,6 @@ intr_kernfs_init(void)
 	kernfs_addentry(NULL, dkt);
 }
 
-
-#define MAX_IRQ 0xff
-
-struct cpu_intrcnt {
-	cpuid_t cpuid;
-	uint64_t intrcnt;
-	int active;
-};
-
 static int
 intr_kernfs_loadcnt(char *buf, int length)
 {
@@ -1916,12 +1961,11 @@ intr_kernfs_loadcnt(char *buf, int length)
 	struct cpu_info *ci;
 
 	int ret;
-	int counted_cpu = 0;
 	char *buf_end;
 	int i;
 	int irq;
-	struct cpu_intrcnt *cpu_intr = NULL;
-	char xname[16];
+	struct intrsource *isp;
+	struct percpu_evcnt pep;
 
 	if (buf == NULL) {
 		ret = EINVAL;
@@ -1951,60 +1995,34 @@ intr_kernfs_loadcnt(char *buf, int length)
 	FILL_BUF(buf, buf_end, " IRQ");
 	for (CPU_INFO_FOREACH(cii, ci)) {
 		FILL_BUF(buf, buf_end, "\t  CPU#%02lu", ci->ci_cpuid);
-		counted_cpu += 1;
 	}
 	*(buf++) = '\n';
 
-	cpu_intr = malloc(sizeof(*cpu_intr) * counted_cpu, M_TEMP, M_WAITOK);
-	if (cpu_intr == NULL) {
-		ret = ENOMEM;
-		goto out;
-	}
-	memset(cpu_intr, 0, sizeof(*cpu_intr) * counted_cpu);
-
-	for (irq = 0; irq <= MAX_IRQ; irq++) {
-		int found = 0;
-		int cpu_seq = 0;
-		memset(xname, 0, sizeof(xname));
-
-		for (CPU_INFO_FOREACH(cii, ci)) {
-			for (i = 0; i < ci->ci_nintrhand; i++) {
-				struct intrsource *source = ci->ci_isources[i];
-				if (source == NULL)
-					continue;
-
-				if (irq == source->is_pin) {
-					cpu_intr[cpu_seq].intrcnt = source->is_evcnt.ev_count;
-					cpu_intr[cpu_seq].active = source->active;
-					strncpy(xname, source->xname, sizeof(xname));
-					found = 1;
-				}
-			}
-			cpu_seq += 1;
-		}
-		if (!found)
+	for (irq = 0; irq < NUM_IO_INTS; irq++) {
+		isp = intr_get_io_intrsource(irq);
+		if (isp == NULL) {
 			continue;
+		}
 
 		FILL_BUF(buf, buf_end, " %3d", irq);
-		for (i = 0; i < counted_cpu; i++) {
-			if (cpu_intr[i].active) {
-				FILL_BUF(buf, buf_end, "\t%8lu*", cpu_intr[i].intrcnt);
+		for (i = 0; i < ncpuonline; i++) {
+			pep = isp->is_saved_evcnt[i];
+			if (isp->is_active_cpu == pep.cpuid) {
+				FILL_BUF(buf, buf_end, "\t%8lu*", isp->is_evcnt.ev_count);
 			}
 			else {
-				FILL_BUF(buf, buf_end, "\t%8lu", cpu_intr[i].intrcnt);
+				FILL_BUF(buf, buf_end, "\t%8lu", pep.count);
 			}
 		}
-		FILL_BUF(buf, buf_end, "\t%-16s", xname);
+		FILL_BUF(buf, buf_end, "\t%-16s", isp->is_xname);
 		*(buf++) = '\n';
+
 	}
 
 	*(buf++) = '\0';
 
 	ret = 0;
 out:
-	if (cpu_intr != NULL)
-		free(cpu_intr, M_TEMP);
-
 	return ret;
 
 #undef FILL_BUF
