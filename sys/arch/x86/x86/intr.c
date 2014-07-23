@@ -1474,10 +1474,209 @@ cpu_intr_count(struct cpu_info *ci)
 	return ci->ci_nintrhand;
 }
 
+static struct cpu_info *
+intr_find_cpuinfo(cpuid_t cpuid)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		if (ci->ci_cpuid == cpuid) {
+			return ci;
+		}
+	}
+
+	return NULL;
+}
+
+static int
+intr_find_unused_slot(struct cpu_info *ci, struct pic *pic, int *index)
+{
+	int slot, i;
+
+	KASSERT(mutex_owned(&cpu_lock));
+
+	slot = -1;
+	for (i = 0; i < MAX_INTR_SOURCES ; i++) {
+		if (ci->ci_isources[i] == NULL) {
+			slot = i;
+			break;
+		}
+	}
+	if (slot == -1) {
+		printf("cannot allocate ci_isources\n");
+		return EBUSY;
+	}
+
+	*index = slot;
+	return 0;
+}
+
+/* reuse same idt_vec */
+static void
+intr_activate_xcall(void *arg1, void *arg2)
+{
+	struct intrsource *source;
+	struct intrstub *stubp;
+	struct intrhand *ih;
+	struct cpu_info *ci;
+	int idt_vec;
+	int slot;
+	u_long psl;
+
+	ih = arg1;
+
+	KASSERT(ih->ih_cpu == curcpu() || !mp_online);
+
+	ci = ih->ih_cpu;
+	slot = ih->ih_slot;
+	source = ci->ci_isources[slot];
+	idt_vec = source->is_idtvec;
+
+	psl = x86_read_psl();
+	x86_disable_intr();
+
+	intr_calculatemasks(ci);
+
+	if (source->is_type == IST_LEVEL) {
+		stubp = &source->is_pic->pic_level_stubs[slot];
+	}
+	else {
+		stubp = &source->is_pic->pic_edge_stubs[slot];
+	}
+	source->is_resume = stubp->ist_resume;
+	source->is_recurse = stubp->ist_recurse;
+	setgate(&idt[idt_vec], stubp->ist_entry, 0, SDT_SYS386IGT,
+	    SEL_KPL, GSEL(GCODE_SEL, SEL_KPL));
+
+	x86_write_psl(psl);
+}
+
+static void
+intr_deactivate_xcall(void *arg1, void *arg2)
+{
+	struct intrhand *ih;
+	struct cpu_info *ci;
+	u_long psl;
+
+	ih = arg1;
+
+	KASSERT(ih->ih_cpu == curcpu() || !mp_online);
+
+	ci = ih->ih_cpu;
+
+	psl = x86_read_psl();
+	x86_disable_intr();
+
+	intr_calculatemasks(ci);
+
+	x86_write_psl(psl);
+}
+
 static int
 intr_set_affinity(int irq, cpuid_t cpuid)
 {
-	return 0;
+	struct intrsource *isp;
+	struct intrhand *ih, *lih;
+	struct pic *pic;
+	int idt_vec;
+	struct cpu_info *oldci, *newci;
+	int oldslot, newslot;
+	int err;
+
+	isp = intr_get_io_intrsource(irq);
+	if (isp == NULL) {
+		printf("invalid irq: %d\n", irq);
+		return EINVAL;
+	}
+
+	newci = intr_find_cpuinfo(cpuid);
+	if (newci == NULL) {
+		printf("invalid cpuid: %ld\n", cpuid);
+		return EINVAL;
+	}
+
+	pic = isp->is_pic;
+	if (pic == &i8259_pic) {
+		printf("i8259 pic does not support set_affinity\n");
+		return ENOTSUP;
+	}
+
+	ih = isp->is_handlers;
+	if (ih == NULL) {
+		printf("irq %d has no handler\n", irq);
+		return ENOENT;
+	}
+
+	oldci = ih->ih_cpu;
+	if (newci == oldci) {
+		/* nothing to do */
+		return 0;
+	}
+
+	oldslot = ih->ih_slot;
+	idt_vec = isp->is_idtvec;
+
+	mutex_enter(&cpu_lock);
+
+	/* XXXX evcnt to percpu data */
+	err = intr_find_unused_slot(newci, pic, &newslot);
+	if (err) {
+		printf("failed to allocate interrupt slot for PIC %s irq %d\n",
+		       isp->is_pic->pic_name, irq);
+		goto out;
+	}
+
+	(*pic->pic_hwmask)(pic, irq); /* for ci_ipending check */
+
+	if (oldci->ci_ipending & ~(1 << oldslot)) {
+		(*pic->pic_hwunmask)(pic, irq);
+		printf("there are pending interrupts to irq on cpuid %ld: %d\n ",
+		       oldci->ci_cpuid, irq);
+		err = EBUSY;
+		goto out;
+	}
+
+	/* deactivate old interrupt setting */
+	oldci->ci_isources[oldslot] = NULL;
+	for (lih = ih; lih != NULL; lih = lih->ih_next) {
+		oldci->ci_nintrhand--;
+	}
+	if (oldci == curcpu() || !mp_online) {
+		intr_deactivate_xcall(ih, NULL);
+	}
+	else {
+		uint64_t where;
+		where = xc_unicast(0, intr_deactivate_xcall, ih,
+				   NULL, oldci);
+		xc_wait(where);
+	}
+	(*pic->pic_delroute)(pic, oldci, irq, idt_vec, isp->is_type);
+
+	/* activate new interrupt setting */
+	newci->ci_isources[newslot] = isp;
+	for (lih = ih; lih != NULL; lih = lih->ih_next) {
+		newci->ci_nintrhand++;
+		lih->ih_cpu = newci;
+		lih->ih_slot = newslot;
+	}
+	if (newci == curcpu() || !mp_online) {
+		intr_activate_xcall(ih, NULL);
+	}
+	else {
+		uint64_t where;
+		where = xc_unicast(0, intr_activate_xcall, ih,
+				   NULL, newci);
+		xc_wait(where);
+	}
+	(*pic->pic_addroute)(pic, newci, irq, idt_vec, isp->is_type);
+
+	(*pic->pic_hwunmask)(pic, irq);
+	err = 0;
+out:
+	mutex_exit(&cpu_lock);
+
+	return err;
 }
 
 static char irq_cpu[16] = "";
