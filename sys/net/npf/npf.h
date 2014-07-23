@@ -1,4 +1,4 @@
-/*	$NetBSD: npf.h,v 1.42 2014/06/29 00:05:24 rmind Exp $	*/
+/*	$NetBSD: npf.h,v 1.44 2014/07/20 00:37:41 rmind Exp $	*/
 
 /*-
  * Copyright (c) 2009-2014 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
 
-#define	NPF_VERSION		14
+#define	NPF_VERSION		15
 
 /*
  * Public declarations and definitions.
@@ -78,9 +78,6 @@ typedef uint8_t			npf_netmask_t;
 #define	NPF_EXT_MODULE(name, req)	\
     MODULE(MODULE_CLASS_MISC, name, (sizeof(req) - 1) ? ("npf," req) : "npf")
 
-/*
- * Packet information cache.
- */
 #include <net/if.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
@@ -88,6 +85,43 @@ typedef uint8_t			npf_netmask_t;
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/icmp6.h>
+
+/*
+ * Network buffer interface.
+ */
+
+#define	NBUF_DATAREF_RESET	0x01
+
+typedef struct {
+	struct mbuf *	nb_mbuf0;
+	struct mbuf *	nb_mbuf;
+	void *		nb_nptr;
+	const ifnet_t *	nb_ifp;
+	unsigned	nb_ifid;
+	int		nb_flags;
+} nbuf_t;
+
+void		nbuf_init(nbuf_t *, struct mbuf *, const ifnet_t *);
+void		nbuf_reset(nbuf_t *);
+struct mbuf *	nbuf_head_mbuf(nbuf_t *);
+
+bool		nbuf_flag_p(const nbuf_t *, int);
+void		nbuf_unset_flag(nbuf_t *, int);
+
+void *		nbuf_dataptr(nbuf_t *);
+size_t		nbuf_offset(const nbuf_t *);
+void *		nbuf_advance(nbuf_t *, size_t, size_t);
+
+void *		nbuf_ensure_contig(nbuf_t *, size_t);
+void *		nbuf_ensure_writable(nbuf_t *, size_t);
+
+bool		nbuf_cksum_barrier(nbuf_t *, int);
+int		nbuf_add_tag(nbuf_t *, uint32_t, uint32_t);
+int		nbuf_find_tag(nbuf_t *, uint32_t, void **);
+
+/*
+ * Packet information cache.
+ */
 
 #define	NPC_IP4		0x01	/* Indicates IPv4 header. */
 #define	NPC_IP6		0x02	/* Indicates IPv6 header. */
@@ -104,8 +138,9 @@ typedef uint8_t			npf_netmask_t;
 #define	NPC_IP46	(NPC_IP4|NPC_IP6)
 
 typedef struct {
-	/* Information flags. */
+	/* Information flags and the nbuf. */
 	uint32_t		npc_info;
+	nbuf_t *		npc_nbuf;
 
 	/*
 	 * Pointers to the IP source and destination addresses,
@@ -144,39 +179,6 @@ npf_iscached(const npf_cache_t *npc, const int inf)
 #define	NPF_DST		1
 
 /*
- * Network buffer interface.
- */
-
-#define	NBUF_DATAREF_RESET	0x01
-
-typedef struct {
-	struct mbuf *	nb_mbuf0;
-	struct mbuf *	nb_mbuf;
-	void *		nb_nptr;
-	const ifnet_t *	nb_ifp;
-	unsigned	nb_ifid;
-	int		nb_flags;
-} nbuf_t;
-
-void		nbuf_init(nbuf_t *, struct mbuf *, const ifnet_t *);
-void		nbuf_reset(nbuf_t *);
-struct mbuf *	nbuf_head_mbuf(nbuf_t *);
-
-bool		nbuf_flag_p(const nbuf_t *, int);
-void		nbuf_unset_flag(nbuf_t *, int);
-
-void *		nbuf_dataptr(nbuf_t *);
-size_t		nbuf_offset(const nbuf_t *);
-void *		nbuf_advance(nbuf_t *, size_t, size_t);
-
-void *		nbuf_ensure_contig(nbuf_t *, size_t);
-void *		nbuf_ensure_writable(nbuf_t *, size_t);
-
-bool		nbuf_cksum_barrier(nbuf_t *, int);
-int		nbuf_add_tag(nbuf_t *, uint32_t, uint32_t);
-int		nbuf_find_tag(nbuf_t *, uint32_t, void **);
-
-/*
  * NPF extensions and rule procedure interface.
  */
 
@@ -190,7 +192,7 @@ typedef struct {
 	void *		ctx;
 	int		(*ctor)(npf_rproc_t *, prop_dictionary_t);
 	void		(*dtor)(npf_rproc_t *, void *);
-	bool		(*proc)(npf_cache_t *, nbuf_t *, void *, int *);
+	bool		(*proc)(npf_cache_t *, void *, int *);
 } npf_ext_ops_t;
 
 void *		npf_ext_register(const char *, const npf_ext_ops_t *);
@@ -326,7 +328,7 @@ typedef enum {
 	/* Packets blocked. */
 	NPF_STAT_BLOCK_DEFAULT,
 	NPF_STAT_BLOCK_RULESET,
-	/* Session and NAT entries. */
+	/* Connection and NAT entries. */
 	NPF_STAT_SESSION_CREATE,
 	NPF_STAT_SESSION_DESTROY,
 	NPF_STAT_NAT_CREATE,

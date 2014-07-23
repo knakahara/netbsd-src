@@ -1,4 +1,4 @@
-/* $NetBSD: lunafb.c,v 1.31 2014/07/13 16:00:32 tsutsui Exp $ */
+/* $NetBSD: lunafb.c,v 1.33 2014/07/18 18:17:54 tsutsui Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -31,14 +31,14 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: lunafb.c,v 1.31 2014/07/13 16:00:32 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lunafb.c,v 1.33 2014/07/18 18:17:54 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/conf.h>
 #include <sys/device.h>
 #include <sys/ioctl.h>
-#include <sys/malloc.h>
+#include <sys/kmem.h>
 #include <sys/mman.h>
 #include <sys/proc.h>
 #include <sys/tty.h>
@@ -156,12 +156,14 @@ static int   omfb_show_screen(void *, void *, int,
 			      void (*) (void *, int, int), void *);
 
 static const struct wsdisplay_accessops omfb_accessops = {
-	omfbioctl,
-	omfbmmap,
-	omfb_alloc_screen,
-	omfb_free_screen,
-	omfb_show_screen,
-	0 /* load_font */
+	.ioctl        = omfbioctl,
+	.mmap         = omfbmmap,
+	.alloc_screen = omfb_alloc_screen,
+	.free_screen  = omfb_free_screen,
+	.show_screen  = omfb_show_screen,
+	.load_font    = NULL,
+	.pollc        = NULL,
+	.scroll       = NULL
 };
 
 static int  omfbmatch(device_t, cfdata_t, void *);
@@ -204,8 +206,8 @@ omfbattach(device_t parent, device_t self, void *args)
 		sc->sc_dc = &omfb_console_dc;
 		sc->nscreens = 1;
 	} else {
-		sc->sc_dc = malloc(sizeof(struct om_hwdevconfig),
-		    M_DEVBUF, M_WAITOK | M_ZERO);
+		sc->sc_dc = kmem_zalloc(sizeof(struct om_hwdevconfig),
+		    KM_SLEEP);
 		omfb_getdevconfig(OMFB_FB_WADDR, sc->sc_dc);
 	}
 	aprint_normal(": %d x %d, %dbpp\n", sc->sc_dc->dc_wid, sc->sc_dc->dc_ht,
