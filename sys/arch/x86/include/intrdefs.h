@@ -56,6 +56,8 @@
 #define IDT_INTR_LOW	(0x20 + NUM_LEGACY_IRQS)
 #define IDT_INTR_HIGH	0xef
 
+#define NUM_IO_INTS	255
+
 #ifndef XEN
 
 #define X86_IPI_HALT			0x00000001
