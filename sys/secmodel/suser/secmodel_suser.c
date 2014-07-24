@@ -443,6 +443,20 @@ secmodel_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
 
 		break;
 
+	case KAUTH_SYSTEM_INTR:
+		switch (req) {
+		case KAUTH_REQ_SYSTEM_INTR_AFFINITY:
+			if (isroot)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		default:
+			break;
+		}
+
+		break;
+
 	default:
 		break;
 	}

@@ -271,8 +271,8 @@ pci_intr_setattr(pci_chipset_tag_t pc, pci_intr_handle_t *ih,
 }
 
 void *
-pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
-    int level, int (*func)(void *), void *arg)
+pci_intr_establish_xname(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg, const char *xname)
 {
 	int pin, irq;
 	struct pic *pic;
@@ -309,8 +309,15 @@ pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	}
 #endif
 
-	return intr_establish(irq, pic, pin, IST_LEVEL, level, func, arg,
-	    mpsafe);
+	return intr_establish_xname(irq, pic, pin, IST_LEVEL, level, func, arg,
+	    mpsafe, xname);
+}
+
+void *
+pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg)
+{
+	return pci_intr_establish_xname(pc, ih, level, func, arg, "unknown");
 }
 
 void
