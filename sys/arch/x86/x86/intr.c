@@ -750,8 +750,9 @@ intr_establish_xcall(void *arg1, void *arg2)
 }
 
 void *
-intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
-	       int (*handler)(void *), void *arg, bool known_mpsafe)
+intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int level,
+		     int (*handler)(void *), void *arg, bool known_mpsafe,
+		     const char *xname)
 {
 	struct intrhand **p, *q, *ih;
 	struct cpu_info *ci;
@@ -817,6 +818,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 
 	source->is_pin = pin;
 	source->is_pic = pic;
+	strncpy(source->is_xname, xname, sizeof(source->is_xname));
 
 	switch (source->is_type) {
 	case IST_NONE:
@@ -906,6 +908,14 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 #endif
 
 	return (ih);
+}
+
+void *
+intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
+	       int (*handler)(void *), void *arg, bool known_mpsafe)
+{
+	return intr_establish_xname(legacy_irq, pic, pin, type,
+	    level, handler, arg, known_mpsafe, "unknown");
 }
 
 /*
@@ -2004,6 +2014,7 @@ intr_kernfs_loadcnt(char *buf, int length)
 				FILL_BUF(buf, buf_end, "\t%8lu", pep.count);
 			}
 		}
+		FILL_BUF(buf, buf_end, "\t%-16s", isp->is_xname);
 		*(buf++) = '\n';
 
 	}
