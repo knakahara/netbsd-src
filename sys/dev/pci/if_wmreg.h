@@ -441,6 +441,18 @@ struct livengood_tcpip_ctxdesc {
 #define	WMREG_IMC	0x00d8	/* Interrupt Mask Clear Register */
 	/* See ICR bits. */
 
+#define WMREG_IVAL	0x00e4	/* Interrupt Vector Allocation Register */
+#define WMREG_IVAR0	0x01700	/* Interrupt Vector Allocation */
+#define WMREG_IVAR_MISC	0x01740	/* IVAR for other causes */
+
+#define WMREG_GPIE	0x01514	/* General Purpose Interrupt Enable */
+#define WMREG_GPIE_NSICR        0x00000001
+#define WMREG_GPIE_MSIX_MODE    0x00000010
+#define WMREG_GPIE_EIAME        0x40000000
+#define WMREG_GPIE_PBA          0x80000000
+
+#define WMREG_IVAR_VALID	0x80
+
 #define	WMREG_RCTL	0x0100	/* Receive Control */
 #define	RCTL_EN		(1U << 1)	/* receiver enable */
 #define	RCTL_SBP	(1U << 2)	/* store bad packets */
