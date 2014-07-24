@@ -153,6 +153,12 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/xcall.h>
 #include <sys/sysctl.h>
 
+#include <sys/stat.h>
+#include <sys/dirent.h>
+#include <sys/malloc.h>
+#include <sys/vnode.h>
+#include <miscfs/kernfs/kernfs.h>
+
 #include <uvm/uvm_extern.h>
 
 #include <machine/i8259.h>
@@ -1807,4 +1813,206 @@ SYSCTL_SETUP(sysctl_intr_setup, "sysctl kern.cpu_affinity")
 		    "(kern.cpu_affinity.irq) failed, err = %d\n", err);
 		return;
 	}
+}
+
+static int intr_kernfs_read(void *);
+static int intr_kernfs_getattr(void *);
+static int intr_kernfs_open(void *);
+static int intr_kernfs_close(void *);
+
+static int intr_kernfs_loadcnt(char *, int);
+
+static const struct kernfs_fileop intr_kernfs_fileops[] = {
+  { .kf_fileop = KERNFS_FILEOP_OPEN, .kf_vop = intr_kernfs_open },
+  { .kf_fileop = KERNFS_FILEOP_CLOSE, .kf_vop = intr_kernfs_close },
+  { .kf_fileop = KERNFS_FILEOP_READ, .kf_vop = intr_kernfs_read },
+  { .kf_fileop = KERNFS_FILEOP_GETATTR, .kf_vop = intr_kernfs_getattr },
+};
+
+#define INTERRUPTS_SIZE 4096
+
+static int
+intr_kernfs_open(void *v)
+{
+	struct vop_open_args /* {
+		struct vnode *a_vp;
+		int a_mode;
+		struct ucred *a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+	char *buf;
+	int err;
+
+	buf= malloc(INTERRUPTS_SIZE * sizeof(char), M_TEMP, M_WAITOK);
+	if (buf == NULL)
+		return ENOMEM;
+
+	err = intr_kernfs_loadcnt(buf, INTERRUPTS_SIZE);
+	if (err)
+		return err;
+
+	kfs->kfs_v = buf;
+
+	return 0;
+}
+
+static int
+intr_kernfs_close(void *v)
+{
+	struct vop_close_args /* {
+		struct vnode *a_vp;
+		int a_fflag;
+		struct ucred *a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+
+	char *buf = kfs->kfs_v;
+
+	free(buf, M_TEMP);
+	kfs->kfs_v = NULL;
+
+	return 0;
+}
+
+static int
+intr_kernfs_read(void *v)
+{
+	struct vop_read_args /* {
+		struct vnode *a_vp;
+		struct uio *a_uio;
+		int  a_ioflag;
+		struct ucred *a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+	char *buf = kfs->kfs_v;
+	struct uio *uio = ap->a_uio;
+	int err;
+
+	if (uio->uio_offset >= strlen(buf))
+		return 0;
+	err = uiomove(buf, strlen(buf), uio);
+
+	return err;
+}
+
+static int
+intr_kernfs_getattr(void *v)
+{
+	struct vop_getattr_args /* {
+		struct vnode *a_vp;
+		struct vattr *a_vap;
+		kauth_cred_t a_cred;
+	} */ *ap = v;
+	struct kernfs_node *kfs = VTOKERN(ap->a_vp);
+	struct vattr *vap = ap->a_vap;
+
+	char *buf = kfs->kfs_v;
+	char *tmp;
+	size_t size = 0;
+	int err;
+
+	vap->va_nlink = 1;
+
+	if (buf != NULL) {
+		size = strlen(buf);
+	}
+	else {
+		tmp = malloc(INTERRUPTS_SIZE * sizeof(char), M_TEMP, M_WAITOK);
+		if (tmp != NULL) {
+			err = intr_kernfs_loadcnt(tmp, INTERRUPTS_SIZE);
+			if (err == 0)
+				size = strlen(tmp);
+
+			free(tmp, M_TEMP);
+		}
+	}
+	vap->va_bytes = vap->va_size = size;
+
+	return 0;
+}
+
+void
+intr_kernfs_init(void)
+{
+	kernfs_entry_t *dkt;
+	kfstype kfst;
+
+	kfst = KERNFS_ALLOCTYPE(intr_kernfs_fileops);
+	KERNFS_ALLOCENTRY(dkt, M_TEMP, M_WAITOK);
+	KERNFS_INITENTRY(dkt, DT_REG, "interrupts", NULL, kfst, VREG,
+			 S_IRUSR|S_IRGRP|S_IROTH);
+	kernfs_addentry(NULL, dkt);
+}
+
+static int
+intr_kernfs_loadcnt(char *buf, int length)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+
+	int ret;
+	char *buf_end;
+	int i;
+	int irq;
+	struct intrsource *isp;
+	struct percpu_evcnt pep;
+
+	if (buf == NULL) {
+		ret = EINVAL;
+		goto out;
+	}
+	if (length < 0) {
+		ret = EINVAL;
+		goto out;
+	}
+
+	buf_end = buf + length;
+
+#define FILL_BUF(cur, end, fmt, ...) do{				\
+		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
+		if (ret < 0) {						\
+			ret = EIO;					\
+			goto out;					\
+		}							\
+		cur += ret;						\
+		if (cur > end) {					\
+			ret = EINVAL;					\
+			goto out;					\
+		}							\
+	}while(0)
+
+	/* print header */
+	FILL_BUF(buf, buf_end, " IRQ");
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		FILL_BUF(buf, buf_end, "\t  CPU#%02lu", ci->ci_cpuid);
+	}
+	*(buf++) = '\n';
+
+	for (irq = 0; irq < NUM_IO_INTS; irq++) {
+		isp = intr_get_io_intrsource(irq);
+		if (isp == NULL) {
+			continue;
+		}
+
+		FILL_BUF(buf, buf_end, " %3d", irq);
+		for (i = 0; i < ncpuonline; i++) {
+			pep = isp->is_saved_evcnt[i];
+			if (isp->is_active_cpu == pep.cpuid) {
+				FILL_BUF(buf, buf_end, "\t%8lu*", isp->is_evcnt.ev_count);
+			}
+			else {
+				FILL_BUF(buf, buf_end, "\t%8lu", pep.count);
+			}
+		}
+		*(buf++) = '\n';
+
+	}
+
+	*(buf++) = '\0';
+
+	ret = 0;
+out:
+	return ret;
+
+#undef FILL_BUF
 }

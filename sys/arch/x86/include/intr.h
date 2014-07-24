@@ -188,6 +188,7 @@ void cpu_intr_init(struct cpu_info *);
 int intr_find_mpmapping(int, int, int *);
 struct pic *intr_findpic(int);
 void intr_printconfig(void);
+void intr_kernfs_init(void);
 
 struct intrsource *intr_allocate_io_intrsource(int);
 void intr_free_io_intrsource(int);
