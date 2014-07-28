@@ -37,6 +37,10 @@
 
 #include <linux/vga_switcheroo.h>
 
+#ifdef __NetBSD__
+#include "radeondrmkmsfb.h"
+#endif
+
 /* object hierarchy -
    this contains a helper + a radeon fb
    the helper contains a pointer to radeon framebuffer baseclass.
@@ -124,14 +128,14 @@ static int radeonfb_create_pinned_object(struct radeon_fbdev *rfbdev,
 						  fb_tiled) * ((bpp + 1) / 8);
 
 	if (rdev->family >= CHIP_R600)
-#ifdef __NetBSD__
-		height = DIV_ROUND_UP(mode_cmd->height, 8);
+#ifdef __NetBSD__		/* XXX ALIGN means something else.  */
+		height = round_up(mode_cmd->height, 8);
 #else
 		height = ALIGN(mode_cmd->height, 8);
 #endif
 	size = mode_cmd->pitches[0] * height;
-#ifdef __NetBSD__
-	aligned_size = DIV_ROUND_UP (size, PAGE_SIZE);
+#ifdef __NetBSD__		/* XXX ALIGN means something else.  */
+	aligned_size = round_up(size, PAGE_SIZE);
 #else
 	aligned_size = ALIGN(size, PAGE_SIZE);
 #endif
@@ -243,12 +247,22 @@ static int radeonfb_create(struct drm_fb_helper *helper,
 	}
 
 	(void)memset(rbo->kptr, 0, radeon_bo_size(rbo));
-	ret = radeon_genfb_attach(rdev->ddev, helper, sizes, rbo);
-	if (ret) {
-		DRM_ERROR("failed to attach genfb: %d\n", ret);
+
+    {
+	static const struct radeonfb_attach_args zero_rfa;
+	struct radeonfb_attach_args rfa = zero_rfa;
+
+	rfa.rfa_fb_helper = helper;
+	rfa.rfa_fb_sizes = *sizes;
+	rfa.rfa_fb_ptr = rbo->kptr;
+
+	helper->fbdev = config_found_ia(rdev->ddev->dev, "radeonfbbus", &rfa,
+	    NULL);
+	if (helper->fbdev == NULL) {
+		DRM_ERROR("failed to attach genfb\n");
 		goto out_unref;
 	}
-	helper->genfb_attached = true;
+    }
 	fb = &rfbdev->rfb.base;
 	rfbdev->helper.fb = fb;
 #else
@@ -346,12 +360,16 @@ static int radeon_fbdev_destroy(struct drm_device *dev, struct radeon_fbdev *rfb
 	struct fb_info *info;
 #endif
 	struct radeon_framebuffer *rfb = &rfbdev->rfb;
+#ifdef __NetBSD__
+	int ret;
+#endif
 
 #ifdef __NetBSD__
-	if (rfbdev->helper.genfb_attached) {
-		/* XXX detach genfb for real...  */
-		(void)config_detach_children(dev->dev, DETACH_FORCE);
-	}
+	/* XXX errno NetBSD->Linux */
+	ret = -config_detach(rfbdev->helper.fbdev, DETACH_FORCE);
+	if (ret)
+		DRM_ERROR("failed to detach radeonfb: %d\n", ret);
+	rfbdev->helper.fbdev = NULL;
 #else
 	if (rfbdev->helper.fbdev) {
 		info = rfbdev->helper.fbdev;

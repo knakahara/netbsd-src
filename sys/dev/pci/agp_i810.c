@@ -1,4 +1,4 @@
-/*	$NetBSD: agp_i810.c,v 1.107 2014/07/01 16:27:25 riastradh Exp $	*/
+/*	$NetBSD: agp_i810.c,v 1.112 2014/07/25 23:05:54 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.107 2014/07/01 16:27:25 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.112 2014/07/25 23:05:54 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1323,14 +1323,14 @@ agp_i810_bind_memory_dcache(struct agp_softc *sc, struct agp_memory *mem,
 
 	KASSERT((mem->am_size & (AGP_PAGE_SIZE - 1)) == 0);
 	for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE) {
-		/* XXX No offset?  */
-		error = agp_i810_write_gtt_entry(isc, i,
+		error = agp_i810_write_gtt_entry(isc, offset + i,
 		    i | I810_GTT_PTE_VALID | I810_GTT_PTE_DCACHE);
 		if (error)
 			goto fail0;
 	}
 
 	/* Success!  */
+	mem->am_offset = offset;
 	return 0;
 
 fail0:	for (j = 0; j < i; j += AGP_PAGE_SIZE)
@@ -1365,7 +1365,7 @@ fail0:	for (j = 0; j < i; j += AGP_PAGE_SIZE)
 static int
 agp_i810_unbind_memory(struct agp_softc *sc, struct agp_memory *mem)
 {
-	struct agp_i810_softc *isc = sc->as_chipc;
+	struct agp_i810_softc *isc __diagused = sc->as_chipc;
 	u_int32_t i;
 
 	if (!mem->am_is_bound)
@@ -1376,9 +1376,7 @@ agp_i810_unbind_memory(struct agp_softc *sc, struct agp_memory *mem)
 		return agp_generic_unbind_memory(sc, mem);
 	case AGP_I810_MEMTYPE_DCACHE:
 		KASSERT(isc->chiptype == CHIP_I810);
-		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
-			(void)agp_i810_write_gtt_entry(isc, i, 0);
-		break;
+		/* FALLTHROUGH */
 	case AGP_I810_MEMTYPE_HWCURSOR:
 		for (i = 0; i < mem->am_size; i += AGP_PAGE_SIZE)
 			(void)agp_i810_unbind_page(sc, mem->am_offset + i);

@@ -1,4 +1,4 @@
-/*	$NetBSD: ww_mutex.h,v 1.2 2014/07/22 02:38:31 riastradh Exp $	*/
+/*	$NetBSD: ww_mutex.h,v 1.4 2014/07/26 21:36:40 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2014 The NetBSD Foundation, Inc.
@@ -234,7 +234,8 @@ ww_mutex_lock_wait(struct ww_mutex *mutex, struct ww_acquire_ctx *ctx)
 	    ctx->wwx_class, mutex->wwm_u.ctx->wwx_class);
 	KASSERTMSG((mutex->wwm_u.ctx->wwx_ticket != ctx->wwx_ticket),
 	    "ticket number reused: %"PRId64" (%p) %"PRId64" (%p)",
-	    ctx->wwx_ticket, ctx, mutex->wwm_u.ctx->wwx_ticket, mutex->wwm_u.ctx);
+	    ctx->wwx_ticket, ctx,
+	    mutex->wwm_u.ctx->wwx_ticket, mutex->wwm_u.ctx);
 
 	collision = rb_tree_insert_node(&mutex->wwm_waiters, ctx);
 	KASSERTMSG((collision == ctx),
@@ -261,7 +262,8 @@ ww_mutex_lock_wait_sig(struct ww_mutex *mutex, struct ww_acquire_ctx *ctx)
 	    ctx->wwx_class, mutex->wwm_u.ctx->wwx_class);
 	KASSERTMSG((mutex->wwm_u.ctx->wwx_ticket != ctx->wwx_ticket),
 	    "ticket number reused: %"PRId64" (%p) %"PRId64" (%p)",
-	    ctx->wwx_ticket, ctx, mutex->wwm_u.ctx->wwx_ticket, mutex->wwm_u.ctx);
+	    ctx->wwx_ticket, ctx,
+	    mutex->wwm_u.ctx->wwx_ticket, mutex->wwm_u.ctx);
 
 	collision = rb_tree_insert_node(&mutex->wwm_waiters, ctx);
 	KASSERTMSG((collision == ctx),
@@ -622,6 +624,8 @@ ww_mutex_unlock(struct ww_mutex *mutex)
 		mutex->wwm_state = WW_UNLOCKED;
 		break;
 	case WW_CTX:
+		KASSERT(mutex->wwm_u.ctx != NULL);
+		mutex->wwm_u.ctx->wwx_acquired--;
 		mutex->wwm_u.ctx = NULL;
 		/*
 		 * If there are any waiters with contexts, grant the

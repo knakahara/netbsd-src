@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_usrreq.c,v 1.188 2014/07/14 13:20:41 rtr Exp $	*/
+/*	$NetBSD: tcp_usrreq.c,v 1.191 2014/07/24 16:02:19 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -99,7 +99,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.188 2014/07/14 13:20:41 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.191 2014/07/24 16:02:19 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -199,10 +199,14 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
 	KASSERT(req != PRU_ACCEPT);
+	KASSERT(req != PRU_BIND);
+	KASSERT(req != PRU_LISTEN);
 	KASSERT(req != PRU_CONTROL);
 	KASSERT(req != PRU_SENSE);
 	KASSERT(req != PRU_PEERADDR);
 	KASSERT(req != PRU_SOCKADDR);
+	KASSERT(req != PRU_RCVOOB);
+	KASSERT(req != PRU_SENDOOB);
 
 	family = so->so_proto->pr_domain->dom_family;
 
@@ -256,7 +260,7 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		splx(s);
 		return EAFNOSUPPORT;
 	}
-	KASSERT(!control || (req == PRU_SEND || req == PRU_SENDOOB));
+	KASSERT(!control || req == PRU_SEND);
 #ifdef INET6
 	/* XXX: KASSERT((inp != NULL) ^ (in6p != NULL)); */
 #endif
@@ -292,52 +296,6 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	switch (req) {
 
 	/*
-	 * Give the socket an address.
-	 */
-	case PRU_BIND:
-		switch (family) {
-#ifdef INET
-		case PF_INET:
-			error = in_pcbbind(inp, nam, l);
-			break;
-#endif
-#ifdef INET6
-		case PF_INET6:
-			error = in6_pcbbind(in6p, nam, l);
-			if (!error) {
-				/* mapped addr case */
-				if (IN6_IS_ADDR_V4MAPPED(&in6p->in6p_laddr))
-					tp->t_family = AF_INET;
-				else
-					tp->t_family = AF_INET6;
-			}
-			break;
-#endif
-		}
-		break;
-
-	/*
-	 * Prepare to accept connections.
-	 */
-	case PRU_LISTEN:
-#ifdef INET
-		if (inp && inp->inp_lport == 0) {
-			error = in_pcbbind(inp, NULL, l);
-			if (error)
-				break;
-		}
-#endif
-#ifdef INET6
-		if (in6p && in6p->in6p_lport == 0) {
-			error = in6_pcbbind(in6p, NULL, l);
-			if (error)
-				break;
-		}
-#endif
-		tp->t_state = TCPS_LISTEN;
-		break;
-
-	/*
 	 * Initiate connection to peer.
 	 * Create a template for use in transmissions on this connection.
 	 * Enter SYN_SENT state, and mark socket as connecting.
@@ -348,7 +306,7 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 #ifdef INET
 		if (inp) {
 			if (inp->inp_lport == 0) {
-				error = in_pcbbind(inp, NULL, l);
+				error = in_pcbbind(inp, NULL);
 				if (error)
 					break;
 			}
@@ -358,7 +316,7 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 #ifdef INET6
 		if (in6p) {
 			if (in6p->in6p_lport == 0) {
-				error = in6_pcbbind(in6p, NULL, l);
+				error = in6_pcbbind(in6p, NULL);
 				if (error)
 					break;
 			}
@@ -470,45 +428,6 @@ tcp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	 */
 	case PRU_ABORT:
 		tp = tcp_drop(tp, ECONNABORTED);
-		break;
-
-	case PRU_RCVOOB:
-		if ((so->so_oobmark == 0 &&
-		    (so->so_state & SS_RCVATMARK) == 0) ||
-		    so->so_options & SO_OOBINLINE ||
-		    tp->t_oobflags & TCPOOB_HADDATA) {
-			error = EINVAL;
-			break;
-		}
-		if ((tp->t_oobflags & TCPOOB_HAVEDATA) == 0) {
-			error = EWOULDBLOCK;
-			break;
-		}
-		m->m_len = 1;
-		*mtod(m, char *) = tp->t_iobc;
-		if (((long)nam & MSG_PEEK) == 0)
-			tp->t_oobflags ^= (TCPOOB_HAVEDATA | TCPOOB_HADDATA);
-		break;
-
-	case PRU_SENDOOB:
-		if (sbspace(&so->so_snd) < -512) {
-			m_freem(m);
-			error = ENOBUFS;
-			break;
-		}
-		/*
-		 * According to RFC961 (Assigned Protocols),
-		 * the urgent pointer points to the last octet
-		 * of urgent data.  We continue, however,
-		 * to consider it to indicate the first octet
-		 * of data past the urgent section.
-		 * Otherwise, snd_up should be one lower.
-		 */
-		sbappendstream(&so->so_snd, m);
-		tp->snd_up = tp->snd_una + so->so_snd.sb_cc;
-		tp->t_force = 1;
-		error = tcp_output(tp);
-		tp->t_force = 0;
 		break;
 
 	default:
@@ -969,6 +888,193 @@ tcp_accept(struct socket *so, struct mbuf *nam)
 }
 
 static int
+tcp_bind(struct socket *so, struct mbuf *nam)
+{
+	struct inpcb *inp;
+#ifdef INET6
+	struct in6pcb *in6p;
+#endif
+	struct tcpcb *tp = NULL;
+	int s;
+	int error = 0;
+	int ostate = 0;
+	int family;	/* family of the socket */
+
+	KASSERT(solocked(so));
+
+
+	s = splsoftnet();
+
+	family = so->so_proto->pr_domain->dom_family;
+	switch (family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+#ifdef INET6
+		in6p = NULL;
+#endif
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		inp = NULL;
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		splx(s);
+		return EAFNOSUPPORT;
+	}
+
+	/*
+	 * When a TCP is attached to a socket, then there will be
+	 * a (struct inpcb) pointed at by the socket, and this
+	 * structure will point at a subsidary (struct tcpcb).
+	 */
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+	{
+		error = EINVAL;
+		goto release;
+	}
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		ostate = tcp_debug_capture(tp, PRU_BIND);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		ostate = tcp_debug_capture(tp, PRU_BIND);
+	}
+#endif
+
+	/*
+	 * Give the socket an address.
+	 */
+	switch (family) {
+#ifdef INET
+	case PF_INET:
+		error = in_pcbbind(inp, nam);
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		error = in6_pcbbind(in6p, nam);
+		if (!error) {
+			/* mapped addr case */
+			if (IN6_IS_ADDR_V4MAPPED(&in6p->in6p_laddr))
+				tp->t_family = AF_INET;
+			else
+				tp->t_family = AF_INET6;
+		}
+		break;
+#endif
+	}
+
+	tcp_debug_trace(so, tp, ostate, PRU_BIND);
+
+release:
+	splx(s);
+	return (error);
+}
+
+static int
+tcp_listen(struct socket *so)
+{
+	struct inpcb *inp;
+#ifdef INET6
+	struct in6pcb *in6p;
+#endif
+	struct tcpcb *tp = NULL;
+	int s;
+	int error = 0;
+	int ostate = 0;
+	int family;	/* family of the socket */
+
+	KASSERT(solocked(so));
+
+	s = splsoftnet();
+
+	family = so->so_proto->pr_domain->dom_family;
+	switch (family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+#ifdef INET6
+		in6p = NULL;
+#endif
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		inp = NULL;
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		splx(s);
+		return EAFNOSUPPORT;
+	}
+
+	/*
+	 * When a TCP is attached to a socket, then there will be
+	 * a (struct inpcb) pointed at by the socket, and this
+	 * structure will point at a subsidary (struct tcpcb).
+	 */
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+	{
+		error = EINVAL;
+		goto release;
+	}
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		ostate = tcp_debug_capture(tp, PRU_LISTEN);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		ostate = tcp_debug_capture(tp, PRU_LISTEN);
+	}
+#endif
+
+	/*
+	 * Prepare to accept connections.
+	 */
+#ifdef INET
+	if (inp && inp->inp_lport == 0) {
+		error = in_pcbbind(inp, NULL);
+		if (error)
+			goto release;
+	}
+#endif
+#ifdef INET6
+	if (in6p && in6p->in6p_lport == 0) {
+		error = in6_pcbbind(in6p, NULL);
+		if (error)
+			goto release;
+	}
+#endif
+	tp->t_state = TCPS_LISTEN;
+
+	tcp_debug_trace(so, tp, ostate, PRU_LISTEN);
+
+release:
+	splx(s);
+	return (error);
+}
+
+static int
 tcp_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	switch (so->so_proto->pr_domain->dom_family) {
@@ -1096,6 +1202,139 @@ tcp_sockaddr(struct socket *so, struct mbuf *nam)
 	tcp_debug_trace(so, tp, ostate, PRU_SOCKADDR);
 
 	return 0;
+}
+
+static int
+tcp_recvoob(struct socket *so, struct mbuf *m, int flags)
+{
+	struct inpcb *inp = NULL;
+#ifdef INET6
+	struct in6pcb *in6p = NULL;
+#endif
+	struct tcpcb *tp = NULL;
+	int ostate = 0;
+
+	switch (so->so_proto->pr_domain->dom_family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		return EAFNOSUPPORT;
+	}
+
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+		return EINVAL;
+
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		ostate = tcp_debug_capture(tp, PRU_RCVOOB);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		ostate = tcp_debug_capture(tp, PRU_RCVOOB);
+	}
+#endif
+
+	if ((so->so_oobmark == 0 &&
+	    (so->so_state & SS_RCVATMARK) == 0) ||
+	    so->so_options & SO_OOBINLINE ||
+	    tp->t_oobflags & TCPOOB_HADDATA)
+		return EINVAL;
+
+	if ((tp->t_oobflags & TCPOOB_HAVEDATA) == 0)
+		return EWOULDBLOCK;
+
+	m->m_len = 1;
+	*mtod(m, char *) = tp->t_iobc;
+	if ((flags & MSG_PEEK) == 0)
+		tp->t_oobflags ^= (TCPOOB_HAVEDATA | TCPOOB_HADDATA);
+
+	tcp_debug_trace(so, tp, ostate, PRU_RCVOOB);
+
+	return 0;
+}
+
+static int
+tcp_sendoob(struct socket *so, struct mbuf *m, struct mbuf *control)
+{
+	struct inpcb *inp = NULL;
+#ifdef INET6
+	struct in6pcb *in6p = NULL;
+#endif
+	struct tcpcb *tp = NULL;
+	int ostate = 0;
+	int error = 0;
+
+	switch (so->so_proto->pr_domain->dom_family) {
+#ifdef INET
+	case PF_INET:
+		inp = sotoinpcb(so);
+		break;
+#endif
+#ifdef INET6
+	case PF_INET6:
+		in6p = sotoin6pcb(so);
+		break;
+#endif
+	default:
+		return EAFNOSUPPORT;
+	}
+
+	if (inp == NULL
+#ifdef INET6
+	    && in6p == NULL
+#endif
+	    )
+		return EINVAL;
+
+#ifdef INET
+	if (inp) {
+		tp = intotcpcb(inp);
+		ostate = tcp_debug_capture(tp, PRU_SENDOOB);
+	}
+#endif
+#ifdef INET6
+	if (in6p) {
+		tp = in6totcpcb(in6p);
+		ostate = tcp_debug_capture(tp, PRU_SENDOOB);
+	}
+#endif
+
+	if (sbspace(&so->so_snd) < -512) {
+		m_freem(m);
+		return ENOBUFS;
+	}
+	/*
+	 * According to RFC961 (Assigned Protocols),
+	 * the urgent pointer points to the last octet
+	 * of urgent data.  We continue, however,
+	 * to consider it to indicate the first octet
+	 * of data past the urgent section.
+	 * Otherwise, snd_up should be one lower.
+	 */
+	sbappendstream(&so->so_snd, m);
+	tp->snd_up = tp->snd_una + so->so_snd.sb_cc;
+	tp->t_force = 1;
+	error = tcp_output(tp);
+	tp->t_force = 0;
+
+	tcp_debug_trace(so, tp, ostate, PRU_SENDOOB);
+
+	return error;
 }
 
 /*
@@ -2335,19 +2574,27 @@ PR_WRAP_USRREQS(tcp)
 #define	tcp_attach	tcp_attach_wrapper
 #define	tcp_detach	tcp_detach_wrapper
 #define	tcp_accept	tcp_accept_wrapper
+#define	tcp_bind	tcp_bind_wrapper
+#define	tcp_listen	tcp_listen_wrapper
 #define	tcp_ioctl	tcp_ioctl_wrapper
 #define	tcp_stat	tcp_stat_wrapper
 #define	tcp_peeraddr	tcp_peeraddr_wrapper
 #define	tcp_sockaddr	tcp_sockaddr_wrapper
+#define	tcp_recvoob	tcp_recvoob_wrapper
+#define	tcp_sendoob	tcp_sendoob_wrapper
 #define	tcp_usrreq	tcp_usrreq_wrapper
 
 const struct pr_usrreqs tcp_usrreqs = {
 	.pr_attach	= tcp_attach,
 	.pr_detach	= tcp_detach,
 	.pr_accept	= tcp_accept,
+	.pr_bind	= tcp_bind,
+	.pr_listen	= tcp_listen,
 	.pr_ioctl	= tcp_ioctl,
 	.pr_stat	= tcp_stat,
 	.pr_peeraddr	= tcp_peeraddr,
 	.pr_sockaddr	= tcp_sockaddr,
+	.pr_recvoob	= tcp_recvoob,
+	.pr_sendoob	= tcp_sendoob,
 	.pr_generic	= tcp_usrreq,
 };

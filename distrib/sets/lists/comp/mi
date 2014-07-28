@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1900 2014/07/22 22:35:03 christos Exp $
+#	$NetBSD: mi,v 1.1904 2014/07/25 21:43:13 joerg Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -76,6 +76,7 @@
 ./usr/bin/nm					comp-util-bin		binutils
 ./usr/bin/objcopy				comp-util-bin		binutils
 ./usr/bin/objdump				comp-util-bin		binutils
+./usr/bin/p++					comp-cxx-bin		pcc
 ./usr/bin/pcc					comp-c-bin		pcc
 ./usr/bin/protoize				comp-c-bin		gcc=4,gcccmds
 ./usr/bin/protoize                              comp-obsolete           gcc=45,obsolete
@@ -3128,6 +3129,11 @@
 ./usr/include/sys/chio.h			comp-c-include
 ./usr/include/sys/clist.h			comp-obsolete		obsolete
 ./usr/include/sys/clockctl.h			comp-c-include
+./usr/include/sys/common_int_const.h		comp-c-include
+./usr/include/sys/common_int_fmtio.h		comp-c-include
+./usr/include/sys/common_int_limits.h		comp-c-include
+./usr/include/sys/common_int_mwgwtypes.h	comp-c-include
+./usr/include/sys/common_int_types.h		comp-c-include
 ./usr/include/sys/condvar.h			comp-c-include
 ./usr/include/sys/conf.h			comp-c-include
 ./usr/include/sys/core.h			comp-c-include
@@ -4087,6 +4093,7 @@
 ./usr/libexec/ccom				comp-c-bin		pcc
 ./usr/libexec/collect2				comp-obsolete		obsolete
 ./usr/libexec/cpp				comp-obsolete		pcc,obsolete
+./usr/libexec/cxxcom				comp-cxx-bin		pcc
 ./usr/libexec/f771				comp-fortran-bin	gcc=3,gcccmds
 ./usr/libexec/f771				comp-obsolete		gcc=4,obsolete
 ./usr/libexec/lint1				comp-c-bin
@@ -4372,6 +4379,7 @@
 ./usr/share/man/cat2/fchroot.0			comp-c-catman		.cat
 ./usr/share/man/cat2/fcntl.0			comp-c-catman		.cat
 ./usr/share/man/cat2/fdatasync.0		comp-c-catman		.cat
+./usr/share/man/cat2/fdiscard.0			comp-c-catman		.cat
 ./usr/share/man/cat2/fhopen.0			comp-c-catman		.cat
 ./usr/share/man/cat2/fhstat.0			comp-c-catman		.cat
 ./usr/share/man/cat2/fhstatfs.0			comp-obsolete		obsolete
@@ -4489,6 +4497,7 @@
 ./usr/share/man/cat2/poll.0			comp-c-catman		.cat
 ./usr/share/man/cat2/pollts.0			comp-c-catman		.cat
 ./usr/share/man/cat2/posix_fadvise.0		comp-c-catman		.cat
+./usr/share/man/cat2/posix_fallocate.0		comp-c-catman		.cat
 ./usr/share/man/cat2/posix_madvise.0		comp-c-catman		.cat
 ./usr/share/man/cat2/pread.0			comp-c-catman		.cat
 ./usr/share/man/cat2/preadv.0			comp-c-catman		.cat
@@ -11273,6 +11282,7 @@
 ./usr/share/man/html2/fchroot.html		comp-c-htmlman		html
 ./usr/share/man/html2/fcntl.html		comp-c-htmlman		html
 ./usr/share/man/html2/fdatasync.html		comp-c-htmlman		html
+./usr/share/man/html2/fdiscard.html		comp-c-htmlman		html
 ./usr/share/man/html2/fhopen.html		comp-c-htmlman		html
 ./usr/share/man/html2/fhstat.html		comp-c-htmlman		html
 ./usr/share/man/html2/fhstatvfs.html		comp-c-htmlman		html
@@ -11384,6 +11394,7 @@
 ./usr/share/man/html2/poll.html			comp-c-htmlman		html
 ./usr/share/man/html2/pollts.html		comp-c-htmlman		html
 ./usr/share/man/html2/posix_fadvise.html	comp-c-htmlman		html
+./usr/share/man/html2/posix_fallocate.html		comp-c-htmlman		html
 ./usr/share/man/html2/posix_madvise.html	comp-c-htmlman		html
 ./usr/share/man/html2/pread.html		comp-c-htmlman		html
 ./usr/share/man/html2/preadv.html		comp-c-htmlman		html
@@ -17945,6 +17956,7 @@
 ./usr/share/man/man2/fchroot.2			comp-c-man		.man
 ./usr/share/man/man2/fcntl.2			comp-c-man		.man
 ./usr/share/man/man2/fdatasync.2		comp-c-man		.man
+./usr/share/man/man2/fdiscard.2			comp-c-man		.man
 ./usr/share/man/man2/fhopen.2			comp-c-man		.man
 ./usr/share/man/man2/fhstat.2			comp-c-man		.man
 ./usr/share/man/man2/fhstatfs.2			comp-obsolete		obsolete
@@ -18061,6 +18073,7 @@
 ./usr/share/man/man2/poll.2			comp-c-man		.man
 ./usr/share/man/man2/pollts.2			comp-c-man		.man
 ./usr/share/man/man2/posix_fadvise.2		comp-c-man		.man
+./usr/share/man/man2/posix_fallocate.2		comp-c-man		.man
 ./usr/share/man/man2/posix_madvise.2		comp-c-man		.man
 ./usr/share/man/man2/pread.2			comp-c-man		.man
 ./usr/share/man/man2/preadv.2			comp-c-man		.man

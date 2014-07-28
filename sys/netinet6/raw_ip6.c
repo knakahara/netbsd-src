@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_ip6.c,v 1.127 2014/07/09 14:41:42 rtr Exp $	*/
+/*	$NetBSD: raw_ip6.c,v 1.129 2014/07/24 15:12:03 rtr Exp $	*/
 /*	$KAME: raw_ip6.c,v 1.82 2001/07/23 18:57:56 jinmei Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.127 2014/07/09 14:41:42 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.129 2014/07/24 15:12:03 rtr Exp $");
 
 #include "opt_ipsec.h"
 
@@ -653,6 +653,52 @@ rip6_accept(struct socket *so, struct mbuf *nam)
 }
 
 static int
+rip6_bind(struct socket *so, struct mbuf *nam)
+{
+	struct in6pcb *in6p = sotoin6pcb(so);
+	struct sockaddr_in6 *addr;
+	struct ifaddr *ia = NULL;
+	int error = 0;
+
+	KASSERT(solocked(so));
+	KASSERT(in6p != NULL);
+	KASSERT(nam != NULL);
+
+	addr = mtod(nam, struct sockaddr_in6 *);
+	if (nam->m_len != sizeof(*addr))
+		return EINVAL;
+	if (!IFNET_FIRST() || addr->sin6_family != AF_INET6)
+		return EADDRNOTAVAIL;
+
+	if ((error = sa6_embedscope(addr, ip6_use_defzone)) != 0)
+		return error;
+
+	/*
+	 * we don't support mapped address here, it would confuse
+	 * users so reject it
+	 */
+	if (IN6_IS_ADDR_V4MAPPED(&addr->sin6_addr))
+		return EADDRNOTAVAIL;
+	if (!IN6_IS_ADDR_UNSPECIFIED(&addr->sin6_addr) &&
+	    (ia = ifa_ifwithaddr((struct sockaddr *)addr)) == 0)
+		return EADDRNOTAVAIL;
+	if (ia && ((struct in6_ifaddr *)ia)->ia6_flags &
+	    (IN6_IFF_ANYCAST|IN6_IFF_NOTREADY|
+	     IN6_IFF_DETACHED|IN6_IFF_DEPRECATED))
+		return EADDRNOTAVAIL;
+	in6p->in6p_laddr = addr->sin6_addr;
+	return 0;
+}
+
+static int
+rip6_listen(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
 rip6_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return in6_control(so, cmd, nam, ifp);
@@ -689,6 +735,25 @@ rip6_sockaddr(struct socket *so, struct mbuf *nam)
 	return 0;
 }
 
+static int
+rip6_recvoob(struct socket *so, struct mbuf *m, int flags)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+rip6_sendoob(struct socket *so, struct mbuf *m, struct mbuf *control)
+{
+	KASSERT(solocked(so));
+
+	if (m)
+	 	m_freem(m);
+
+	return EOPNOTSUPP;
+}
+
 int
 rip6_usrreq(struct socket *so, int req, struct mbuf *m, 
 	struct mbuf *nam, struct mbuf *control, struct lwp *l)
@@ -697,10 +762,14 @@ rip6_usrreq(struct socket *so, int req, struct mbuf *m,
 	int error = 0;
 
 	KASSERT(req != PRU_ACCEPT);
+	KASSERT(req != PRU_BIND);
+	KASSERT(req != PRU_LISTEN);
 	KASSERT(req != PRU_CONTROL);
 	KASSERT(req != PRU_SENSE);
 	KASSERT(req != PRU_PEERADDR);
 	KASSERT(req != PRU_SOCKADDR);
+	KASSERT(req != PRU_RCVOOB);
+	KASSERT(req != PRU_SENDOOB);
 
 	if (req == PRU_PURGEIF) {
 		mutex_enter(softnet_lock);
@@ -725,45 +794,6 @@ rip6_usrreq(struct socket *so, int req, struct mbuf *m,
 		soisdisconnected(so);
 		rip6_detach(so);
 		break;
-
-	case PRU_BIND:
-	    {
-		struct sockaddr_in6 *addr = mtod(nam, struct sockaddr_in6 *);
-		struct ifaddr *ia = NULL;
-
-		if (nam->m_len != sizeof(*addr)) {
-			error = EINVAL;
-			break;
-		}
-		if (!IFNET_FIRST() || addr->sin6_family != AF_INET6) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		if ((error = sa6_embedscope(addr, ip6_use_defzone)) != 0)
-			break;
-
-		/*
-		 * we don't support mapped address here, it would confuse
-		 * users so reject it
-		 */
-		if (IN6_IS_ADDR_V4MAPPED(&addr->sin6_addr)) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		if (!IN6_IS_ADDR_UNSPECIFIED(&addr->sin6_addr) &&
-		    (ia = ifa_ifwithaddr((struct sockaddr *)addr)) == 0) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		if (ia && ((struct in6_ifaddr *)ia)->ia6_flags &
-		    (IN6_IFF_ANYCAST|IN6_IFF_NOTREADY|
-		     IN6_IFF_DETACHED|IN6_IFF_DEPRECATED)) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		in6p->in6p_laddr = addr->sin6_addr;
-		break;
-	    }
 
 	case PRU_CONNECT:
 	{
@@ -872,10 +902,7 @@ rip6_usrreq(struct socket *so, int req, struct mbuf *m,
 	/*
 	 * Not supported.
 	 */
-	case PRU_RCVOOB:
 	case PRU_RCVD:
-	case PRU_LISTEN:
-	case PRU_SENDOOB:
 		error = EOPNOTSUPP;
 		break;
 
@@ -930,19 +957,27 @@ PR_WRAP_USRREQS(rip6)
 #define	rip6_attach		rip6_attach_wrapper
 #define	rip6_detach		rip6_detach_wrapper
 #define	rip6_accept		rip6_accept_wrapper
+#define	rip6_bind		rip6_bind_wrapper
+#define	rip6_listen		rip6_listen_wrapper
 #define	rip6_ioctl		rip6_ioctl_wrapper
 #define	rip6_stat		rip6_stat_wrapper
 #define	rip6_peeraddr		rip6_peeraddr_wrapper
 #define	rip6_sockaddr		rip6_sockaddr_wrapper
+#define	rip6_recvoob		rip6_recvoob_wrapper
+#define	rip6_sendoob		rip6_sendoob_wrapper
 #define	rip6_usrreq		rip6_usrreq_wrapper
 
 const struct pr_usrreqs rip6_usrreqs = {
 	.pr_attach	= rip6_attach,
 	.pr_detach	= rip6_detach,
 	.pr_accept	= rip6_accept,
+	.pr_bind	= rip6_bind,
+	.pr_listen	= rip6_listen,
 	.pr_ioctl	= rip6_ioctl,
 	.pr_stat	= rip6_stat,
 	.pr_peeraddr	= rip6_peeraddr,
 	.pr_sockaddr	= rip6_sockaddr,
+	.pr_recvoob	= rip6_recvoob,
+	.pr_sendoob	= rip6_sendoob,
 	.pr_generic	= rip6_usrreq,
 };

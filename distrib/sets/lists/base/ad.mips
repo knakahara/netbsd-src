@@ -1,4 +1,4 @@
-# $NetBSD: ad.mips,v 1.45 2014/07/23 02:42:56 lneto Exp $
+# $NetBSD: ad.mips,v 1.47 2014/07/25 08:32:21 dholland Exp $
 ./lib/64					base-compat-shlib	compat,arch64
 ./lib/64/npf					base-npf-shlib		compat,arch64
 ./lib/64/npf/ext_log.so				base-npf-shlib		compat,pic,arch64
@@ -94,7 +94,7 @@
 ./usr/lib/64/libc++.so.1			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/64/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/64/libc.so.12				base-compat-shlib	compat,pic,arch64
-./usr/lib/64/libc.so.12.192			base-compat-shlib	compat,pic,arch64
+./usr/lib/64/libc.so.12.193			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/64/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/64/libcrypt.so.1			base-compat-shlib	compat,pic,arch64
@@ -241,7 +241,7 @@
 ./usr/lib/64/libpcap.so.5			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libpcap.so.5.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libpci.so.2			base-compat-shlib	compat,pic,arch64
-./usr/lib/64/libpci.so.2.0			base-compat-shlib	compat,pic,arch64
+./usr/lib/64/libpci.so.2.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libperfuse.so.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libperfuse.so.0.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libposix.so.0			base-compat-shlib	compat,pic,arch64
@@ -441,7 +441,7 @@
 ./usr/lib/o32/libc++.so.1			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/o32/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/o32/libc.so.12			base-compat-shlib	compat,pic,arch64
-./usr/lib/o32/libc.so.12.192			base-compat-shlib	compat,pic,arch64
+./usr/lib/o32/libc.so.12.193			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/o32/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/o32/libcrypt.so.1			base-compat-shlib	compat,pic,arch64
@@ -580,7 +580,7 @@
 ./usr/lib/o32/libpcap.so.5			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libpcap.so.5.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libpci.so.2			base-compat-shlib	compat,pic,arch64
-./usr/lib/o32/libpci.so.2.0			base-compat-shlib	compat,pic,arch64
+./usr/lib/o32/libpci.so.2.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libperfuse.so.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libperfuse.so.0.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libposix.so.0			base-compat-shlib	compat,pic,arch64

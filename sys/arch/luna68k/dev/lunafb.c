@@ -1,4 +1,4 @@
-/* $NetBSD: lunafb.c,v 1.33 2014/07/18 18:17:54 tsutsui Exp $ */
+/* $NetBSD: lunafb.c,v 1.35 2014/07/25 16:40:12 tsutsui Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: lunafb.c,v 1.33 2014/07/18 18:17:54 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lunafb.c,v 1.35 2014/07/25 16:40:12 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -126,13 +126,15 @@ struct om_hwdevconfig {
 struct omfb_softc {
 	device_t sc_dev;		/* base device */
 	struct om_hwdevconfig *sc_dc;	/* device configuration */
-	int nscreens;
+	int sc_nscreens;
+	int sc_mode;
 };
 
 static int  omgetcmap(struct omfb_softc *, struct wsdisplay_cmap *);
 static int  omsetcmap(struct omfb_softc *, struct wsdisplay_cmap *);
 
 static struct om_hwdevconfig omfb_console_dc;
+static void omfb_resetcmap(struct om_hwdevconfig *);
 static void omfb_getdevconfig(paddr_t, struct om_hwdevconfig *);
 
 static struct wsscreen_descr omfb_stdscreen = {
@@ -204,7 +206,7 @@ omfbattach(device_t parent, device_t self, void *args)
 
 	if (omfb_console) {
 		sc->sc_dc = &omfb_console_dc;
-		sc->nscreens = 1;
+		sc->sc_nscreens = 1;
 	} else {
 		sc->sc_dc = kmem_zalloc(sizeof(struct om_hwdevconfig),
 		    KM_SLEEP);
@@ -213,6 +215,7 @@ omfbattach(device_t parent, device_t self, void *args)
 	aprint_normal(": %d x %d, %dbpp\n", sc->sc_dc->dc_wid, sc->sc_dc->dc_ht,
 	    sc->sc_dc->dc_depth);
 
+	sc->sc_mode = WSDISPLAYIO_MODE_EMUL;
 	waa.console = omfb_console;
 	waa.scrdata = &omfb_screenlist;
 	waa.accessops = &omfb_accessops;
@@ -240,6 +243,7 @@ omfbioctl(void *v, void *vs, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	struct omfb_softc *sc = v;
 	struct om_hwdevconfig *dc = sc->sc_dc;
+	int new_mode;
 
 	switch (cmd) {
 	case WSDISPLAYIO_GTYPE:
@@ -265,6 +269,15 @@ omfbioctl(void *v, void *vs, u_long cmd, void *data, int flag, struct lwp *l)
 	case WSDISPLAYIO_PUTCMAP:
 		return omsetcmap(sc, (struct wsdisplay_cmap *)data);
 
+	case WSDISPLAYIO_SMODE:
+		new_mode = *(int *)data;
+		if (new_mode != sc->sc_mode) {
+			sc->sc_mode = new_mode;
+			if (new_mode == WSDISPLAYIO_MODE_EMUL)
+				omfb_resetcmap(dc);
+		}
+		return 0;
+
 	case WSDISPLAYIO_SVIDEO:
 	case WSDISPLAYIO_GVIDEO:
 	case WSDISPLAYIO_GCURPOS:
@@ -288,13 +301,21 @@ omfbmmap(void *v, void *vs, off_t offset, int prot)
 	struct om_hwdevconfig *dc = sc->sc_dc;
 	paddr_t cookie = -1;
 
-#if 0	/* XXX: quick workaround to make X.Org mono server work */
-	if (offset >= 0 && offset < OMFB_SIZE)
-		cookie = m68k_btop(m68k_trunc_page(dc->dc_videobase) + offset);
-#else
-	if (offset >= 0 && offset < dc->dc_rowbytes * dc->dc_ht * dc->dc_depth)
-		cookie = m68k_btop(m68k_trunc_page(OMFB_FB_RADDR) + offset);
+	switch (sc->sc_mode) {
+#if 0
+	case WSDISPLAYIO_MODE_MAPPED:
+		if (offset >= 0 && offset < OMFB_SIZE)
+			cookie = m68k_btop(m68k_trunc_page(dc->dc_videobase) +
+			    offset);
+		break;
 #endif
+	case WSDISPLAYIO_MODE_DUMBFB:
+		if (offset >= 0 &&
+		    offset < dc->dc_rowbytes * dc->dc_ht * dc->dc_depth)
+			cookie = m68k_btop(m68k_trunc_page(OMFB_FB_RADDR) +
+			    offset);
+		break;
+	}
 
 	return cookie;
 }
@@ -364,35 +385,10 @@ omsetcmap(struct omfb_softc *sc, struct wsdisplay_cmap *p)
 }
 
 static void
-omfb_getdevconfig(paddr_t paddr, struct om_hwdevconfig *dc)
+omfb_resetcmap(struct om_hwdevconfig *dc)
 {
-	int bpp, i;
-	struct rasops_info *ri;
-	union {
-		struct { short h, v; } p;
-		uint32_t u;
-	} rfcnt;
+	int i;
 
-	switch (hwplanemask) {
-	case 0xff:
-		bpp = 8;	/* XXX check monochrome bit in DIPSW */
-		break;
-	default:
-	case 0x0f:
-		bpp = 4;	/* XXX check monochrome bit in DIPSW */
-		break;
-	case 1:
-		bpp = 1;
-		break;
-	}
-	dc->dc_wid = 1280;
-	dc->dc_ht = 1024;
-	dc->dc_depth = bpp;
-	dc->dc_rowbytes = 2048 / 8;
-	dc->dc_cmsize = (bpp == 1) ? 0 : 1 << bpp;
-	dc->dc_videobase = paddr;
-
-	/* WHITE on BLACK */
 	if (hwplanemask == 0x01) {
 		struct bt454 *odac = (struct bt454 *)OMFB_RAMDAC;
 
@@ -451,6 +447,38 @@ omfb_getdevconfig(paddr_t paddr, struct om_hwdevconfig *dc)
 			ndac->bt_cmap = dc->dc_cmap.b[i] = ansicmap[i % 16].b;
 		}
 	}
+}
+
+static void
+omfb_getdevconfig(paddr_t paddr, struct om_hwdevconfig *dc)
+{
+	int bpp, i;
+	struct rasops_info *ri;
+	union {
+		struct { short h, v; } p;
+		uint32_t u;
+	} rfcnt;
+
+	switch (hwplanemask) {
+	case 0xff:
+		bpp = 8;	/* XXX check monochrome bit in DIPSW */
+		break;
+	default:
+	case 0x0f:
+		bpp = 4;	/* XXX check monochrome bit in DIPSW */
+		break;
+	case 1:
+		bpp = 1;
+		break;
+	}
+	dc->dc_wid = 1280;
+	dc->dc_ht = 1024;
+	dc->dc_depth = bpp;
+	dc->dc_rowbytes = 2048 / 8;
+	dc->dc_cmsize = (bpp == 1) ? 0 : 1 << bpp;
+	dc->dc_videobase = paddr;
+
+	omfb_resetcmap(dc);
 
 	/* adjust h/v origin on screen */
 	rfcnt.p.h = 7;
@@ -497,14 +525,14 @@ omfb_alloc_screen(void *v, const struct wsscreen_descr *type, void **cookiep,
 	struct omfb_softc *sc = v;
 	struct rasops_info *ri = &sc->sc_dc->dc_ri;
 
-	if (sc->nscreens > 0)
+	if (sc->sc_nscreens > 0)
 		return ENOMEM;
 
 	*cookiep = ri;
 	*curxp = 0;
 	*curyp = 0;
 	(*ri->ri_ops.allocattr)(ri, 0, 0, 0, attrp);
-	sc->nscreens++;
+	sc->sc_nscreens++;
 	return 0;
 }
 
@@ -516,7 +544,7 @@ omfb_free_screen(void *v, void *cookie)
 	if (sc->sc_dc == &omfb_console_dc)
 		panic("omfb_free_screen: console");
 
-	sc->nscreens--;
+	sc->sc_nscreens--;
 }
 
 static int

@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.365 2014/07/19 20:58:12 palle Exp $	*/
+/*	$NetBSD: locore.s,v 1.368 2014/07/27 16:37:47 palle Exp $	*/
 
 /*
  * Copyright (c) 2006-2010 Matthew R. Green
@@ -154,10 +154,43 @@
 2:		
 #endif	
 	/* sun4u */
-	wrpr	%g0, PSTATE_KERN, %pstate
+	rdpr	 %pstate, \scratch
+	and	\scratch, ~PSTATE_AG, \scratch	! Alternate Globals (AG) bit set to zero
+	wrpr	%g0, \scratch, %pstate
+3:
+	.endm
+
+	.macro	ALTERNATE_GLOBALS scratch
+#ifdef SUN4V
+	sethi	%hi(cputyp), \scratch
+	ld	[\scratch + %lo(cputyp)], \scratch
+	cmp	\scratch, CPU_SUN4V
+	bne,pt	%icc, 2f
+	 nop
+	/* sun4v */
+	ba	3f
+	 wrpr	%g0, 1, %gl
+2:		
+#endif	
+	/* sun4u */
+	rdpr	 %pstate, \scratch
+	or	\scratch, PSTATE_AG, \scratch	! Alternate Globals (AG) bit set to one
+	wrpr	%g0, \scratch, %pstate
 3:
 	.endm
 	
+	.macro	ENABLE_INTERRUPTS scratch
+	rdpr	 %pstate, \scratch
+	or	\scratch, PSTATE_IE, \scratch	! Interrupt Enable (IE) bit set to one
+	wrpr	%g0, \scratch, %pstate
+	.endm
+
+	.macro	DISABLE_INTERRUPTS scratch
+	rdpr	 %pstate, \scratch
+	and	\scratch, ~PSTATE_IE, \scratch	! Interrupt Enable (IE) bit set to zero
+	wrpr	%g0, \scratch, %pstate
+	.endm
+		
 
 #ifdef SUN4V
 	/* Misc. sun4v macros */
@@ -987,64 +1020,97 @@ _C_LABEL(trapbase_sun4v):
 	!
 	! trap level 0
 	!
-	sun4v_trap_entry 49				! 0x000-0x030
-	VTRAP(T_DATA_MMU_MISS, sun4v_dtsb_miss)		! 0x031 = data MMU miss
-	sun4v_trap_entry 15				! 0x032-0x040
-	HARDINT4V(1)					! 0x041 = level 1 interrupt
-	HARDINT4V(2)					! 0x042 = level 2 interrupt
-	HARDINT4V(3)					! 0x043 = level 3 interrupt
-	HARDINT4V(4)					! 0x044 = level 4 interrupt
-	HARDINT4V(5)					! 0x045 = level 5 interrupt
-	HARDINT4V(6)					! 0x046 = level 6 interrupt
-	HARDINT4V(7)					! 0x047 = level 7 interrupt
-	HARDINT4V(8)					! 0x048 = level 8 interrupt
-	HARDINT4V(9)					! 0x049 = level 9 interrupt
-	HARDINT4V(10)					! 0x04a = level 10 interrupt
-	HARDINT4V(11)					! 0x04b = level 11 interrupt
-	HARDINT4V(12)					! 0x04c = level 12 interrupt
-	HARDINT4V(13)					! 0x04d = level 13 interrupt
-	HARDINT4V(14)					! 0x04e = level 14 interrupt
-	HARDINT4V(15)					! 0x04f = level 15 interrupt
-	sun4v_trap_entry 48				! 0x050-0x07f
-	SPILL64(uspill8_sun4v,ASI_AIUS)			! 0x080 spill_0_normal -- used to save user windows in user mode
-	SPILL32(uspill4_sun4v,ASI_AIUS)			! 0x084 spill_1_normal
-	SPILLBOTH(uspill8_sun4v,uspill4_sun4v,ASI_AIUS)	! 0x088 spill_2_normal
-	sun4v_trap_entry_spill_fill_fail 1		! 0x08c spill_3_normal
-	SPILL64(kspill8_sun4v,ASI_N)			! 0x090 spill_4_normal  -- used to save supervisor windows
-	SPILL32(kspill4_sun4v,ASI_N)			! 0x094 spill_5_normal
-	SPILLBOTH(kspill8_sun4v,kspill4_sun4v,ASI_N)	! 0x098 spill_6_normal
+	sun4v_trap_entry 49					! 0x000-0x030
+	VTRAP(T_DATA_MMU_MISS, sun4v_dtsb_miss)			! 0x031 = data MMU miss
+	sun4v_trap_entry 15					! 0x032-0x040
+	HARDINT4V(1)						! 0x041 = level 1 interrupt
+	HARDINT4V(2)						! 0x042 = level 2 interrupt
+	HARDINT4V(3)						! 0x043 = level 3 interrupt
+	HARDINT4V(4)						! 0x044 = level 4 interrupt
+	HARDINT4V(5)						! 0x045 = level 5 interrupt
+	HARDINT4V(6)						! 0x046 = level 6 interrupt
+	HARDINT4V(7)						! 0x047 = level 7 interrupt
+	HARDINT4V(8)						! 0x048 = level 8 interrupt
+	HARDINT4V(9)						! 0x049 = level 9 interrupt
+	HARDINT4V(10)						! 0x04a = level 10 interrupt
+	HARDINT4V(11)						! 0x04b = level 11 interrupt
+	HARDINT4V(12)						! 0x04c = level 12 interrupt
+	HARDINT4V(13)						! 0x04d = level 13 interrupt
+	HARDINT4V(14)						! 0x04e = level 14 interrupt
+	HARDINT4V(15)						! 0x04f = level 15 interrupt
+	sun4v_trap_entry 48					! 0x050-0x07f
+	SPILL64(uspill8_sun4vt0,ASI_AIUS)			! 0x080 spill_0_normal -- used to save user windows in user mode
+	SPILL32(uspill4_sun4vt0,ASI_AIUS)			! 0x084 spill_1_normal
+	SPILLBOTH(uspill8_sun4vt0,uspill4_sun4vt0,ASI_AIUS)	! 0x088 spill_2_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x08c spill_3_normal
+	SPILL64(kspill8_sun4vt0,ASI_N)				! 0x090 spill_4_normal  -- used to save supervisor windows
+	SPILL32(kspill4_sun4vt0,ASI_N)				! 0x094 spill_5_normal
+	SPILLBOTH(kspill8_sun4vt0,kspill4_sun4vt0,ASI_N)	! 0x098 spill_6_normal
 	sun4v_trap_entry_spill_fill_fail 1			! 0x09c spill_7_normal
-	SPILL64(uspillk8_sun4v,ASI_AIUS)			! 0x0a0 spill_0_other -- used to save user windows in supervisor mode
-	SPILL32(uspillk4_sun4v,ASI_AIUS)			! 0x0a4 spill_1_other
-	SPILLBOTH(uspillk8_sun4v,uspillk4_sun4v,ASI_AIUS)	! 0x0a8 spill_2_other
+	SPILL64(uspillk8_sun4vt0,ASI_AIUS)			! 0x0a0 spill_0_other -- used to save user windows in supervisor mode
+	SPILL32(uspillk4_sun4vt0,ASI_AIUS)			! 0x0a4 spill_1_other
+	SPILLBOTH(uspillk8_sun4vt0,uspillk4_sun4vt0,ASI_AIUS)	! 0x0a8 spill_2_other
 	sun4v_trap_entry_spill_fill_fail 1			! 0x0ac spill_3_other
 	sun4v_trap_entry_spill_fill_fail 1			! 0x0b0 spill_4_other
 	sun4v_trap_entry_spill_fill_fail 1			! 0x0b4 spill_5_other
 	sun4v_trap_entry_spill_fill_fail 1			! 0x0b8 spill_6_other
 	sun4v_trap_entry_spill_fill_fail 1			! 0x0bc spill_7_other
-	FILL64(ufill8_sun4v,ASI_AIUS)			! 0x0c0 fill_0_normal -- used to fill windows when running user mode
-	FILL32(ufill4_sun4v,ASI_AIUS)			! 0x0c4 fill_1_normal
-	FILLBOTH(ufill8_sun4v,ufill4_sun4v,ASI_AIUS)	! 0x0c8 fill_2_normal
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0cc fill_3_normal
-	FILL64(kfill8_sun4v,ASI_N)			! 0x0d0 fill_4_normal  -- used to fill windows when running supervisor mode
-	FILL32(kfill4_sun4v,ASI_N)			! 0x0d4 fill_5_normal
-	FILLBOTH(kfill8_sun4v,kfill4_sun4v,ASI_N)	! 0x0d8 fill_6_normal
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0dc fill_7_normal
-	FILL64(ufillk8_sun4v,ASI_AIUS)			! 0x0e0 fill_0_other
-	FILL32(ufillk4_sun4v,ASI_AIUS)			! 0x0e4 fill_1_other
-	FILLBOTH(ufillk8_sun4v,ufillk4_sun4v,ASI_AIUS)	! 0x0e8 fill_2_other
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0ec fill_3_other
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0f0 fill_4_other
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0f4 fill_5_other
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0f8 fill_6_other
-	sun4v_trap_entry_spill_fill_fail 1		! 0x0fc fill_7_other
-	sun4v_trap_entry 256				! 0x100-0x1ff
+	FILL64(ufill8_sun4vt0,ASI_AIUS)				! 0x0c0 fill_0_normal -- used to fill windows when running user mode
+	FILL32(ufill4_sun4vt0,ASI_AIUS)				! 0x0c4 fill_1_normal
+	FILLBOTH(ufill8_sun4vt0,ufill4_sun4vt0,ASI_AIUS)	! 0x0c8 fill_2_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0cc fill_3_normal
+	FILL64(kfill8_sun4vt0,ASI_N)				! 0x0d0 fill_4_normal  -- used to fill windows when running supervisor mode
+	FILL32(kfill4_sun4vt0,ASI_N)				! 0x0d4 fill_5_normal
+	FILLBOTH(kfill8_sun4vt0,kfill4_sun4vt0,ASI_N)		! 0x0d8 fill_6_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0dc fill_7_normal
+	FILL64(ufillk8_sun4vt0,ASI_AIUS)			! 0x0e0 fill_0_other
+	FILL32(ufillk4_sun4vt0,ASI_AIUS)			! 0x0e4 fill_1_other
+	FILLBOTH(ufillk8_sun4vt0,ufillk4_sun4vt0,ASI_AIUS)	! 0x0e8 fill_2_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0ec fill_3_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0f0 fill_4_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0f4 fill_5_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0f8 fill_6_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0fc fill_7_other
+	sun4v_trap_entry 256					! 0x100-0x1ff
 	!
 	! trap level 1
 	!
-	sun4v_trap_entry_fail 49			! 0x000-0x030
-	VTRAP(T_DATA_MMU_MISS, sun4v_dtsb_miss)		! 0x031 = data MMU miss
-	sun4v_trap_entry_fail 462			! 0x032-0x1ff
+	sun4v_trap_entry_fail 49				! 0x000-0x030
+	VTRAP(T_DATA_MMU_MISS, sun4v_dtsb_miss)			! 0x031 = data MMU miss
+	sun4v_trap_entry_fail 78				! 0x032-0x07f
+	SPILL64(uspill8_sun4vt1,ASI_AIUS)			! 0x080 spill_0_normal -- save user windows
+	SPILL32(uspill4_sun4vt1,ASI_AIUS)			! 0x084 spill_1_normal
+	SPILLBOTH(uspill8_sun4vt1,uspill4_sun4vt1,ASI_AIUS)	! 0x088 spill_2_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x08c spill_3_normal
+	SPILL64(kspill8_sun4vt1,ASI_N)				! 0x090 spill_4_normal -- save supervisor windows
+	SPILL32(kspill4_sun4vt1,ASI_N)				! 0x094 spill_5_normal
+	SPILLBOTH(kspill8_sun4vt1,kspill4_sun4vt1,ASI_N)	! 0x098 spill_6_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x09c spill_7_normal
+	SPILL64(uspillk8_sun4vt1,ASI_AIUS)			! 0x0a0 spill_0_other -- save user windows in nucleus mode
+	SPILL32(uspillk4_sun4vt1,ASI_AIUS)			! 0x0a4 spill_1_other
+	SPILLBOTH(uspillk8_sun4vt1,uspillk4_sun4vt1,ASI_AIUS)	! 0x0a8 spill_2_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0ac spill_3_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0b0 spill_4_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0b4 spill_5_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0b8 spill_6_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0bc spill_7_other
+	FILL64(ufill8_sun4vt1,ASI_AIUS)				! 0x0c0 fill_0_normal -- fill windows when running nucleus mode from user
+	FILL32(ufill4_sun4vt1,ASI_AIUS)				! 0x0c4 fill_1_normal
+	FILLBOTH(ufill8_sun4vt1,ufill4_sun4vt1,ASI_AIUS)	! 0x0c8 fill_2_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0cc fill_3_normal
+	FILL64(kfill8_sun4vt1,ASI_N)				! 0x0d0 fill_4_normal -- fill windows when running nucleus mode from supervisor
+	FILL32(kfill4_sun4vt1,ASI_N)				! 0x0d4 fill_5_normal
+	FILLBOTH(kfill8_sun4vt1,kfill4_sun4vt1,ASI_N)		! 0x0d8 fill_6_normal
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0dc fill_7_normal
+	FILL64(ufillk8_sun4vt1,ASI_AIUS)			! 0x0e0 fill_0_other -- fill user windows when running nucleus mode -- will we ever use this?
+	FILL32(ufillk4_sun4vt1,ASI_AIUS)			! 0x0e4 fill_1_other
+	FILLBOTH(ufillk8_sun4vt1,ufillk4_sun4vt1,ASI_AIUS)	! 0x0e8 fill_2_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0ec fill_3_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0f0 fill_4_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0f4 fill_5_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0f8 fill_6_other
+	sun4v_trap_entry_spill_fill_fail 1			! 0x0fc fill_7_other
+	sun4v_trap_entry_fail 256				! 0x100-0x1ff
 
 #endif
 		
@@ -3869,10 +3935,12 @@ return_from_trap:
 	!!
 	bnz,pn	%icc, 1f				! Returning to userland?
 	 nop
-	wrpr	%g0, PSTATE_INTR, %pstate
+	ENABLE_INTERRUPTS %g5
 	wrpr	%g0, %g0, %pil				! Lower IPL
 1:
-	wrpr	%g0, PSTATE_KERN, %pstate		! Make sure we have normal globals & no IRQs
+	!! Make sure we have normal globals & no IRQs
+	DISABLE_INTERRUPTS %g5
+	NORMAL_GLOBALS %g5
 
 	/* Restore normal globals */
 	ldx	[%sp + CC64FSZ + STKB + TF_G + (1*8)], %g1
@@ -3886,7 +3954,7 @@ return_from_trap:
 #ifdef TRAPS_USE_IG
 	wrpr	%g0, PSTATE_KERN|PSTATE_IG, %pstate	! DEBUG
 #else
-	wrpr	%g0, PSTATE_KERN|PSTATE_AG, %pstate
+	ALTERNATE_GLOBALS %g7		! Assuming %g7 is ok to trash
 #endif
 	ldx	[%sp + CC64FSZ + STKB + TF_O + (0*8)], %i0
 	ldx	[%sp + CC64FSZ + STKB + TF_O + (1*8)], %i1

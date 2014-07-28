@@ -1,4 +1,4 @@
-/*	$NetBSD: udp_usrreq.c,v 1.208 2014/07/09 14:41:42 rtr Exp $	*/
+/*	$NetBSD: udp_usrreq.c,v 1.210 2014/07/24 15:12:03 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: udp_usrreq.c,v 1.208 2014/07/09 14:41:42 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: udp_usrreq.c,v 1.210 2014/07/24 15:12:03 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_compat_netbsd.h"
@@ -900,9 +900,36 @@ udp_accept(struct socket *so, struct mbuf *nam)
 	KASSERT(solocked(so));
 
 	panic("udp_accept");
-	/* NOT REACHED */
+
 	return EOPNOTSUPP;
 }
+
+static int
+udp_bind(struct socket *so, struct mbuf *nam)
+{
+	struct inpcb *inp = sotoinpcb(so);
+	int error = 0;
+	int s;
+
+	KASSERT(solocked(so));
+	KASSERT(inp != NULL);
+	KASSERT(nam != NULL);
+
+	s = splsoftnet();
+	error = in_pcbbind(inp, nam);
+	splx(s);
+
+	return error;
+}
+
+static int
+udp_listen(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
 
 static int
 udp_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
@@ -942,6 +969,25 @@ udp_sockaddr(struct socket *so, struct mbuf *nam)
 }
 
 static int
+udp_recvoob(struct socket *so, struct mbuf *m, int flags)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+udp_sendoob(struct socket *so, struct mbuf *m, struct mbuf *control)
+{
+	KASSERT(solocked(so));
+
+	m_freem(m);
+	m_freem(control);
+
+	return EOPNOTSUPP;
+}
+
+static int
 udp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
     struct mbuf *control, struct lwp *l)
 {
@@ -951,10 +997,14 @@ udp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
 	KASSERT(req != PRU_ACCEPT);
+	KASSERT(req != PRU_BIND);
+	KASSERT(req != PRU_LISTEN);
 	KASSERT(req != PRU_CONTROL);
 	KASSERT(req != PRU_SENSE);
 	KASSERT(req != PRU_PEERADDR);
 	KASSERT(req != PRU_SOCKADDR);
+	KASSERT(req != PRU_RCVOOB);
+	KASSERT(req != PRU_SENDOOB);
 
 	s = splsoftnet();
 	if (req == PRU_PURGEIF) {
@@ -970,7 +1020,7 @@ udp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	KASSERT(solocked(so));
 	inp = sotoinpcb(so);
 
-	KASSERT(!control || (req == PRU_SEND || req == PRU_SENDOOB));
+	KASSERT(!control || req == PRU_SEND);
 	if (inp == NULL) {
 		splx(s);
 		return EINVAL;
@@ -981,14 +1031,6 @@ udp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	 * the udp pcb queue and/or pcb addresses.
 	 */
 	switch (req) {
-	case PRU_BIND:
-		error = in_pcbbind(inp, nam, l);
-		break;
-
-	case PRU_LISTEN:
-		error = EOPNOTSUPP;
-		break;
-
 	case PRU_CONNECT:
 		error = in_pcbconnect(inp, nam, l);
 		if (error)
@@ -1053,16 +1095,6 @@ udp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 		if (m)
 			m_freem(m);
 	}
-		break;
-
-	case PRU_RCVOOB:
-		error =  EOPNOTSUPP;
-		break;
-
-	case PRU_SENDOOB:
-		m_freem(control);
-		m_freem(m);
-		error =  EOPNOTSUPP;
 		break;
 
 	default:
@@ -1294,19 +1326,27 @@ PR_WRAP_USRREQS(udp)
 #define	udp_attach	udp_attach_wrapper
 #define	udp_detach	udp_detach_wrapper
 #define	udp_accept	udp_accept_wrapper
+#define	udp_bind	udp_bind_wrapper
+#define	udp_listen	udp_listen_wrapper
 #define	udp_ioctl	udp_ioctl_wrapper
 #define	udp_stat	udp_stat_wrapper
 #define	udp_peeraddr	udp_peeraddr_wrapper
 #define	udp_sockaddr	udp_sockaddr_wrapper
+#define	udp_recvoob	udp_recvoob_wrapper
+#define	udp_sendoob	udp_sendoob_wrapper
 #define	udp_usrreq	udp_usrreq_wrapper
 
 const struct pr_usrreqs udp_usrreqs = {
 	.pr_attach	= udp_attach,
 	.pr_detach	= udp_detach,
 	.pr_accept	= udp_accept,
+	.pr_bind	= udp_bind,
+	.pr_listen	= udp_listen,
 	.pr_ioctl	= udp_ioctl,
 	.pr_stat	= udp_stat,
 	.pr_peeraddr	= udp_peeraddr,
 	.pr_sockaddr	= udp_sockaddr,
+	.pr_recvoob	= udp_recvoob,
+	.pr_sendoob	= udp_sendoob,
 	.pr_generic	= udp_usrreq,
 };

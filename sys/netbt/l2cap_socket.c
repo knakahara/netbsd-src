@@ -1,4 +1,4 @@
-/*	$NetBSD: l2cap_socket.c,v 1.23 2014/07/09 14:41:42 rtr Exp $	*/
+/*	$NetBSD: l2cap_socket.c,v 1.25 2014/07/24 15:12:03 rtr Exp $	*/
 
 /*-
  * Copyright (c) 2005 Iain Hibbert.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: l2cap_socket.c,v 1.23 2014/07/09 14:41:42 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: l2cap_socket.c,v 1.25 2014/07/24 15:12:03 rtr Exp $");
 
 /* load symbolic names */
 #ifdef BLUETOOTH_DEBUG
@@ -134,6 +134,41 @@ l2cap_accept(struct socket *so, struct mbuf *nam)
 }
 
 static int
+l2cap_bind(struct socket *so, struct mbuf *nam)
+{
+	struct l2cap_channel *pcb = so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(nam != NULL);
+
+	if (pcb == NULL)
+		return EINVAL;
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	if (sa->bt_len != sizeof(struct sockaddr_bt))
+		return EINVAL;
+
+	if (sa->bt_family != AF_BLUETOOTH)
+		return EAFNOSUPPORT;
+
+	return l2cap_bind_pcb(pcb, sa);
+}
+
+static int
+l2cap_listen(struct socket *so)
+{
+	struct l2cap_channel *pcb = so->so_pcb;
+
+	KASSERT(solocked(so));
+
+	if (pcb == NULL)
+		return EINVAL;
+
+	return l2cap_listen_pcb(pcb);
+}
+
+static int
 l2cap_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return EPASSTHROUGH;
@@ -177,6 +212,27 @@ l2cap_sockaddr(struct socket *so, struct mbuf *nam)
 	return l2cap_sockaddr_pcb(pcb, sa);
 }
 
+static int
+l2cap_recvoob(struct socket *so, struct mbuf *m, int flags)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+l2cap_sendoob(struct socket *so, struct mbuf *m, struct mbuf *control)
+{
+	KASSERT(solocked(so));
+
+	if (m)
+		m_freem(m);
+	if (control)
+		m_freem(control);
+
+	return EOPNOTSUPP;
+}
+
 /*
  * User Request.
  * up is socket
@@ -205,10 +261,14 @@ l2cap_usrreq(struct socket *up, int req, struct mbuf *m,
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
 	KASSERT(req != PRU_ACCEPT);
+	KASSERT(req != PRU_BIND);
+	KASSERT(req != PRU_LISTEN);
 	KASSERT(req != PRU_CONTROL);
 	KASSERT(req != PRU_SENSE);
 	KASSERT(req != PRU_PEERADDR);
 	KASSERT(req != PRU_SOCKADDR);
+	KASSERT(req != PRU_RCVOOB);
+	KASSERT(req != PRU_SENDOOB);
 
 	switch (req) {
 	case PRU_PURGEIF:
@@ -230,18 +290,6 @@ l2cap_usrreq(struct socket *up, int req, struct mbuf *m,
 		soisdisconnected(up);
 		l2cap_detach(up);
 		return 0;
-
-	case PRU_BIND:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-
-		if (sa->bt_len != sizeof(struct sockaddr_bt))
-			return EINVAL;
-
-		if (sa->bt_family != AF_BLUETOOTH)
-			return EAFNOSUPPORT;
-
-		return l2cap_bind(pcb, sa);
 
 	case PRU_CONNECT:
 		KASSERT(nam != NULL);
@@ -283,14 +331,9 @@ l2cap_usrreq(struct socket *up, int req, struct mbuf *m,
 		return l2cap_send(pcb, m0);
 
 	case PRU_RCVD:
-	case PRU_RCVOOB:
 		return EOPNOTSUPP;	/* (no release) */
 
-	case PRU_LISTEN:
-		return l2cap_listen(pcb);
-
 	case PRU_CONNECT2:
-	case PRU_SENDOOB:
 	case PRU_FASTTIMO:
 	case PRU_SLOWTIMO:
 	case PRU_PROTORCV:
@@ -455,19 +498,27 @@ PR_WRAP_USRREQS(l2cap)
 #define	l2cap_attach		l2cap_attach_wrapper
 #define	l2cap_detach		l2cap_detach_wrapper
 #define	l2cap_accept		l2cap_accept_wrapper
+#define	l2cap_bind		l2cap_bind_wrapper
+#define	l2cap_listen		l2cap_listen_wrapper
 #define	l2cap_ioctl		l2cap_ioctl_wrapper
 #define	l2cap_stat		l2cap_stat_wrapper
 #define	l2cap_peeraddr		l2cap_peeraddr_wrapper
 #define	l2cap_sockaddr		l2cap_sockaddr_wrapper
+#define	l2cap_recvoob		l2cap_recvoob_wrapper
+#define	l2cap_sendoob		l2cap_sendoob_wrapper
 #define	l2cap_usrreq		l2cap_usrreq_wrapper
 
 const struct pr_usrreqs l2cap_usrreqs = {
 	.pr_attach	= l2cap_attach,
 	.pr_detach	= l2cap_detach,
 	.pr_accept	= l2cap_accept,
+	.pr_bind	= l2cap_bind,
+	.pr_listen	= l2cap_listen,
 	.pr_ioctl	= l2cap_ioctl,
 	.pr_stat	= l2cap_stat,
 	.pr_peeraddr	= l2cap_peeraddr,
 	.pr_sockaddr	= l2cap_sockaddr,
+	.pr_recvoob	= l2cap_recvoob,
+	.pr_sendoob	= l2cap_sendoob,
 	.pr_generic	= l2cap_usrreq,
 };

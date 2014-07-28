@@ -1,4 +1,4 @@
-/*	$NetBSD: sco_socket.c,v 1.25 2014/07/09 14:41:42 rtr Exp $	*/
+/*	$NetBSD: sco_socket.c,v 1.27 2014/07/24 15:12:03 rtr Exp $	*/
 
 /*-
  * Copyright (c) 2006 Itronix Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sco_socket.c,v 1.25 2014/07/09 14:41:42 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sco_socket.c,v 1.27 2014/07/24 15:12:03 rtr Exp $");
 
 /* load symbolic names */
 #ifdef BLUETOOTH_DEBUG
@@ -125,6 +125,41 @@ sco_accept(struct socket *so, struct mbuf *nam)
 }
 
 static int
+sco_bind(struct socket *so, struct mbuf *nam)
+{
+	struct sco_pcb *pcb = so->so_pcb;
+	struct sockaddr_bt *sa;
+
+	KASSERT(solocked(so));
+	KASSERT(nam != NULL);
+
+	if (pcb == NULL)
+		return EINVAL;
+
+	sa = mtod(nam, struct sockaddr_bt *);
+	if (sa->bt_len != sizeof(struct sockaddr_bt))
+		return EINVAL;
+
+	if (sa->bt_family != AF_BLUETOOTH)
+		return EAFNOSUPPORT;
+
+	return sco_bind_pcb(pcb, sa);
+}
+
+static int
+sco_listen(struct socket *so)
+{
+	struct sco_pcb *pcb = so->so_pcb;
+
+	KASSERT(solocked(so));
+
+	if (pcb == NULL)
+		return EINVAL;
+
+	return sco_listen_pcb(pcb);
+}
+
+static int
 sco_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return EOPNOTSUPP;
@@ -168,6 +203,27 @@ sco_sockaddr(struct socket *so, struct mbuf *nam)
 	return sco_sockaddr_pcb(pcb, sa);
 }
 
+static int
+sco_recvoob(struct socket *so, struct mbuf *m, int flags)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+sco_sendoob(struct socket *so, struct mbuf *m, struct mbuf *control)
+{
+	KASSERT(solocked(so));
+
+	if (m)
+		m_freem(m);
+	if (control)
+		m_freem(control);
+
+	return EOPNOTSUPP;
+}
+
 /*
  * User Request.
  * up is socket
@@ -192,10 +248,14 @@ sco_usrreq(struct socket *up, int req, struct mbuf *m,
 	KASSERT(req != PRU_ATTACH);
 	KASSERT(req != PRU_DETACH);
 	KASSERT(req != PRU_ACCEPT);
+	KASSERT(req != PRU_BIND);
+	KASSERT(req != PRU_LISTEN);
 	KASSERT(req != PRU_CONTROL);
 	KASSERT(req != PRU_SENSE);
 	KASSERT(req != PRU_PEERADDR);
 	KASSERT(req != PRU_SOCKADDR);
+	KASSERT(req != PRU_RCVOOB);
+	KASSERT(req != PRU_SENDOOB);
 
 	switch(req) {
 	case PRU_PURGEIF:
@@ -218,18 +278,6 @@ sco_usrreq(struct socket *up, int req, struct mbuf *m,
 		soisdisconnected(up);
 		sco_detach(up);
 		return 0;
-
-	case PRU_BIND:
-		KASSERT(nam != NULL);
-		sa = mtod(nam, struct sockaddr_bt *);
-
-		if (sa->bt_len != sizeof(struct sockaddr_bt))
-			return EINVAL;
-
-		if (sa->bt_family != AF_BLUETOOTH)
-			return EAFNOSUPPORT;
-
-		return sco_bind(pcb, sa);
 
 	case PRU_CONNECT:
 		KASSERT(nam != NULL);
@@ -271,14 +319,9 @@ sco_usrreq(struct socket *up, int req, struct mbuf *m,
 		return sco_send(pcb, m0);
 
 	case PRU_RCVD:
-	case PRU_RCVOOB:
 		return EOPNOTSUPP;	/* (no release) */
 
-	case PRU_LISTEN:
-		return sco_listen(pcb);
-
 	case PRU_CONNECT2:
-	case PRU_SENDOOB:
 	case PRU_FASTTIMO:
 	case PRU_SLOWTIMO:
 	case PRU_PROTORCV:
@@ -422,19 +465,27 @@ PR_WRAP_USRREQS(sco)
 #define	sco_attach		sco_attach_wrapper
 #define	sco_detach		sco_detach_wrapper
 #define	sco_accept		sco_accept_wrapper
+#define	sco_bind		sco_bind_wrapper
+#define	sco_listen		sco_listen_wrapper
 #define	sco_ioctl		sco_ioctl_wrapper
 #define	sco_stat		sco_stat_wrapper
 #define	sco_peeraddr		sco_peeraddr_wrapper
 #define	sco_sockaddr		sco_sockaddr_wrapper
+#define	sco_recvoob		sco_recvoob_wrapper
+#define	sco_sendoob		sco_sendoob_wrapper
 #define	sco_usrreq		sco_usrreq_wrapper
 
 const struct pr_usrreqs sco_usrreqs = {
 	.pr_attach	= sco_attach,
 	.pr_detach	= sco_detach,
 	.pr_accept	= sco_accept,
+	.pr_bind	= sco_bind,
+	.pr_listen	= sco_listen,
 	.pr_ioctl	= sco_ioctl,
 	.pr_stat	= sco_stat,
 	.pr_peeraddr	= sco_peeraddr,
 	.pr_sockaddr	= sco_sockaddr,
+	.pr_recvoob	= sco_recvoob,
+	.pr_sendoob	= sco_sendoob,
 	.pr_generic	= sco_usrreq,
 };

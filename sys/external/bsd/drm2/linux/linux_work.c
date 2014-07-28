@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_work.c,v 1.4 2014/07/16 20:59:58 riastradh Exp $	*/
+/*	$NetBSD: linux_work.c,v 1.6 2014/07/27 14:02:48 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_work.c,v 1.4 2014/07/16 20:59:58 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_work.c,v 1.6 2014/07/27 14:02:48 riastradh Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -281,24 +281,49 @@ linux_wq_barrier(struct work_struct *work)
  *
  * We use __cpu_simple_lock(9) rather than mutex(9) because Linux code
  * does not destroy work, so there is nowhere to call mutex_destroy.
+ *
+ * XXX This is getting out of hand...  Really, work items shouldn't
+ * have locks in them at all; instead the workqueues should.
  */
 
 static void
 linux_work_lock_init(struct work_struct *work)
 {
+
 	__cpu_simple_lock_init(&work->w_lock);
 }
 
 static void
 linux_work_lock(struct work_struct *work)
 {
+	struct cpu_info *ci;
+	int cnt, s;
+
+	/* XXX Copypasta of MUTEX_SPIN_SPLRAISE.  */
+	s = splvm();
+	ci = curcpu();
+	cnt = ci->ci_mtx_count--;
+	__insn_barrier();
+	if (cnt == 0)
+		ci->ci_mtx_oldspl = s;
+
 	__cpu_simple_lock(&work->w_lock);
 }
 
 static void
 linux_work_unlock(struct work_struct *work)
 {
+	struct cpu_info *ci;
+	int s;
+
 	__cpu_simple_unlock(&work->w_lock);
+
+	/* XXX Copypasta of MUTEX_SPIN_SPLRESTORE.  */
+	ci = curcpu();
+	s = ci->ci_mtx_oldspl;
+	__insn_barrier();
+	if (++ci->ci_mtx_count == 0)
+		splx(s);
 }
 
 static bool __diagused
@@ -703,6 +728,7 @@ cancel_delayed_work_sync(struct delayed_work *dw)
 		dw->work.w_state = WORK_CANCELLED;
 		linux_wait_for_cancelled_work(&dw->work);
 		cancelled_p = true;
+		break;
 
 	case WORK_INVOKED:
 		linux_wait_for_invoked_work(&dw->work);

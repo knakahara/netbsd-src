@@ -1,4 +1,4 @@
-/*	$NetBSD: drm_drv.c,v 1.7 2014/07/16 20:56:25 riastradh Exp $	*/
+/*	$NetBSD: drm_drv.c,v 1.9 2014/07/26 21:15:45 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: drm_drv.c,v 1.7 2014/07/16 20:56:25 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: drm_drv.c,v 1.9 2014/07/26 21:15:45 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -232,6 +232,7 @@ const struct cdevsw drm_cdevsw = {
 	.d_poll = nopoll,
 	.d_mmap = drm_mmap,
 	.d_kqfilter = nokqfilter,
+	.d_discard = nodiscard,
 	/* XXX was D_TTY | D_NEGOFFSAFE */
 	/* XXX Add D_MPSAFE some day... */
 	.d_flag = D_NEGOFFSAFE,
@@ -753,24 +754,14 @@ drm_mmap_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 		return -EINVAL;
 	(void)addr;		/* XXX ignore -- no MAP_FIXED for now */
 
-	/* Try a GEM object mapping first.  */
-	ret = drm_gem_mmap_object(dev, offset, size, prot, &uobj, &uoffset);
+	ret = (*dev->driver->mmap_object)(dev, offset, size, prot, &uobj,
+	    &uoffset, file->filp);
 	if (ret)
 		return ret;
-	if (uobj != NULL)
-		goto map;
+	if (uobj == NULL)
+		return -EINVAL;
 
-	/* Try a traditional DRM mapping second.  */
-	ret = drm_mmap_object(dev, offset, size, prot, &uobj, &uoffset);
-	if (ret)
-		return ret;
-	if (uobj != NULL)
-		goto map;
-
-	/* Fail.  */
-	return ret;
-
-map:	vm_prot = ((ISSET(prot, PROT_READ)? VM_PROT_READ : 0) |
+	vm_prot = ((ISSET(prot, PROT_READ)? VM_PROT_READ : 0) |
 	    (ISSET(prot, PROT_WRITE)? VM_PROT_WRITE : 0));
 	KASSERT(vm_prot == (vm_prot & vm_maxprot));
 	uvmflag = UVM_MAPFLAG(vm_prot, vm_maxprot, UVM_INH_COPY,

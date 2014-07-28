@@ -185,9 +185,9 @@ void ttm_tt_destroy(struct ttm_tt *ttm)
 	if (!(ttm->page_flags & TTM_PAGE_FLAG_PERSISTENT_SWAP) &&
 	    ttm->swap_storage)
 		fput(ttm->swap_storage);
-#endif
 
 	ttm->swap_storage = NULL;
+#endif
 	ttm->func->destroy(ttm);
 }
 
@@ -316,7 +316,7 @@ EXPORT_SYMBOL(ttm_dma_tt_fini);
 
 void ttm_tt_unbind(struct ttm_tt *ttm)
 {
-	int ret;
+	int ret __diagused;
 
 	if (ttm->state == tt_bound) {
 		ret = ttm->func->unbind(ttm);

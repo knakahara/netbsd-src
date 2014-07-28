@@ -1,4 +1,4 @@
-/*	$NetBSD: mpls_proto.c,v 1.15 2014/07/09 14:41:42 rtr Exp $ */
+/*	$NetBSD: mpls_proto.c,v 1.17 2014/07/24 15:12:03 rtr Exp $ */
 
 /*
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mpls_proto.c,v 1.15 2014/07/09 14:41:42 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mpls_proto.c,v 1.17 2014/07/24 15:12:03 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_mbuftrace.h"
@@ -103,6 +103,22 @@ mpls_accept(struct socket *so, struct mbuf *nam)
 }
 
 static int
+mpls_bind(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+mpls_listen(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
 mpls_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return EOPNOTSUPP;
@@ -126,6 +142,22 @@ mpls_peeraddr(struct socket *so, struct mbuf *nam)
 
 static int
 mpls_sockaddr(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+mpls_recvoob(struct socket *so, struct mbuf *m, int flags)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+mpls_sendoob(struct socket *so, struct mbuf *m, struct mbuf *control)
 {
 	KASSERT(solocked(so));
 
@@ -224,20 +256,28 @@ PR_WRAP_USRREQS(mpls)
 #define	mpls_attach	mpls_attach_wrapper
 #define	mpls_detach	mpls_detach_wrapper
 #define	mpls_accept	mpls_accept_wrapper
+#define	mpls_bind	mpls_bind_wrapper
+#define	mpls_listen	mpls_listen_wrapper
 #define	mpls_ioctl	mpls_ioctl_wrapper
 #define	mpls_stat	mpls_stat_wrapper
 #define	mpls_peeraddr	mpls_peeraddr_wrapper
 #define	mpls_sockaddr	mpls_sockaddr_wrapper
+#define	mpls_recvoob	mpls_recvoob_wrapper
+#define	mpls_sendoob	mpls_sendoob_wrapper
 #define	mpls_usrreq	mpls_usrreq_wrapper
 
 static const struct pr_usrreqs mpls_usrreqs = {
 	.pr_attach	= mpls_attach,
 	.pr_detach	= mpls_detach,
 	.pr_accept	= mpls_accept,
+	.pr_bind	= mpls_bind,
+	.pr_listen	= mpls_listen,
 	.pr_ioctl	= mpls_ioctl,
 	.pr_stat	= mpls_stat,
 	.pr_peeraddr	= mpls_peeraddr,
 	.pr_sockaddr	= mpls_sockaddr,
+	.pr_recvoob	= mpls_recvoob,
+	.pr_sendoob	= mpls_sendoob,
 	.pr_generic	= mpls_usrreq,
 };
 

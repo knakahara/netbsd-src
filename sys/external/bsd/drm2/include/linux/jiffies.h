@@ -1,4 +1,4 @@
-/*	$NetBSD: jiffies.h,v 1.4 2014/07/16 20:59:58 riastradh Exp $	*/
+/*	$NetBSD: jiffies.h,v 1.6 2014/07/26 14:24:08 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -56,7 +56,12 @@ jiffies_to_msecs(unsigned int j)
 static inline unsigned int
 usecs_to_jiffies(unsigned int usec)
 {
-	return mstohz((usec + (1000 / hz) - 1) / (1000 / hz));
+	const struct timeval tv = {
+		.tv_sec = usec / 1000000,
+		.tv_usec = usec % 1000000,
+	};
+
+	return tvtohz(&tv);
 }
 
 static inline unsigned int

@@ -1,4 +1,4 @@
-/* $NetBSD: cgd.c,v 1.88 2014/06/14 07:39:00 hannken Exp $ */
+/* $NetBSD: cgd.c,v 1.90 2014/07/25 08:10:35 dholland Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cgd.c,v 1.88 2014/06/14 07:39:00 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cgd.c,v 1.90 2014/07/25 08:10:35 dholland Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -77,6 +77,7 @@ const struct bdevsw cgd_bdevsw = {
 	.d_ioctl = cgdioctl,
 	.d_dump = cgddump,
 	.d_psize = cgdsize,
+	.d_discard = nodiscard,
 	.d_flag = D_DISK
 };
 
@@ -91,6 +92,7 @@ const struct cdevsw cgd_cdevsw = {
 	.d_poll = nopoll,
 	.d_mmap = nommap,
 	.d_kqfilter = nokqfilter,
+	.d_discard = nodiscard,
 	.d_flag = D_DISK
 };
 
