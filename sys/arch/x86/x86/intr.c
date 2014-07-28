@@ -1045,6 +1045,7 @@ intr_string(int ih, char *buf, size_t len)
 	if (ih == 0)
 		panic("%s: bogus handle 0x%x", __func__, ih);
 
+
 #if NIOAPIC > 0
 	if (ih & APIC_INT_VIA_APIC) {
 		pic = ioapic_find(APIC_IRQ_APIC(ih));
@@ -1670,7 +1671,6 @@ intr_set_affinity(int irq, cpuid_t cpuid)
 
 	mutex_enter(&cpu_lock);
 
-	/* XXXX evcnt to percpu data */
 	err = intr_find_unused_slot(newci, pic, &newslot);
 	if (err) {
 		printf("failed to allocate interrupt slot for PIC %s irq %d\n",
@@ -1981,7 +1981,7 @@ intr_kernfs_loadcnt(char *buf, int length)
 #define FILL_BUF(cur, end, fmt, ...) do{				\
 		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
 		if (ret < 0) {						\
-			ret = EIO; /* XXXX reasonable? */		\
+			ret = EIO;					\
 			goto out;					\
 		}							\
 		cur += ret;						\
