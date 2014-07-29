@@ -91,7 +91,7 @@ struct intrsource {
 	int is_idtvec;
 	int is_minlevel;
 	char is_evname[32];		/* event counter name */
-	char is_xname[16];		/* device name (same as device_xname(struct device) */
+	char *is_xname;			/* device name */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
 	int is_active_cpu;		/* active cpuid */
 };

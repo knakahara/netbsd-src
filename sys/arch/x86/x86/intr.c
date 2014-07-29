@@ -459,6 +459,7 @@ intr_allocate_io_intrsource(int irq)
 		pep->cpuid = ci->ci_cpuid;
 		pep++;
 	}
+	isp->is_xname = NULL;
 
 	io_interrupt_sources[irq] = isp;
 
@@ -475,6 +476,8 @@ intr_free_io_intrsource(int irq)
 		return;
 	}
 
+	kmem_free(io_interrupt_sources[irq]->is_xname,
+		  strlen(io_interrupt_sources[irq]->is_xname) + 1);
 	kmem_free(io_interrupt_sources[irq]->is_saved_evcnt,
 		  sizeof(*io_interrupt_sources[irq]->is_saved_evcnt) * ncpuonline);
 	kmem_free(io_interrupt_sources[irq],
@@ -696,6 +699,38 @@ intr_findpic(int num)
 	return NULL;
 }
 
+static int
+intr_append_intrsource_xname(struct intrsource *isp, const char *xname)
+{
+	size_t len;
+	char *new;
+
+	/* 16 is same as device_xname(struct device) */
+	KASSERT(strlen(xname) < 16);
+
+	if (isp->is_xname == NULL) {
+		len = strlen(xname);
+		new = kmem_zalloc(len + 1, KM_SLEEP);
+		if (new == NULL) {
+			return ENOMEM;
+		}
+		strncpy(new, xname, len);
+		isp->is_xname = new;
+		return 0;
+	}
+	else {
+		len = strlen(isp->is_xname) + strlen(xname) + 2;
+		new = kmem_zalloc(len + 1, KM_SLEEP);
+		if (new == NULL) {
+			return ENOMEM;
+		}
+		snprintf(new, len, "%s, %s", isp->is_xname, xname);
+		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
+		isp->is_xname = new;
+		return 0;
+	}
+}
+
 /*
  * Handle per-CPU component of interrupt establish.
  *
@@ -818,7 +853,18 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 
 	source->is_pin = pin;
 	source->is_pic = pic;
-	strncpy(source->is_xname, xname, sizeof(source->is_xname));
+	error = intr_append_intrsource_xname(source, xname);
+	if (error) {
+		mutex_exit(&cpu_lock);
+		__cpu_simple_lock(&io_interrupt_sources_lock);
+		intr_free_io_intrsource(pin);
+		__cpu_simple_unlock(&io_interrupt_sources_lock);
+		kmem_free(ih, sizeof(*ih));
+		intr_source_free(ci, slot, pic, idt_vec);
+		printf("%s: pic %s pin %d: can't set device name: %s\n",
+		       __func__, pic->pic_name, pin, xname);
+		return NULL;
+	}
 
 	switch (source->is_type) {
 	case IST_NONE:
@@ -2014,9 +2060,8 @@ intr_kernfs_loadcnt(char *buf, int length)
 				FILL_BUF(buf, buf_end, "\t%8lu", pep.count);
 			}
 		}
-		FILL_BUF(buf, buf_end, "\t%-16s", isp->is_xname);
+		FILL_BUF(buf, buf_end, "\t%s", isp->is_xname);
 		*(buf++) = '\n';
-
 	}
 
 	*(buf++) = '\0';
