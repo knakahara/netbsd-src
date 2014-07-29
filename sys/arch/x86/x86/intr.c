@@ -724,7 +724,7 @@ intr_append_intrsource_xname(struct intrsource *isp, const char *xname)
 		if (new == NULL) {
 			return ENOMEM;
 		}
-		snprintf(new, len, "%s, %s", isp->is_xname, xname);
+		snprintf(new, len + 1, "%s, %s", isp->is_xname, xname);
 		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
 		isp->is_xname = new;
 		return 0;
