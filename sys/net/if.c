@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.285 2014/07/01 10:16:02 ozaki-r Exp $	*/
+/*	$NetBSD: if.c,v 1.287 2014/07/29 05:56:58 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2008 The NetBSD Foundation, Inc.
@@ -90,7 +90,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.285 2014/07/01 10:16:02 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.287 2014/07/29 05:56:58 ozaki-r Exp $");
 
 #include "opt_inet.h"
 
@@ -252,6 +252,8 @@ ifinit1(void)
 
 	if_pfil = pfil_head_create(PFIL_TYPE_IFNET, NULL);
 	KASSERT(if_pfil != NULL);
+
+	etherinit();
 }
 
 ifnet_t *
@@ -688,10 +690,9 @@ if_deactivate(struct ifnet *ifp)
 void
 if_purgeaddrs(struct ifnet *ifp, int family, void (*purgeaddr)(struct ifaddr *))
 {
-	struct ifaddr *ifa, *nifa;
+	struct ifaddr *ifa;
 
-	for (ifa = IFADDR_FIRST(ifp); ifa != NULL; ifa = nifa) {
-		nifa = IFADDR_NEXT(ifa);
+	IFADDR_FOREACH(ifa, ifp) {
 		if (ifa->ifa_addr->sa_family != family)
 			continue;
 		(*purgeaddr)(ifa);
