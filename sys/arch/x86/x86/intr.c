@@ -451,6 +451,11 @@ intr_allocate_io_intrsource(int irq)
 		return NULL;
 
 	if (io_interrupt_sources[irq] != NULL) {
+		/* normal interrupts can share IRQ */
+		if (!is_msi_irq(irq))
+			return io_interrupt_sources[irq];
+
+		/* MSI/MSI-X cannot share IRQ, return NULL */
 		return NULL;
 	}
 
@@ -482,10 +487,8 @@ intr_free_io_intrsource(int irq)
 	if (irq > NUM_IO_INTS)
 		return;
 
-	__cpu_simple_lock(&io_interrupt_sources_lock);
-
 	if (io_interrupt_sources[irq] == NULL)
-		goto out;
+		return;
 
 	kmem_free(io_interrupt_sources[irq]->is_xname,
 		  strlen(io_interrupt_sources[irq]->is_xname) + 1);
@@ -494,8 +497,6 @@ intr_free_io_intrsource(int irq)
 	kmem_free(io_interrupt_sources[irq], sizeof(*io_interrupt_sources[irq]));
 	io_interrupt_sources[irq] = NULL;
 
-out:
-	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	return;
 }
 
@@ -599,9 +600,12 @@ void
 intr_free_msi_vectors(int *vectors, int count)
 {
 	int i;
+
+	__cpu_simple_lock(&io_interrupt_sources_lock);
 	for (i = 0; i < count; i++) {
 		intr_free_io_intrsource(vectors[i]);
 	}
+	__cpu_simple_unlock(&io_interrupt_sources_lock);
 
 	kmem_free(vectors, sizeof(int) * count);
 }
