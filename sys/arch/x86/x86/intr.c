@@ -159,6 +159,8 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/vnode.h>
 #include <miscfs/kernfs/kernfs.h>
 
+#include <sys/conf.h>
+
 #include <uvm/uvm_extern.h>
 
 #include <machine/i8259.h>
@@ -2071,4 +2073,34 @@ out:
 	return ret;
 
 #undef FILL_BUF
+}
+
+void	intrctlattach(int);
+
+dev_type_ioctl(intrctl_ioctl);
+
+const struct cdevsw intrctl_cdevsw = {
+	.d_open = nullopen,
+	.d_close = nullclose,
+	.d_read = nullread,
+	.d_write = nullwrite,
+	.d_ioctl = intrctl_ioctl,
+	.d_stop = nullstop,
+	.d_tty = notty,
+	.d_poll = nopoll,
+	.d_mmap = nommap,
+	.d_kqfilter = nokqfilter,
+	.d_discard = nodiscard,
+	.d_flag = D_OTHER | D_MPSAFE
+};
+
+void
+intrctlattach(int dummy)
+{
+}
+
+int
+intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
+{
+	return 0;
 }
