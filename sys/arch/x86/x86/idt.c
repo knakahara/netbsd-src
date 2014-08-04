@@ -170,7 +170,9 @@ print_idt(void)
 
 		(*pr)("idt[0x%x]\n", i);
 		(*pr)("    selector: 0x%0x\n", curr->gd_selector);
+#ifdef __amd64__
 		(*pr)("    ist     : 0x%0x\n", curr->gd_ist);
+#endif
 		(*pr)("    type    : 0x%0x\n", curr->gd_type);
 		(*pr)("    dpl     : 0x%0x\n", curr->gd_dpl);
 		(*pr)("    p (=1)  : 0x%0x\n", curr->gd_p);
