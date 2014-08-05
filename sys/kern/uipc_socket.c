@@ -1,4 +1,4 @@
-/*	$NetBSD: uipc_socket.c,v 1.227 2014/07/24 15:12:03 rtr Exp $	*/
+/*	$NetBSD: uipc_socket.c,v 1.229 2014/07/31 03:39:35 rtr Exp $	*/
 
 /*-
  * Copyright (c) 2002, 2007, 2008, 2009 The NetBSD Foundation, Inc.
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uipc_socket.c,v 1.227 2014/07/24 15:12:03 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uipc_socket.c,v 1.229 2014/07/31 03:39:35 rtr Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_sock_counters.h"
@@ -827,8 +827,7 @@ soconnect(struct socket *so, struct mbuf *nam, struct lwp *l)
 	    (error = sodisconnect(so))))
 		error = EISCONN;
 	else
-		error = (*so->so_proto->pr_usrreqs->pr_generic)(so,
-		    PRU_CONNECT, NULL, nam, NULL, l);
+		error = (*so->so_proto->pr_usrreqs->pr_connect)(so, nam);
 
 	return error;
 }
@@ -854,8 +853,7 @@ sodisconnect(struct socket *so)
 	} else if (so->so_state & SS_ISDISCONNECTING) {
 		error = EALREADY;
 	} else {
-		error = (*so->so_proto->pr_usrreqs->pr_generic)(so,
-		    PRU_DISCONNECT, NULL, NULL, NULL, NULL);
+		error = (*so->so_proto->pr_usrreqs->pr_disconnect)(so);
 	}
 	return (error);
 }
@@ -1612,8 +1610,7 @@ soshutdown(struct socket *so, int how)
 		error = 0;
 	}
 	if (how == SHUT_WR || how == SHUT_RDWR)
-		error = (*pr->pr_usrreqs->pr_generic)(so,
-		    PRU_SHUTDOWN, NULL, NULL, NULL, NULL);
+		error = (*pr->pr_usrreqs->pr_shutdown)(so);
 
 	return error;
 }

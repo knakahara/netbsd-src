@@ -1,4 +1,4 @@
-/*	$NetBSD: locore_subr.S,v 1.51 2014/07/29 19:15:47 joerg Exp $	*/
+/*	$NetBSD: locore_subr.S,v 1.54 2014/07/30 23:27:55 matt Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -304,7 +304,7 @@ ENTRY_NOPROFILE(emptyidlespin)
 	twnei	%r4,IPL_NONE
 	mfmsr	%r5
 	andi.	%r5,%r5,PSL_EE@l
-	tweqi	%r5,PSL_EE@l
+	tweqi	%r5,0
 #endif
 	blr				/* CPUINIT needs a raw blr */
 
@@ -508,8 +508,8 @@ _ENTRY(cpu_lwp_bootstrap)
 	blrl				/* jump indirect to r31 */
 	lwz	%r31, FRAME_SRR1(%r1)	/* trapexit wants srr1 in r31 */
 #ifdef PPC_BOOKE
-	lis	%r30, 0xbeeffeed@ha
-	addi	%r30, %r30, 0xbeeffeed@l
+	lis	%r30, 0xbeeffeed@h
+	ori	%r30, %r30, 0xbeeffeed@l
 	andis.	%r0,%r31,PSL_CE@h
 	tweqi	%r0,0
 	andi.	%r0,%r31,PSL_DE@l

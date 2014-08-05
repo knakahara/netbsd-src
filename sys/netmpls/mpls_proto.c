@@ -1,4 +1,4 @@
-/*	$NetBSD: mpls_proto.c,v 1.17 2014/07/24 15:12:03 rtr Exp $ */
+/*	$NetBSD: mpls_proto.c,v 1.20 2014/07/31 05:37:00 rtr Exp $ */
 
 /*
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mpls_proto.c,v 1.17 2014/07/24 15:12:03 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mpls_proto.c,v 1.20 2014/07/31 05:37:00 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_mbuftrace.h"
@@ -119,6 +119,38 @@ mpls_listen(struct socket *so)
 }
 
 static int
+mpls_connect(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+mpls_disconnect(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+mpls_shutdown(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+mpls_abort(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
 mpls_ioctl(struct socket *so, u_long cmd, void *nam, struct ifnet *ifp)
 {
 	return EOPNOTSUPP;
@@ -168,6 +200,23 @@ static int
 mpls_usrreq(struct socket *so, int req, struct mbuf *m,
     struct mbuf *nam, struct mbuf *control, struct lwp *l)
 {
+
+	KASSERT(req != PRU_ATTACH);
+	KASSERT(req != PRU_DETACH);
+	KASSERT(req != PRU_ACCEPT);
+	KASSERT(req != PRU_BIND);
+	KASSERT(req != PRU_LISTEN);
+	KASSERT(req != PRU_CONNECT);
+	KASSERT(req != PRU_DISCONNECT);
+	KASSERT(req != PRU_SHUTDOWN);
+	KASSERT(req != PRU_ABORT);
+	KASSERT(req != PRU_CONTROL);
+	KASSERT(req != PRU_SENSE);
+	KASSERT(req != PRU_PEERADDR);
+	KASSERT(req != PRU_SOCKADDR);
+	KASSERT(req != PRU_RCVOOB);
+	KASSERT(req != PRU_SENDOOB);
+
 	return EOPNOTSUPP;
 }
 
@@ -258,6 +307,10 @@ PR_WRAP_USRREQS(mpls)
 #define	mpls_accept	mpls_accept_wrapper
 #define	mpls_bind	mpls_bind_wrapper
 #define	mpls_listen	mpls_listen_wrapper
+#define	mpls_connect	mpls_connect_wrapper
+#define	mpls_disconnect	mpls_disconnect_wrapper
+#define	mpls_shutdown	mpls_shutdown_wrapper
+#define	mpls_abort	mpls_abort_wrapper
 #define	mpls_ioctl	mpls_ioctl_wrapper
 #define	mpls_stat	mpls_stat_wrapper
 #define	mpls_peeraddr	mpls_peeraddr_wrapper
@@ -272,6 +325,10 @@ static const struct pr_usrreqs mpls_usrreqs = {
 	.pr_accept	= mpls_accept,
 	.pr_bind	= mpls_bind,
 	.pr_listen	= mpls_listen,
+	.pr_connect	= mpls_connect,
+	.pr_disconnect	= mpls_disconnect,
+	.pr_shutdown	= mpls_shutdown,
+	.pr_abort	= mpls_abort,
 	.pr_ioctl	= mpls_ioctl,
 	.pr_stat	= mpls_stat,
 	.pr_peeraddr	= mpls_peeraddr,

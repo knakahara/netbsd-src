@@ -1,4 +1,4 @@
-/*	$NetBSD: l2cap_upper.c,v 1.15 2014/07/24 15:12:03 rtr Exp $	*/
+/*	$NetBSD: l2cap_upper.c,v 1.17 2014/07/31 03:39:35 rtr Exp $	*/
 
 /*-
  * Copyright (c) 2005 Iain Hibbert.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: l2cap_upper.c,v 1.15 2014/07/24 15:12:03 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: l2cap_upper.c,v 1.17 2014/07/31 03:39:35 rtr Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -131,7 +131,7 @@ l2cap_sockaddr_pcb(struct l2cap_channel *chan, struct sockaddr_bt *addr)
 }
 
 /*
- * l2cap_connect(l2cap_channel, sockaddr)
+ * l2cap_connect_pcb(l2cap_channel, sockaddr)
  *
  *	Initiate a connection to destination. This corresponds to
  *	"Open Channel Request" in the L2CAP specification and will
@@ -144,7 +144,7 @@ l2cap_sockaddr_pcb(struct l2cap_channel *chan, struct sockaddr_bt *addr)
  *		proto->connecting(upper)
  */
 int
-l2cap_connect(struct l2cap_channel *chan, struct sockaddr_bt *dest)
+l2cap_connect_pcb(struct l2cap_channel *chan, struct sockaddr_bt *dest)
 {
 	struct hci_unit *unit;
 	int err;
@@ -222,7 +222,7 @@ l2cap_peeraddr_pcb(struct l2cap_channel *chan, struct sockaddr_bt *addr)
 }
 
 /*
- * l2cap_disconnect(l2cap_channel, linger)
+ * l2cap_disconnect_pcb(l2cap_channel, linger)
  *
  *	Initiate L2CAP disconnection. This corresponds to
  *	"Close Channel Request" in the L2CAP specification
@@ -235,7 +235,7 @@ l2cap_peeraddr_pcb(struct l2cap_channel *chan, struct sockaddr_bt *addr)
  *	the queue.
  */
 int
-l2cap_disconnect(struct l2cap_channel *chan, int linger)
+l2cap_disconnect_pcb(struct l2cap_channel *chan, int linger)
 {
 	int err = 0;
 

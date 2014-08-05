@@ -1,4 +1,4 @@
-/*	$NetBSD: rtsock.c,v 1.157 2014/07/24 15:12:03 rtr Exp $	*/
+/*	$NetBSD: rtsock.c,v 1.159 2014/07/31 03:39:35 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -61,7 +61,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.157 2014/07/24 15:12:03 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.159 2014/07/31 03:39:35 rtr Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -250,6 +250,57 @@ COMPATNAME(route_listen)(struct socket *so)
 }
 
 static int
+COMPATNAME(route_connect)(struct socket *so, struct mbuf *nam)
+{
+	KASSERT(solocked(so));
+
+	return EOPNOTSUPP;
+}
+
+static int
+COMPATNAME(route_disconnect)(struct socket *so)
+{
+	struct rawcb *rp = sotorawcb(so);
+	int s;
+
+	KASSERT(solocked(so));
+	KASSERT(rp != NULL);
+
+	s = splsoftnet();
+	soisdisconnected(so);
+	raw_disconnect(rp);
+	splx(s);
+
+	return 0;
+}
+
+static int
+COMPATNAME(route_shutdown)(struct socket *so)
+{
+	int s;
+
+	KASSERT(solocked(so));
+
+	/*
+	 * Mark the connection as being incapable of further input.
+	 */
+	s = splsoftnet();
+	socantsendmore(so);
+	splx(s);
+	return 0;
+}
+
+static int
+COMPATNAME(route_abort)(struct socket *so)
+{
+	KASSERT(solocked(so));
+
+	panic("route_abort");
+
+	return EOPNOTSUPP;
+}
+
+static int
 COMPATNAME(route_ioctl)(struct socket *so, u_long cmd, void *nam,
     struct ifnet * ifp)
 {
@@ -327,6 +378,10 @@ COMPATNAME(route_usrreq)(struct socket *so, int req, struct mbuf *m,
 	KASSERT(req != PRU_ACCEPT);
 	KASSERT(req != PRU_BIND);
 	KASSERT(req != PRU_LISTEN);
+	KASSERT(req != PRU_CONNECT);
+	KASSERT(req != PRU_DISCONNECT);
+	KASSERT(req != PRU_SHUTDOWN);
+	KASSERT(req != PRU_ABORT);
 	KASSERT(req != PRU_CONTROL);
 	KASSERT(req != PRU_SENSE);
 	KASSERT(req != PRU_PEERADDR);
@@ -1432,6 +1487,10 @@ static const struct pr_usrreqs route_usrreqs = {
 	.pr_accept	= COMPATNAME(route_accept_wrapper),
 	.pr_bind	= COMPATNAME(route_bind_wrapper),
 	.pr_listen	= COMPATNAME(route_listen_wrapper),
+	.pr_connect	= COMPATNAME(route_connect_wrapper),
+	.pr_disconnect	= COMPATNAME(route_disconnect_wrapper),
+	.pr_shutdown	= COMPATNAME(route_shutdown_wrapper),
+	.pr_abort	= COMPATNAME(route_abort_wrapper),
 	.pr_ioctl	= COMPATNAME(route_ioctl_wrapper),
 	.pr_stat	= COMPATNAME(route_stat_wrapper),
 	.pr_peeraddr	= COMPATNAME(route_peeraddr_wrapper),
