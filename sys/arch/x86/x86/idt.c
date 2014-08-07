@@ -172,6 +172,8 @@ print_idt(void)
 		(*pr)("    selector: 0x%0x\n", curr->gd_selector);
 #ifdef __amd64__
 		(*pr)("    ist     : 0x%0x\n", curr->gd_ist);
+#else
+		(*pr)("    stkcpy  : 0x%0x\n", curr->gd_stkcpy);
 #endif
 		(*pr)("    type    : 0x%0x\n", curr->gd_type);
 		(*pr)("    dpl     : 0x%0x\n", curr->gd_dpl);
