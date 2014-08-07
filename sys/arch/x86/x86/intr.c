@@ -996,8 +996,8 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 			printf("%s: can't allocate io_intersource\n", __func__);
 			return NULL;
 		}
+		__cpu_simple_unlock(&io_interrupt_sources_lock);
 	}
-	__cpu_simple_unlock(&io_interrupt_sources_lock);
 
 	mutex_enter(&cpu_lock);
 	error = intr_allocate_slot(pic, pin, level, &ci, &slot, &idt_vec);
