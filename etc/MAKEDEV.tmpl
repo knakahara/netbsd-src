@@ -1448,6 +1448,10 @@ cpuctl)
 	mkdev cpuctl c %cpuctl_chr% 0 666
 	;;
 
+intrctl)
+	mkdev intrctl c %intr_chr% 0 666
+	;;
+
 audio|audio[0-9]*)
 	unit=${i#audio}
 	audio=audio$unit
