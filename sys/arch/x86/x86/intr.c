@@ -159,6 +159,8 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/vnode.h>
 #include <miscfs/kernfs/kernfs.h>
 
+#include <sys/intrio.h>
+
 #include <sys/conf.h>
 
 #include <uvm/uvm_extern.h>
@@ -1887,8 +1889,6 @@ static const struct kernfs_fileop intr_kernfs_fileops[] = {
   { .kf_fileop = KERNFS_FILEOP_GETATTR, .kf_vop = intr_kernfs_getattr },
 };
 
-#define INTERRUPTS_SIZE 4096
-
 static int
 intr_kernfs_open(void *v)
 {
@@ -1901,11 +1901,11 @@ intr_kernfs_open(void *v)
 	char *buf;
 	int err;
 
-	buf= malloc(INTERRUPTS_SIZE * sizeof(char), M_TEMP, M_WAITOK);
+	buf= malloc(INTR_LIST_BUFSIZE * sizeof(char), M_TEMP, M_WAITOK);
 	if (buf == NULL)
 		return ENOMEM;
 
-	err = intr_kernfs_loadcnt(buf, INTERRUPTS_SIZE);
+	err = intr_kernfs_loadcnt(buf, INTR_LIST_BUFSIZE);
 	if (err)
 		return err;
 
@@ -1975,9 +1975,9 @@ intr_kernfs_getattr(void *v)
 		size = strlen(buf);
 	}
 	else {
-		tmp = malloc(INTERRUPTS_SIZE * sizeof(char), M_TEMP, M_WAITOK);
+		tmp = malloc(INTR_LIST_BUFSIZE * sizeof(char), M_TEMP, M_WAITOK);
 		if (tmp != NULL) {
-			err = intr_kernfs_loadcnt(tmp, INTERRUPTS_SIZE);
+			err = intr_kernfs_loadcnt(tmp, INTR_LIST_BUFSIZE);
 			if (err == 0)
 				size = strlen(tmp);
 
@@ -2102,5 +2102,17 @@ intrctlattach(int dummy)
 int
 intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 {
-	return 0;
+	int error = 0;
+
+	switch (cmd) {
+	case IOC_INTR_LIST:
+		intr_kernfs_loadcnt((char *)data, INTR_LIST_BUFSIZE);
+		break;
+
+	default:
+		error = ENOTTY;
+		break;
+	}
+
+	return error;
 }

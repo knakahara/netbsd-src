@@ -1,5 +1,6 @@
 
 #include <sys/ioctl.h>
+#include <sys/intrio.h>
 
 #include <err.h>
 #include <errno.h>
@@ -77,6 +78,20 @@ usage(void)
 static void
 intr_list(int argc, char **argv)
 {
+	char *buf;
+	int error;
+
+	buf = malloc(INTR_LIST_BUFSIZE);
+	if (buf == NULL) {
+		err(EXIT_FAILURE, "malloc");
+	}
+
+	error = ioctl(fd, IOC_INTR_LIST, buf);
+	if (error < 0) {
+		err(EXIT_FAILURE, "IOC_INTR_LIST");
+	}
+
+	printf("%s", buf);
 }
 
 static void
