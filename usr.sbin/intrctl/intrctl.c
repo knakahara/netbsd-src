@@ -93,6 +93,7 @@ intr_list(int argc, char **argv)
 	}
 
 	printf("%s", buf);
+	free(buf);
 }
 
 static void
