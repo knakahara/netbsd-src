@@ -5,6 +5,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <paths.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,6 +98,33 @@ intr_list(int argc, char **argv)
 static void
 intr_set(int argc, char **argv)
 {
+	struct intr_set iset;
+	int ch;
+	int error;
+
+	iset.irq = -1;
+	iset.cpuid = ULONG_MAX;
+
+	while ((ch = getopt(argc, argv, "c:i:")) != -1) {
+		switch (ch) {
+		case 'c':
+			iset.cpuid = strtoul(optarg, NULL, 10);
+			break;
+		case 'i':
+			iset.irq = atoi(optarg);
+			break;
+		default:
+			usage();
+		}
+	}
+
+	if (iset.irq == -1 || iset.cpuid == ULONG_MAX)
+		usage();
+
+	error = ioctl(fd, IOC_INTR_SET, &iset);
+	if (error < 0) {
+		err(EXIT_FAILURE, "IOC_INTR_SET");
+	}
 }
 
 static void
