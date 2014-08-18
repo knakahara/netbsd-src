@@ -131,10 +131,56 @@ intr_set(int argc, char **argv)
 static void
 intr_intr(int argc, char **argv)
 {
+	cpuid_t cpuid;
+	int ch;
+	int error;
+
+	cpuid = ULONG_MAX;
+
+	while ((ch = getopt(argc, argv, "c:")) != -1) {
+		switch (ch) {
+		case 'c':
+			cpuid = strtoul(optarg, NULL, 10);
+			break;
+		default:
+			usage();
+		}
+	}
+
+	if (cpuid == ULONG_MAX)
+		usage();
+
+	error = ioctl(fd, IOC_INTR_INTR, &cpuid);
+	if (error < 0) {
+		err(EXIT_FAILURE, "IOC_INTR_INTR");
+	}
 }
 
 static void
 intr_nointr(int argc, char **argv)
 {
+	cpuid_t cpuid;
+	int ch;
+	int error;
+
+	cpuid = ULONG_MAX;
+
+	while ((ch = getopt(argc, argv, "c:")) != -1) {
+		switch (ch) {
+		case 'c':
+			cpuid = strtoul(optarg, NULL, 10);
+			break;
+		default:
+			usage();
+		}
+	}
+
+	if (cpuid == ULONG_MAX)
+		usage();
+
+	error = ioctl(fd, IOC_INTR_NOINTR, &cpuid);
+	if (error < 0) {
+		err(EXIT_FAILURE, "IOC_INTR_NOINTR");
+	}
 }
 

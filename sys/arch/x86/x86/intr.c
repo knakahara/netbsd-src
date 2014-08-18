@@ -2114,6 +2114,10 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 		iset = data;
 		error = intr_set_affinity(iset->irq, iset->cpuid);
 		break;
+	case IOC_INTR_INTR:
+		break;
+	case IOC_INTR_NOINTR:
+		break;
 	default:
 		error = ENOTTY;
 		break;
