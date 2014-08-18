@@ -1335,6 +1335,40 @@ softint_init_md(lwp_t *l, u_int level, uintptr_t *machdep)
 }
 
 static void
+intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
+{
+	uint64_t curcnt;
+	struct percpu_evcnt *pep;
+	int i;
+
+	curcnt = source->is_evcnt.ev_count;
+	pep = source->is_saved_evcnt;
+
+	for (i = 0; i < ncpuonline; i++) {
+		if (pep[i].cpuid == cpuid) {
+			pep[i].count = curcnt;
+			break;
+		}
+	}
+}
+
+static void
+intr_restore_evcnt(struct intrsource *source, cpuid_t cpuid)
+{
+	struct percpu_evcnt *pep;
+	int i;
+
+	pep = source->is_saved_evcnt;
+
+	for (i = 0; i < ncpuonline; i++) {
+		if (pep[i].cpuid == cpuid) {
+			source->is_evcnt.ev_count = pep[i].count;
+			break;
+		}
+	}
+}
+
+static void
 intr_redistribute_xc_t(void *arg1, void *arg2)
 {
 	struct cpu_info *ci;
@@ -1507,6 +1541,9 @@ intr_redistribute(struct cpu_info *oci)
 		nci->ci_nintrhand++;
 		ih->ih_cpu = nci;
 	}
+	intr_save_evcnt(isp, oci->ci_cpuid);
+	intr_restore_evcnt(isp, nci->ci_cpuid);
+	isp->is_active_cpu = nci->ci_cpuid;
 
 	return true;
 }
@@ -1639,40 +1676,6 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 	intr_calculatemasks(ci);
 
 	x86_write_psl(psl);
-}
-
-static void
-intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
-{
-	uint64_t curcnt;
-	struct percpu_evcnt *pep;
-	int i;
-
-	curcnt = source->is_evcnt.ev_count;
-	pep = source->is_saved_evcnt;
-
-	for (i = 0; i < ncpuonline; i++) {
-		if (pep[i].cpuid == cpuid) {
-			pep[i].count = curcnt;
-			break;
-		}
-	}
-}
-
-static void
-intr_restore_evcnt(struct intrsource *source, cpuid_t cpuid)
-{
-	struct percpu_evcnt *pep;
-	int i;
-
-	pep = source->is_saved_evcnt;
-
-	for (i = 0; i < ncpuonline; i++) {
-		if (pep[i].cpuid == cpuid) {
-			source->is_evcnt.ev_count = pep[i].count;
-			break;
-		}
-	}
 }
 
 static int
