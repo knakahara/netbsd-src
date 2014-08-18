@@ -2102,11 +2102,145 @@ intrctlattach(int dummy)
 {
 }
 
+#define UNSET_NOINTR_SHIELD	0
+#define SET_NOINTR_SHIELD	1
+
+static void
+intr_shield_xcall(void *arg1, void *arg2)
+{
+	struct cpu_info *ci;
+	struct schedstate_percpu *spc;
+	int shield;
+	int s;
+
+	ci = arg1;
+	shield = (int)(intptr_t)arg2;
+
+	spc = &ci->ci_schedstate;
+	s = splsched();
+	if (shield == UNSET_NOINTR_SHIELD)
+		spc->spc_flags &= ~SPCF_NOINTR;
+	else if (shield == SET_NOINTR_SHIELD)
+		spc->spc_flags |= SPCF_NOINTR;
+	splx(s);
+
+	return;
+}
+
+static int
+intr_shield(cpuid_t cpuid, int shield)
+{
+	struct cpu_info *ci;
+	struct schedstate_percpu *spc;
+
+	ci = intr_find_cpuinfo(cpuid);
+	if (ci == NULL) {
+		return EINVAL;
+	}
+	spc = &ci->ci_schedstate;
+
+	if (shield == UNSET_NOINTR_SHIELD) {
+		if ((spc->spc_flags & SPCF_NOINTR) == 0)
+			return 0;
+	}
+	else if (shield == SET_NOINTR_SHIELD) {
+		if ((spc->spc_flags & SPCF_NOINTR) != 0)
+			return 0;
+	}
+
+	if (ci == curcpu() || !mp_online) {
+		intr_shield_xcall(ci, (void *)(intptr_t)shield);
+	}
+	else {
+		uint64_t where;
+		where = xc_unicast(0, intr_shield_xcall, ci,
+			(void *)(intptr_t)shield, ci);
+		xc_wait(where);
+	}
+
+	spc->spc_lastmod = time_second;
+	return 0;
+}
+
+static int
+intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info  *newci, *lci;
+	struct intrsource *isp;
+	int i, error;
+	int irq;
+	cpuid_t cpuid;
+
+	for (i = 0; i < MAX_INTR_SOURCES; i++) {
+		isp = oldci->ci_isources[i];
+		if (isp == NULL) {
+			continue;
+		}
+
+		if (isp->is_pic->pic_type == PIC_IOAPIC) { /* XXXX need MSI */
+			break;
+		}
+	}
+	if (i == MAX_INTR_SOURCES) {
+		/* done averting interrupts, or already averted */
+		*do_next = false;
+		return 0;
+	}
+
+	newci = NULL;
+	for (CPU_INFO_FOREACH(cii, lci)) {
+		if ((lci->ci_schedstate.spc_flags & SPCF_NOINTR) == 0) {
+			newci = lci;
+			break;
+		}
+	}
+	if (newci == NULL) {
+		/* cannot avert interrupts */
+		printf("cannot find the cpu to affinity\n");
+		*do_next = false;
+		return ENOMEM;
+	}
+
+	irq = isp->is_pin;
+	cpuid = newci->ci_cpuid;
+	error = intr_set_affinity(irq, cpuid);
+	if (error) {
+		printf("cannot set affinity\n");
+		*do_next = false;
+		return error;
+	}
+
+	*do_next = true;
+	return 0;
+}
+
+static int
+intr_avert_all_intr(cpuid_t cpuid)
+{
+	struct cpu_info *ci;
+	bool do_next = true;
+	int error;
+
+	ci = intr_find_cpuinfo(cpuid);
+	if (ci == NULL) {
+		return EINVAL;
+	}
+
+	while (do_next) {
+		error = intr_avert_one_intr(ci, &do_next);
+		if (error)
+			break;
+	}
+	return error;
+}
+
 int
 intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 {
 	int error = 0;
 	struct intr_set *iset;
+	cpuid_t cpuid;
 
 	switch (cmd) {
 	case IOC_INTR_LIST:
@@ -2118,8 +2252,15 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 		error = intr_set_affinity(iset->irq, iset->cpuid);
 		break;
 	case IOC_INTR_INTR:
+		cpuid = *(cpuid_t *)data;
+		error = intr_shield(cpuid, UNSET_NOINTR_SHIELD);
 		break;
 	case IOC_INTR_NOINTR:
+		cpuid = *(cpuid_t *)data;
+		error = intr_shield(cpuid, SET_NOINTR_SHIELD);
+		if (error)
+			break;
+		error = intr_avert_all_intr(cpuid);
 		break;
 	default:
 		error = ENOTTY;
