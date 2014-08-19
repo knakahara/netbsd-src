@@ -1,4 +1,4 @@
-.Dd August 15, 2014
+.Dd August 19, 2014
 .Dt INTRCTL 8
 .Os
 .Sh NAME
@@ -8,15 +8,44 @@
 .Nm intrctl
 .Ar command
 .Op Ar options
+.Nm intrctl
+.Oc
+.Fl f
+.Ar file
 .Sh DESCRIPTION
 The
 .Nm
 command can be used to control and inspect the state of intrerupts in the system.
-
+.Pp
+The first argument,
+.Ar command ,
+specifies the action to take.
+Valid commands are:
+.Bl -tag -width XofflineXcpunoX
+.It list
+for each IRQ in the system, display interrupt counts per CPU.
+.It affinity Fl c Ar cpuid Fl i Ar irq
+set affinity
+.Ar irq
+interrupt to
+.Ar cpuid.
+.It intr Fl c Ar cpuid
+enable interrupts to set affinity to
+.Ar cpuid.
+.It nointr Fl c Ar cpuid
+disable interrupts to set affinity to
+.Ar cpuid.
+.It Fl f Ar file
+load interrupts setting from
+.Ar file.
+.El
+.Sh FILES
+.Bl -tag -width /dev/intrctl -compact
+.It Pa /dev/cpuctl
+control interrupt
 .Ed
 .Sh SEE ALSO
 .Xr cpuctl 8
-
 .Sh HISTORY
 The
 .Nm
