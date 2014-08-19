@@ -1700,6 +1700,10 @@ intr_set_affinity(int irq, cpuid_t cpuid)
 		printf("invalid cpuid: %ld\n", cpuid);
 		return EINVAL;
 	}
+	if ((newci->ci_schedstate.spc_flags & SPCF_NOINTR) != 0) {
+		printf("set nointr shield cpuid: %ld\n", cpuid);
+		return EINVAL;
+	}
 
 	pic = isp->is_pic;
 	if (pic == &i8259_pic) {
