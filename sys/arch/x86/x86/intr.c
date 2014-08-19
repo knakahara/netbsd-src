@@ -160,7 +160,7 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <miscfs/kernfs/kernfs.h>
 
 #include <sys/intrio.h>
-
+#include <sys/kauth.h>
 #include <sys/conf.h>
 
 #include <uvm/uvm_extern.h>
@@ -2249,14 +2249,26 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 
 	case IOC_INTR_AFFINITY:
 		iset = data;
+		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
+		    KAUTH_REQ_SYSTEM_INTR_AFFINITY, NULL, NULL, NULL);
+		if (error)
+			break;
 		error = intr_set_affinity(iset->irq, iset->cpuid);
 		break;
 	case IOC_INTR_INTR:
 		cpuid = *(cpuid_t *)data;
+		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
+		    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
+		if (error)
+			break;
 		error = intr_shield(cpuid, UNSET_NOINTR_SHIELD);
 		break;
 	case IOC_INTR_NOINTR:
 		cpuid = *(cpuid_t *)data;
+		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
+		    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
+		if (error)
+			break;
 		error = intr_shield(cpuid, SET_NOINTR_SHIELD);
 		if (error)
 			break;
