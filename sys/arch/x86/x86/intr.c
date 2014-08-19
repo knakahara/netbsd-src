@@ -2045,7 +2045,14 @@ intr_kernfs_loadcnt(char *buf, int length)
 	/* print header */
 	FILL_BUF(buf, buf_end, " IRQ");
 	for (CPU_INFO_FOREACH(cii, ci)) {
-		FILL_BUF(buf, buf_end, "\t  CPU#%02lu", ci->ci_cpuid);
+		char intr_enable;
+		if (ci->ci_schedstate.spc_flags & SPCF_NOINTR)
+			intr_enable = '-';
+		else
+			intr_enable = '+';
+
+		FILL_BUF(buf, buf_end, "\t  CPU#%02lu(%c)", ci->ci_cpuid,
+			 intr_enable);
 	}
 	*(buf++) = '\n';
 
