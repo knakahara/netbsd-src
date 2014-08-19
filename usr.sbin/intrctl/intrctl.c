@@ -18,7 +18,7 @@ static int	fd;
 int		verbose;
 
 static void	intr_list(int, char **);
-static void	intr_set(int, char **);
+static void	intr_affinity(int, char **);
 static void	intr_intr(int, char **);
 static void	intr_nointr(int, char **);
 
@@ -27,7 +27,7 @@ static struct cmdtab {
 	void	(*func)(int, char **);
 } const intr_cmdtab[] = {
 	{ "list", intr_list },
-	{ "set", intr_set },
+	{ "affinity", intr_affinity },
 	{ "intr", intr_intr },
 	{ "nointr", intr_nointr },
 	{ NULL, NULL },
@@ -69,7 +69,7 @@ usage(void)
 	const char *progname = getprogname();
 
 	fprintf(stderr, "usage: %s list\n", progname);
-	fprintf(stderr, "       %s set -i irq -c cpuno\n", progname);
+	fprintf(stderr, "       %s affinity -i irq -c cpuno\n", progname);
 	fprintf(stderr, "       %s intr -c cpuno\n", progname);
 	fprintf(stderr, "       %s nointr -c cpuno\n", progname);
 	exit(EXIT_FAILURE);
@@ -97,7 +97,7 @@ intr_list(int argc, char **argv)
 }
 
 static void
-intr_set(int argc, char **argv)
+intr_affinity(int argc, char **argv)
 {
 	struct intr_set iset;
 	int ch;
@@ -122,9 +122,9 @@ intr_set(int argc, char **argv)
 	if (iset.irq == -1 || iset.cpuid == ULONG_MAX)
 		usage();
 
-	error = ioctl(fd, IOC_INTR_SET, &iset);
+	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
 	if (error < 0) {
-		err(EXIT_FAILURE, "IOC_INTR_SET");
+		err(EXIT_FAILURE, "IOC_INTR_AFFINITY");
 	}
 }
 

@@ -2247,7 +2247,7 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 		intr_kernfs_loadcnt((char *)data, INTR_LIST_BUFSIZE);
 		break;
 
-	case IOC_INTR_SET:
+	case IOC_INTR_AFFINITY:
 		iset = data;
 		error = intr_set_affinity(iset->irq, iset->cpuid);
 		break;
