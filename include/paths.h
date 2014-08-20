@@ -73,7 +73,7 @@
 #define	_PATH_GETTYTAB	"/etc/gettytab"
 #define	_PATH_I18NMODULE "/usr/lib/i18n"
 #define	_PATH_ICONV	"/usr/share/i18n/iconv"
-#define _PATH_INTRCTL	"/dev/intrctl"
+#define	_PATH_INTRCTL	"/dev/intrctl"
 #define	_PATH_KMEM	"/dev/kmem"
 #define	_PATH_KSYMS	"/dev/ksyms"
 #define	_PATH_KVMDB	"/var/db/kvm.db"

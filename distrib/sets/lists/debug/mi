@@ -1051,6 +1051,7 @@
 ./usr/libdata/debug/usr/sbin/ifwatchd.debug	comp-netutil-debug	debug
 ./usr/libdata/debug/usr/sbin/inetd.debug	comp-netutil-debug	debug
 ./usr/libdata/debug/usr/sbin/installboot.debug	comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/intrctl.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/iopctl.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/iostat.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/ipfs.debug		comp-ipf-debug		ipfilter,debug
