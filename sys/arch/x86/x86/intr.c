@@ -1790,6 +1790,8 @@ out:
 	return err;
 }
 
+#define USE_IRQ_AFFIHNITY_SYSCTL
+#ifdef USE_IRQ_AFFIHNITY_SYSCTL
 static char irq_cpu[16] = "";
 
 static int
@@ -1881,13 +1883,16 @@ SYSCTL_SETUP(sysctl_intr_setup, "sysctl kern.cpu_affinity")
 		return;
 	}
 }
+#endif /* USE_IRQ_AFFIHNITY_SYSCTL */
 
+#define USE_IRQ_AFFINITY_KERNFS
+#ifdef USE_IRQ_AFFINITY_KERNFS
 static int intr_kernfs_read(void *);
 static int intr_kernfs_getattr(void *);
 static int intr_kernfs_open(void *);
 static int intr_kernfs_close(void *);
 
-static int intr_kernfs_loadcnt(char *, int);
+static int intr_loadcnt(char *, int);
 
 static const struct kernfs_fileop intr_kernfs_fileops[] = {
   { .kf_fileop = KERNFS_FILEOP_OPEN, .kf_vop = intr_kernfs_open },
@@ -1912,7 +1917,7 @@ intr_kernfs_open(void *v)
 	if (buf == NULL)
 		return ENOMEM;
 
-	err = intr_kernfs_loadcnt(buf, INTR_LIST_BUFSIZE);
+	err = intr_loadcnt(buf, INTR_LIST_BUFSIZE);
 	if (err)
 		return err;
 
@@ -1984,7 +1989,7 @@ intr_kernfs_getattr(void *v)
 	else {
 		tmp = malloc(INTR_LIST_BUFSIZE * sizeof(char), M_TEMP, M_WAITOK);
 		if (tmp != NULL) {
-			err = intr_kernfs_loadcnt(tmp, INTR_LIST_BUFSIZE);
+			err = intr_loadcnt(tmp, INTR_LIST_BUFSIZE);
 			if (err == 0)
 				size = strlen(tmp);
 
@@ -2008,9 +2013,15 @@ intr_kernfs_init(void)
 			 S_IRUSR|S_IRGRP|S_IROTH);
 	kernfs_addentry(NULL, dkt);
 }
+#else /* ! USE_IRQ_AFFINITY_KERNFS */
+void
+intr_kernfs_init(void)
+{
+}
+#endif /* USE_IRQ_AFFINITY_KERNFS */
 
 static int
-intr_kernfs_loadcnt(char *buf, int length)
+intr_loadcnt(char *buf, int length)
 {
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
@@ -2255,7 +2266,7 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 
 	switch (cmd) {
 	case IOC_INTR_LIST:
-		intr_kernfs_loadcnt((char *)data, INTR_LIST_BUFSIZE);
+		intr_loadcnt((char *)data, INTR_LIST_BUFSIZE);
 		break;
 
 	case IOC_INTR_AFFINITY:
