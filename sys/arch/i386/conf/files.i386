@@ -15,6 +15,9 @@ defparam opt_kernbase.h	KERNBASE
 # delay before cpu_reset() for reboot.
 defparam		CPURESET_DELAY
 
+# for intrctl(8)
+defpseudo	intrctl
+
 # Obsolete Xbox support
 obsolete defflag	XBOX
 

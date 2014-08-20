@@ -2070,10 +2070,10 @@ intr_kernfs_loadcnt(char *buf, int length)
 		for (i = 0; i < ncpuonline; i++) {
 			pep = isp->is_saved_evcnt[i];
 			if (isp->is_active_cpu == pep.cpuid) {
-				FILL_BUF(buf, buf_end, "\t%8lu*", isp->is_evcnt.ev_count);
+				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", isp->is_evcnt.ev_count);
 			}
 			else {
-				FILL_BUF(buf, buf_end, "\t%8lu", pep.count);
+				FILL_BUF(buf, buf_end, "\t%8" PRIu64, pep.count);
 			}
 		}
 		FILL_BUF(buf, buf_end, "\t%s", isp->is_xname);
