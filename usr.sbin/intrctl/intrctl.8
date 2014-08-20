@@ -8,10 +8,6 @@
 .Nm intrctl
 .Ar command
 .Op Ar options
-.Nm intrctl
-.Oc
-.Fl f
-.Ar file
 .Sh DESCRIPTION
 The
 .Nm
@@ -35,13 +31,10 @@ enable interrupts to set affinity to
 .It nointr Fl c Ar cpuid
 disable interrupts to set affinity to
 .Ar cpuid.
-.It Fl f Ar file
-load interrupts setting from
-.Ar file.
 .El
 .Sh FILES
 .Bl -tag -width /dev/intrctl -compact
-.It Pa /dev/cpuctl
+.It Pa /dev/intrctl
 control interrupt
 .Ed
 .Sh SEE ALSO
