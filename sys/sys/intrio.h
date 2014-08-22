@@ -7,8 +7,14 @@
 
 #define INTR_LIST_BUFSIZE 4096
 
+#define INTRID_LEN 31 /* should use max size of interrupt name of supporting
+		       * architectures.
+		       *     - x86
+		       *       sizeof(struct intrsource.is_evname[]) - 1
+		       */
+
 struct intr_set {
-	int irq;
+	char intrid[INTRID_LEN + 1];
 	cpuid_t cpuid;
 };
 

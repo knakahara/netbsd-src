@@ -69,7 +69,7 @@ usage(void)
 	const char *progname = getprogname();
 
 	fprintf(stderr, "usage: %s list\n", progname);
-	fprintf(stderr, "       %s affinity -i irq -c cpuno\n", progname);
+	fprintf(stderr, "       %s affinity -i interrupt_name -c cpuno\n", progname);
 	fprintf(stderr, "       %s intr -c cpuno\n", progname);
 	fprintf(stderr, "       %s nointr -c cpuno\n", progname);
 	exit(EXIT_FAILURE);
@@ -103,7 +103,7 @@ intr_affinity(int argc, char **argv)
 	int ch;
 	int error;
 
-	iset.irq = -1;
+	memset(&iset.intrid, 0, sizeof(iset.intrid));
 	iset.cpuid = ULONG_MAX;
 
 	while ((ch = getopt(argc, argv, "c:i:")) != -1) {
@@ -112,14 +112,16 @@ intr_affinity(int argc, char **argv)
 			iset.cpuid = strtoul(optarg, NULL, 10);
 			break;
 		case 'i':
-			iset.irq = atoi(optarg);
+			if (strnlen(optarg, ARG_MAX) > INTRID_LEN)
+				usage();
+			strncpy(iset.intrid, optarg, INTRID_LEN);
 			break;
 		default:
 			usage();
 		}
 	}
 
-	if (iset.irq == -1 || iset.cpuid == ULONG_MAX)
+	if (iset.intrid[0] == '\0' || iset.cpuid == ULONG_MAX)
 		usage();
 
 	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
