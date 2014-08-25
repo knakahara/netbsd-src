@@ -42,6 +42,7 @@
 #endif
 
 #include <sys/evcnt.h>
+#include <sys/queue.h>
 #include <machine/intrdefs.h>
 
 #ifndef _LOCORE
@@ -94,6 +95,7 @@ struct intrsource {
 	char *is_xname;			/* device name */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
 	int is_active_cpu;		/* active cpuid */
+	LIST_ENTRY(intrsource) is_list;	/* link of intrsources */
 };
 
 #define IS_LEGACY	0x0001		/* legacy ISA irq source */
@@ -190,10 +192,11 @@ void cpu_intr_init(struct cpu_info *);
 int intr_find_mpmapping(int, int, int *);
 struct pic *intr_findpic(int);
 void intr_printconfig(void);
+void print_intrsource_list(void);
 void intr_kernfs_init(void);
 
-struct intrsource *intr_allocate_io_intrsource(int);
-void intr_free_io_intrsource(int);
+struct intrsource *intr_allocate_io_intrsource(const char *, int, struct pic *);
+void intr_free_io_intrsource(const char *);
 
 int x86_send_ipi(struct cpu_info *, int);
 void x86_broadcast_ipi(int);
