@@ -42,6 +42,7 @@
 #endif
 
 #include <sys/evcnt.h>
+#include <sys/intrio.h>
 #include <sys/queue.h>
 #include <machine/intrdefs.h>
 
@@ -95,6 +96,7 @@ struct intrsource {
 	char *is_xname;			/* device name */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
 	int is_active_cpu;		/* active cpuid */
+	char is_intrid[INTRID_LEN + 1];	/* intrid created by create_intrid() */
 	LIST_ENTRY(intrsource) is_list;	/* link of intrsources */
 };
 
@@ -195,7 +197,7 @@ void intr_printconfig(void);
 void print_intrsource_list(void);
 void intr_kernfs_init(void);
 
-struct intrsource *intr_allocate_io_intrsource(const char *, int, struct pic *);
+struct intrsource *intr_allocate_io_intrsource(const char *);
 void intr_free_io_intrsource(const char *);
 
 int x86_send_ipi(struct cpu_info *, int);

@@ -429,7 +429,7 @@ intr_scan_bus(int bus, int pin, int *handle)
 #endif
 
 static const char *
-create_intrstr(int pin, struct pic *pic, char *buf, size_t len)
+create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 {
 	static int seq = 0;
 	int ih;
@@ -453,22 +453,18 @@ static struct intrsource *
 intr_get_io_intrsource(const char *intrid)
 {
 	struct intrsource *isp;
-	const char *ispstr;
-	char ispstr_buf[INTRID_LEN + 1];
 
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
-		ispstr = create_intrstr(isp->is_pin, isp->is_pic, ispstr_buf,
-		    sizeof(ispstr_buf));
-		if (strncmp(intrid, ispstr, INTRID_LEN) == 0) {
+		KASSERT(isp->is_intrid != NULL);
+		if (strncmp(intrid, isp->is_intrid, INTRID_LEN) == 0) {
 			return isp;
 		}
 	}
-
 	return NULL;
 }
 
 struct intrsource *
-intr_allocate_io_intrsource(const char *intrid, int pin, struct pic *pic)
+intr_allocate_io_intrsource(const char *intrid)
 {
 	struct intrsource *isp;
 	struct percpu_evcnt *pep;
@@ -477,10 +473,6 @@ intr_allocate_io_intrsource(const char *intrid, int pin, struct pic *pic)
 
 	if (intrid == NULL)
 		return NULL;
-
-	if (intr_get_io_intrsource(intrid) != NULL) {
-		return NULL;
-	}
 
 	isp = kmem_zalloc(sizeof(*isp), KM_NOSLEEP);
 	if (isp == NULL) {
@@ -498,9 +490,7 @@ intr_allocate_io_intrsource(const char *intrid, int pin, struct pic *pic)
 		pep++;
 	}
 	isp->is_xname = NULL;
-	/* pre-initialize for intr_get_io_intrsource() */
-	isp->is_pin = pin;
-	isp->is_pic = pic;
+	strncpy(isp->is_intrid, intrid, sizeof(isp->is_intrid));
 
 	LIST_INSERT_HEAD(&io_interrupt_sources, isp, is_list);
 
@@ -861,14 +851,14 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 		return NULL;
 	}
 
-	intrstr = create_intrstr(pin, pic, intrstr_buf, sizeof(intrstr_buf));
+	intrstr = create_intrid(pin, pic, intrstr_buf, sizeof(intrstr_buf));
 	KASSERT(intrstr != NULL);
 
 	/* allocate intrsource pool, if not yet. */
 	__cpu_simple_lock(&io_interrupt_sources_lock);
 	chained = intr_get_io_intrsource(intrstr);
 	if (chained == NULL) {
-		chained = intr_allocate_io_intrsource(intrstr, pin, pic);
+		chained = intr_allocate_io_intrsource(intrstr);
 		if (chained == NULL) {
 			__cpu_simple_unlock(&io_interrupt_sources_lock);
 			printf("%s: can't allocate io_intersource\n", __func__);
@@ -883,7 +873,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 	if (error != 0) {
 		mutex_exit(&cpu_lock);
 		__cpu_simple_lock(&io_interrupt_sources_lock);
-		intr_free_io_intrsource(intrstr);
+		intr_free_io_intrsource_direct(chained);
 		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		kmem_free(ih, sizeof(*ih));
 		printf("failed to allocate interrupt slot for PIC %s pin %d\n",
@@ -897,7 +887,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 	    source->is_pic->pic_type != pic->pic_type) {
 		mutex_exit(&cpu_lock);
 		__cpu_simple_lock(&io_interrupt_sources_lock);
-		intr_free_io_intrsource(intrstr);
+		intr_free_io_intrsource_direct(chained);
 		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		kmem_free(ih, sizeof(*ih));
 		printf("%s: can't share intr source between "
@@ -914,7 +904,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 		kmem_free(ih, sizeof(*ih));
 		intr_source_free(ci, slot, pic, idt_vec);
 		__cpu_simple_lock(&io_interrupt_sources_lock);
-		intr_free_io_intrsource(intrstr);
+		intr_free_io_intrsource_direct(chained);
 		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		printf("%s: pic %s pin %d: can't set device name: %s\n",
 		       __func__, pic->pic_name, pin, xname);
@@ -936,7 +926,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 			kmem_free(ih, sizeof(*ih));
 			intr_source_free(ci, slot, pic, idt_vec);
 			__cpu_simple_lock(&io_interrupt_sources_lock);
-			intr_free_io_intrsource(intrstr);
+			intr_free_io_intrsource_direct(chained);
 			__cpu_simple_unlock(&io_interrupt_sources_lock);
 			printf("%s: pic %s pin %d: can't share "
 			       "type %d with %d\n",
@@ -1107,8 +1097,6 @@ intr_disestablish(struct intrhand *ih)
 	struct cpu_info *ci;
 	uint64_t where;
 	struct intrsource *isp;
-	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
 
 	/*
 	 * Count the removal for load balancing.
@@ -1120,8 +1108,6 @@ intr_disestablish(struct intrhand *ih)
 	(ci->ci_nintrhand)--;
 	KASSERT(ci->ci_nintrhand >= 0);
 	isp = ci->ci_isources[ih->ih_slot];
-	intrstr = create_intrstr(isp->is_pin, isp->is_pic, intrstr_buf,
-	    sizeof(intrstr_buf));
 	if (ci == curcpu() || !mp_online) {
 		intr_disestablish_xcall(ih, NULL);
 	} else {
@@ -1131,9 +1117,8 @@ intr_disestablish(struct intrhand *ih)
 	mutex_exit(&cpu_lock);
 
 	__cpu_simple_lock(&io_interrupt_sources_lock);
-	isp = intr_get_io_intrsource(intrstr);
 	if (intr_num_handlers(isp) < 1) {
-		intr_free_io_intrsource(intrstr);
+		intr_free_io_intrsource_direct(isp);
 	}
 	__cpu_simple_unlock(&io_interrupt_sources_lock);
 	kmem_free(ih, sizeof(*ih));
@@ -2076,7 +2061,6 @@ intr_loadcnt(char *buf, int length)
 
 	int ret, i;
 	char *buf_end;
-	char intrstr[INTRID_LEN + 1];
 	struct intrsource *isp;
 	struct percpu_evcnt pep;
 
@@ -2119,9 +2103,7 @@ intr_loadcnt(char *buf, int length)
 	*(buf++) = '\n';
 
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
-		FILL_BUF(buf, buf_end, " %s",
-		    create_intrstr(isp->is_pin, isp->is_pic, intrstr,
-			sizeof(intrstr)));
+		FILL_BUF(buf, buf_end, " %s", isp->is_intrid);
 
 		for (i = 0; i < ncpuonline; i++) {
 			pep = isp->is_saved_evcnt[i];
@@ -2237,8 +2219,6 @@ intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
 	struct intrsource *isp;
 	int i, error;
 	cpuid_t cpuid;
-	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
 
 	for (i = 0; i < MAX_INTR_SOURCES; i++) {
 		isp = oldci->ci_isources[i];
@@ -2270,10 +2250,8 @@ intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
 		return ENOMEM;
 	}
 
-	intrstr = create_intrstr(isp->is_pin, isp->is_pic, intrstr_buf,
-	    sizeof(intrstr_buf));
 	cpuid = newci->ci_cpuid;
-	error = intr_set_affinity(intrstr, cpuid);
+	error = intr_set_affinity(isp->is_intrid, cpuid);
 	if (error) {
 		printf("cannot set affinity\n");
 		*do_next = false;
