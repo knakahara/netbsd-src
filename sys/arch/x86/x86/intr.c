@@ -1716,12 +1716,6 @@ intr_set_affinity(const char *intrid, cpuid_t cpuid)
 	int err;
 	int pin;
 
-	isp = intr_get_io_intrsource(intrid);
-	if (isp == NULL) {
-		printf("invalid intrid: %s\n", intrid);
-		return EINVAL;
-	}
-
 	newci = intr_find_cpuinfo(cpuid);
 	if (newci == NULL) {
 		printf("invalid cpuid: %ld\n", cpuid);
@@ -1732,28 +1726,38 @@ intr_set_affinity(const char *intrid, cpuid_t cpuid)
 		return EINVAL;
 	}
 
+	mutex_enter(&cpu_lock);
+
+	isp = intr_get_io_intrsource(intrid);
+	if (isp == NULL) {
+		printf("invalid intrid: %s\n", intrid);
+		err = EINVAL;
+		goto out;
+	}
+
 	pic = isp->is_pic;
 	if (pic == &i8259_pic) {
 		printf("i8259 pic does not support set_affinity\n");
-		return ENOTSUP;
+		err = ENOTSUP;
+		goto out;
 	}
 
 	ih = isp->is_handlers;
 	if (ih == NULL) {
 		printf("intrid %s has no handler\n", intrid);
-		return ENOENT;
+		err = ENOENT;
+		goto out;
 	}
 
 	oldci = ih->ih_cpu;
 	if (newci == oldci) {
 		/* nothing to do */
-		return 0;
+		err = 0;
+		goto out;
 	}
 
 	oldslot = ih->ih_slot;
 	idt_vec = isp->is_idtvec;
-
-	mutex_enter(&cpu_lock);
 
 	err = intr_find_unused_slot(newci, pic, &newslot);
 	if (err) {
