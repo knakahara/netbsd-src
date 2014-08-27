@@ -201,7 +201,6 @@ struct pic softintr_pic = {
 
 static LIST_HEAD(, intrsource) io_interrupt_sources =
 	LIST_HEAD_INITIALIZER(io_interrupt_sources);
-static __cpu_simple_lock_t io_interrupt_sources_lock = __SIMPLELOCK_UNLOCKED;
 
 #if NIOAPIC > 0 || NACPICA > 0
 static int intr_scan_bus(int, int, int *);
@@ -854,27 +853,23 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 	intrstr = create_intrid(pin, pic, intrstr_buf, sizeof(intrstr_buf));
 	KASSERT(intrstr != NULL);
 
+	mutex_enter(&cpu_lock);
+
 	/* allocate intrsource pool, if not yet. */
-	__cpu_simple_lock(&io_interrupt_sources_lock);
 	chained = intr_get_io_intrsource(intrstr);
 	if (chained == NULL) {
 		chained = intr_allocate_io_intrsource(intrstr);
 		if (chained == NULL) {
-			__cpu_simple_unlock(&io_interrupt_sources_lock);
 			printf("%s: can't allocate io_intersource\n", __func__);
 			return NULL;
 		}
 	}
-	__cpu_simple_unlock(&io_interrupt_sources_lock);
 
-	mutex_enter(&cpu_lock);
 	error = intr_allocate_slot(pic, pin, level, &ci, &slot, &idt_vec,
 	    chained);
 	if (error != 0) {
-		mutex_exit(&cpu_lock);
-		__cpu_simple_lock(&io_interrupt_sources_lock);
 		intr_free_io_intrsource_direct(chained);
-		__cpu_simple_unlock(&io_interrupt_sources_lock);
+		mutex_exit(&cpu_lock);
 		kmem_free(ih, sizeof(*ih));
 		printf("failed to allocate interrupt slot for PIC %s pin %d\n",
 		    pic->pic_name, pin);
@@ -885,10 +880,8 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 
 	if (source->is_handlers != NULL &&
 	    source->is_pic->pic_type != pic->pic_type) {
-		mutex_exit(&cpu_lock);
-		__cpu_simple_lock(&io_interrupt_sources_lock);
 		intr_free_io_intrsource_direct(chained);
-		__cpu_simple_unlock(&io_interrupt_sources_lock);
+		mutex_exit(&cpu_lock);
 		kmem_free(ih, sizeof(*ih));
 		printf("%s: can't share intr source between "
 		       "different PIC types (legacy_irq %d pin %d slot %d)\n",
@@ -900,12 +893,10 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 	source->is_pic = pic;
 	error = intr_append_intrsource_xname(source, xname);
 	if (error) {
+		intr_source_free(ci, slot, pic, idt_vec);
+		intr_free_io_intrsource_direct(chained);
 		mutex_exit(&cpu_lock);
 		kmem_free(ih, sizeof(*ih));
-		intr_source_free(ci, slot, pic, idt_vec);
-		__cpu_simple_lock(&io_interrupt_sources_lock);
-		intr_free_io_intrsource_direct(chained);
-		__cpu_simple_unlock(&io_interrupt_sources_lock);
 		printf("%s: pic %s pin %d: can't set device name: %s\n",
 		       __func__, pic->pic_name, pin, xname);
 		return NULL;
@@ -922,12 +913,10 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 		/* FALLTHROUGH */
 	case IST_PULSE:
 		if (type != IST_NONE) {
+			intr_source_free(ci, slot, pic, idt_vec);
+			intr_free_io_intrsource_direct(chained);
 			mutex_exit(&cpu_lock);
 			kmem_free(ih, sizeof(*ih));
-			intr_source_free(ci, slot, pic, idt_vec);
-			__cpu_simple_lock(&io_interrupt_sources_lock);
-			intr_free_io_intrsource_direct(chained);
-			__cpu_simple_unlock(&io_interrupt_sources_lock);
 			printf("%s: pic %s pin %d: can't share "
 			       "type %d with %d\n",
 				__func__, pic->pic_name, pin,
@@ -1114,13 +1103,11 @@ intr_disestablish(struct intrhand *ih)
 		where = xc_unicast(0, intr_disestablish_xcall, ih, NULL, ci);
 		xc_wait(where);
 	}	
-	mutex_exit(&cpu_lock);
-
-	__cpu_simple_lock(&io_interrupt_sources_lock);
 	if (intr_num_handlers(isp) < 1) {
 		intr_free_io_intrsource_direct(isp);
 	}
-	__cpu_simple_unlock(&io_interrupt_sources_lock);
+	mutex_exit(&cpu_lock);
+
 	kmem_free(ih, sizeof(*ih));
 }
 
