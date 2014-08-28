@@ -1,3 +1,4 @@
+# $NetBSD$
 
 .include <bsd.own.mk>
 
