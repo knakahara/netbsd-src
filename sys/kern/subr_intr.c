@@ -33,12 +33,17 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/errno.h>
+#include <sys/cpu.h>
 #include <sys/intr.h>
+#include <sys/kcpuset.h>
 #include <sys/proc.h>
 
 #include <sys/conf.h>
 #include <sys/intrio.h>
 #include <sys/kauth.h>
+
+#include <machine/limits.h>
+
 
 void	intrctlattach(int);
 
@@ -70,10 +75,61 @@ intrctl_list(void *data)
 	return intrctl_list_md(data);
 }
 
+/* XXXX temporary */
+static u_int
+cpuid2cpuindex(cpuid_t cpuid)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		if (ci->ci_cpuid == cpuid) {
+			return ci->ci_index;
+		}
+	}
+	return UINT_MAX;
+}
+
 static int
 intrctl_affinity(void *data)
 {
-	return intrctl_affinity_md(data);
+	struct kcpuset *intr_cpuset;
+	struct intr_set *iset;
+	cpuid_t cpuid;
+	u_int cpu_index;
+	void *ich;
+	int error;
+
+	iset = data;
+	cpuid = iset->cpuid;
+	cpu_index = cpuid2cpuindex(cpuid);
+	if (cpu_index == UINT_MAX) {
+		printf("cpu id %ld is invalid\n", cpuid);
+		return EINVAL;
+	}
+
+	if (!kcpuset_isset(kcpuset_running, cpu_index)) {
+		printf("cpu index %u is not running\n", cpu_index);
+		return EINVAL;
+	}
+
+	kcpuset_create(&intr_cpuset, true);
+	kcpuset_set(intr_cpuset, cpu_index);
+
+	mutex_enter(&cpu_lock);
+
+	ich = intr_intrctl_handler(iset->intrid);
+	if (ich == NULL) {
+		error = EINVAL;
+		goto out;
+	}
+	error = intr_distribute(ich, intr_cpuset, NULL);
+
+out:
+	mutex_exit(&cpu_lock);
+	kcpuset_destroy(intr_cpuset);
+
+	return error;
 }
 
 static int

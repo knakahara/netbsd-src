@@ -35,6 +35,7 @@
 #ifdef _KERNEL
 
 #include <sys/types.h>
+#include <sys/kcpuset.h>
 
 struct cpu_info;
 
@@ -56,8 +57,9 @@ void	softint_init_md(lwp_t *, u_int, uintptr_t *);
 void	softint_trigger(uintptr_t);
 #endif
 void	softint_dispatch(lwp_t *, int);
+void	*intr_intrctl_handler(const char *);
 int	intrctl_list_md(void *);
-int	intrctl_affinity_md(void *);
+int	intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
 int	intrctl_intr_md(void *);
 int	intrctl_nointr_md(void *);
 

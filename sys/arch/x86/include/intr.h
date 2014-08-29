@@ -95,7 +95,7 @@ struct intrsource {
 	char is_evname[32];		/* event counter name */
 	char *is_xname;			/* device name */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
-	int is_active_cpu;		/* active cpuid */
+	cpuid_t is_active_cpu;		/* active cpuid */
 	char is_intrid[INTRID_LEN + 1];	/* intrid created by create_intrid() */
 	LIST_ENTRY(intrsource) is_list;	/* link of intrsources */
 };

@@ -499,6 +499,7 @@ intr_allocate_io_intrsource(const char *intrid)
 static void
 intr_free_io_intrsource_direct(struct intrsource *isp)
 {
+	KASSERT(mutex_owned(&cpu_lock));
 
 	LIST_REMOVE(isp, is_list);
 
@@ -1704,56 +1705,81 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 	x86_write_psl(psl);
 }
 
+static void
+intr_get_affinity(void *ich, kcpuset_t *cpuset)
+{
+	struct intrsource *isp;
+	struct cpu_info *ci;
+
+	if (ich == NULL) {
+		kcpuset_zero(cpuset);
+		return;
+	}
+
+	isp = ich;
+	ci = intr_find_cpuinfo(isp->is_active_cpu);
+	if (ci == NULL) {
+		kcpuset_zero(cpuset);
+		return;
+	}
+
+	kcpuset_set(cpuset, cpu_index(ci));
+	return;
+}
+
 static int
-intr_set_affinity(const char *intrid, cpuid_t cpuid)
+intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 {
 	struct intrsource *isp;
 	struct intrhand *ih, *lih;
 	struct pic *pic;
-	int idt_vec;
 	struct cpu_info *oldci, *newci;
+	u_int cpu_index;
+	int idt_vec;
 	int oldslot, newslot;
 	int err;
 	int pin;
 
-	newci = intr_find_cpuinfo(cpuid);
+	KASSERT(mutex_owned(&cpu_lock));
+
+	if (kcpuset_countset(cpuset) > 1) {
+		printf("logical destination mode is not supported\n");
+		return EINVAL;
+	}
+
+	cpu_index = kcpuset_ffs(cpuset) - 1;
+	newci = cpu_lookup(cpu_index);
 	if (newci == NULL) {
-		printf("invalid cpuid: %ld\n", cpuid);
+		printf("invalid cpu index: %u\n", cpu_index);
 		return EINVAL;
 	}
 	if ((newci->ci_schedstate.spc_flags & SPCF_NOINTR) != 0) {
-		printf("set nointr shield cpuid: %ld\n", cpuid);
+		printf("set nointr shield cpu index:%u\n", cpu_index);
 		return EINVAL;
 	}
 
-	mutex_enter(&cpu_lock);
-
-	isp = intr_get_io_intrsource(intrid);
+	isp = ich;
 	if (isp == NULL) {
-		printf("invalid intrid: %s\n", intrid);
-		err = EINVAL;
-		goto out;
+		printf("invalid intrctl handler\n");
+		return EINVAL;
 	}
 
 	pic = isp->is_pic;
 	if (pic == &i8259_pic) {
 		printf("i8259 pic does not support set_affinity\n");
-		err = ENOTSUP;
-		goto out;
+		return ENOTSUP;
 	}
 
 	ih = isp->is_handlers;
 	if (ih == NULL) {
-		printf("intrid %s has no handler\n", intrid);
-		err = ENOENT;
-		goto out;
+		printf("intrid %s has no handler\n", isp->is_intrid);
+		return ENOENT;
 	}
 
 	oldci = ih->ih_cpu;
 	if (newci == oldci) {
 		/* nothing to do */
-		err = 0;
-		goto out;
+		return 0;
 	}
 
 	oldslot = ih->ih_slot;
@@ -1762,8 +1788,8 @@ intr_set_affinity(const char *intrid, cpuid_t cpuid)
 	err = intr_find_unused_slot(newci, pic, &newslot);
 	if (err) {
 		printf("failed to allocate interrupt slot for PIC %s intrid %s\n",
-		       isp->is_pic->pic_name, intrid);
-		goto out;
+		       isp->is_pic->pic_name, isp->is_intrid);
+		return err;
 	}
 
 	pin = isp->is_pin;
@@ -1773,8 +1799,7 @@ intr_set_affinity(const char *intrid, cpuid_t cpuid)
 		(*pic->pic_hwunmask)(pic, pin);
 		printf("there are pending interrupts to pin on cpuid %ld: %d\n ",
 		       oldci->ci_cpuid, pin);
-		err = EBUSY;
-		goto out;
+		return EBUSY;
 	}
 
 	/* deactivate old interrupt setting */
@@ -1815,9 +1840,6 @@ intr_set_affinity(const char *intrid, cpuid_t cpuid)
 	(*pic->pic_addroute)(pic, newci, pin, idt_vec, isp->is_type);
 
 	(*pic->pic_hwunmask)(pic, pin);
-	err = 0;
-out:
-	mutex_exit(&cpu_lock);
 
 	return err;
 }
@@ -1962,8 +1984,8 @@ intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info  *newci, *lci;
 	struct intrsource *isp;
+	struct kcpuset *cpuset;
 	int i, error;
-	cpuid_t cpuid;
 
 	for (i = 0; i < MAX_INTR_SOURCES; i++) {
 		isp = oldci->ci_isources[i];
@@ -1995,14 +2017,17 @@ intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
 		return ENOMEM;
 	}
 
-	cpuid = newci->ci_cpuid;
-	error = intr_set_affinity(isp->is_intrid, cpuid);
+	kcpuset_create(&cpuset, true);
+	kcpuset_set(cpuset, newci->ci_cpuid); /* XXXX */
+	error = intr_set_affinity(isp, cpuset);
 	if (error) {
+		kcpuset_destroy(cpuset);
 		printf("cannot set affinity\n");
 		*do_next = false;
 		return error;
 	}
 
+	kcpuset_destroy(cpuset);
 	*do_next = true;
 	return 0;
 }
@@ -2027,6 +2052,14 @@ intr_avert_all_intr(cpuid_t cpuid)
 	return error;
 }
 
+void *
+intr_intrctl_handler(const char *intrid)
+{
+	KASSERT(mutex_owned(&cpu_lock));
+
+	return intr_get_io_intrsource(intrid);
+}
+
 int
 intrctl_list_md(void *data)
 {
@@ -2034,12 +2067,13 @@ intrctl_list_md(void *data)
 }
 
 int
-intrctl_affinity_md(void *data)
+intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
 {
-	struct intr_set *iset;
+	if(oldset != NULL) {
+		intr_get_affinity(ich, oldset);
+	}
 
-	iset = data;
-	return intr_set_affinity(iset->intrid, iset->cpuid);
+	return intr_set_affinity(ich, newset);
 }
 
 int
