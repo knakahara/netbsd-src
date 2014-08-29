@@ -105,7 +105,6 @@ device-major	rd		char 105 block 22	rd
 device-major	ct		char 106 block 23	ct
 device-major	mt		char 107 block 24	mt
 
-device-major	intrctl		char 108		intrctl
 #
 # Device majors for Xen. These are assigned here so that:
 # - we are sure there are no conflicts with plain i386 

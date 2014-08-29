@@ -1896,30 +1896,6 @@ out:
 #undef FILL_BUF
 }
 
-void	intrctlattach(int);
-
-dev_type_ioctl(intrctl_ioctl);
-
-const struct cdevsw intrctl_cdevsw = {
-	.d_open = nullopen,
-	.d_close = nullclose,
-	.d_read = nullread,
-	.d_write = nullwrite,
-	.d_ioctl = intrctl_ioctl,
-	.d_stop = nullstop,
-	.d_tty = notty,
-	.d_poll = nopoll,
-	.d_mmap = nommap,
-	.d_kqfilter = nokqfilter,
-	.d_discard = nodiscard,
-	.d_flag = D_OTHER | D_MPSAFE
-};
-
-void
-intrctlattach(int dummy)
-{
-}
-
 #define UNSET_NOINTR_SHIELD	0
 #define SET_NOINTR_SHIELD	1
 
@@ -2052,48 +2028,37 @@ intr_avert_all_intr(cpuid_t cpuid)
 }
 
 int
-intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
+intrctl_list_md(void *data)
 {
-	int error = 0;
+	return intr_loadcnt((char *)data, INTR_LIST_BUFSIZE);
+}
+
+int
+intrctl_affinity_md(void *data)
+{
 	struct intr_set *iset;
+
+	iset = data;
+	return intr_set_affinity(iset->intrid, iset->cpuid);
+}
+
+int
+intrctl_intr_md(void *data)
+{
 	cpuid_t cpuid;
 
-	switch (cmd) {
-	case IOC_INTR_LIST:
-		intr_loadcnt((char *)data, INTR_LIST_BUFSIZE);
-		break;
+	cpuid = *(cpuid_t *)data;
+	return intr_shield(cpuid, UNSET_NOINTR_SHIELD);
+}
+int
+intrctl_nointr_md(void *data)
+{
+	cpuid_t cpuid;
+	int error;
 
-	case IOC_INTR_AFFINITY:
-		iset = data;
-		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
-		    KAUTH_REQ_SYSTEM_INTR_AFFINITY, NULL, NULL, NULL);
-		if (error)
-			break;
-		error = intr_set_affinity(iset->intrid, iset->cpuid);
-		break;
-	case IOC_INTR_INTR:
-		cpuid = *(cpuid_t *)data;
-		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
-		    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
-		if (error)
-			break;
-		error = intr_shield(cpuid, UNSET_NOINTR_SHIELD);
-		break;
-	case IOC_INTR_NOINTR:
-		cpuid = *(cpuid_t *)data;
-		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
-		    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
-		if (error)
-			break;
-		error = intr_shield(cpuid, SET_NOINTR_SHIELD);
-		if (error)
-			break;
-		error = intr_avert_all_intr(cpuid);
-		break;
-	default:
-		error = ENOTTY;
-		break;
-	}
-
-	return error;
+	cpuid = *(cpuid_t *)data;
+	error = intr_shield(cpuid, SET_NOINTR_SHIELD);
+	if (error)
+		return error;
+	return intr_avert_all_intr(cpuid);
 }

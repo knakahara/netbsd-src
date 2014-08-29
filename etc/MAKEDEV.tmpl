@@ -247,6 +247,7 @@
 #	hil	HP300 HIL input devices
 #	icp	ICP-Vortex/Intel RAID control interface
 #	iic*	IIC bus device
+#	intrctl	interrupt control
 #	io	x86 IOPL access for COMPAT_10, COMPAT_FREEBSD
 #	iop*	I2O IOP control interface
 #	ipl	IP Filter
@@ -825,7 +826,7 @@ all)
 	makedev bpf npf
 	makedev tun0 tun1 tun2 tun3
 	makedev ipl pf crypto random
-	makedev lockstat clockctl cpuctl
+	makedev lockstat clockctl cpuctl intrctl
 	makedev atabus0 atabus1 atabus2 atabus3 atabus4 atabus5 atabus6 atabus7
 	makedev tap tap0 tap1 tap2 tap3
 	makedev gpio gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7

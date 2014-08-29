@@ -147,6 +147,11 @@ __weak_alias(userconf_prompt, voidop);
 
 __weak_alias(kobj_renamespace, nullop);
 
+__weak_alias(intrctl_list, eopnotsupp);
+__weak_alias(intrctl_affinity, eopnotsupp);
+__weak_alias(intrctl_intr, eopnotsupp);
+__weak_alias(intrctl_nointr, eopnotsupp);
+
 /*
  * Scheduler activations system calls.  These need to remain until libc's
  * major version is bumped.

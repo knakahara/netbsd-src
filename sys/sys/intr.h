@@ -56,6 +56,10 @@ void	softint_init_md(lwp_t *, u_int, uintptr_t *);
 void	softint_trigger(uintptr_t);
 #endif
 void	softint_dispatch(lwp_t *, int);
+int	intrctl_list_md(void *);
+int	intrctl_affinity_md(void *);
+int	intrctl_intr_md(void *);
+int	intrctl_nointr_md(void *);
 
 /* Flags for softint_establish(). */
 #define	SOFTINT_BIO	0x0000

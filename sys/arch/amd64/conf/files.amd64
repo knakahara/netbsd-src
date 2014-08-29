@@ -19,9 +19,6 @@ defparam opt_realmem.h	REALBASEMEM REALEXTMEM
 # The PHYSMEM_MAX_{SIZE,ADDR} optionms
 defparam opt_physmem.h	PHYSMEM_MAX_ADDR PHYSMEM_MAX_SIZE
 
-# for intrctl(8)
-defpseudo	intrctl
-
 #
 # XXX these are just here at the moment so that we can share files
 # with the i386 (they include the opt_*.h for these)
