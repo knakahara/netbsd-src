@@ -1687,18 +1687,25 @@ intr_activate_xcall(void *arg1, void *arg2)
 static void
 intr_deactivate_xcall(void *arg1, void *arg2)
 {
-	struct intrhand *ih;
+	struct intrhand *ih, *lih;
 	struct cpu_info *ci;
 	u_long psl;
+	int slot;
 
 	ih = arg1;
 
 	KASSERT(ih->ih_cpu == curcpu() || !mp_online);
 
 	ci = ih->ih_cpu;
+	slot = ih->ih_slot;
 
 	psl = x86_read_psl();
 	x86_disable_intr();
+
+	ci->ci_isources[slot] = NULL;
+	for (lih = ih; lih != NULL; lih = lih->ih_next) {
+		ci->ci_nintrhand--;
+	}
 
 	intr_calculatemasks(ci);
 
@@ -1794,8 +1801,7 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 
 	pin = isp->is_pin;
 	(*pic->pic_hwmask)(pic, pin); /* for ci_ipending check */
-
-	if (oldci->ci_ipending & ~(1 << oldslot)) {
+	if (oldci->ci_ipending & (1 << oldslot)) {
 		(*pic->pic_hwunmask)(pic, pin);
 		printf("there are pending interrupts to pin on cpuid %ld: %d\n ",
 		       oldci->ci_cpuid, pin);
@@ -1803,10 +1809,6 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	}
 
 	/* deactivate old interrupt setting */
-	oldci->ci_isources[oldslot] = NULL;
-	for (lih = ih; lih != NULL; lih = lih->ih_next) {
-		oldci->ci_nintrhand--;
-	}
 	if (oldci == curcpu() || !mp_online) {
 		intr_deactivate_xcall(ih, NULL);
 	}
