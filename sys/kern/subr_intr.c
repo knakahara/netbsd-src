@@ -135,13 +135,25 @@ out:
 static int
 intrctl_intr(void *data)
 {
-	return intrctl_intr_md(data);
+	int ret;
+
+	mutex_enter(&cpu_lock);
+	ret = intrctl_intr_md(data);
+	mutex_exit(&cpu_lock);
+
+	return ret;
 }
 
 static int
 intrctl_nointr(void *data)
 {
-	return intrctl_nointr_md(data);
+	int ret;
+
+	mutex_enter(&cpu_lock);
+	ret = intrctl_nointr_md(data);
+	mutex_exit(&cpu_lock);
+
+	return ret;
 }
 
 int
