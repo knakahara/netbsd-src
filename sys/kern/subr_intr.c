@@ -75,39 +75,17 @@ intrctl_list(void *data)
 	return intrctl_list_md(data);
 }
 
-/* XXXX temporary */
-static u_int
-cpuid2cpuindex(cpuid_t cpuid)
-{
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-
-	for (CPU_INFO_FOREACH(cii, ci)) {
-		if (ci->ci_cpuid == cpuid) {
-			return ci->ci_index;
-		}
-	}
-	return UINT_MAX;
-}
-
 static int
 intrctl_affinity(void *data)
 {
 	struct kcpuset *intr_cpuset;
 	struct intr_set *iset;
-	cpuid_t cpuid;
 	u_int cpu_index;
 	void *ich;
 	int error;
 
 	iset = data;
-	cpuid = iset->cpuid;
-	cpu_index = cpuid2cpuindex(cpuid);
-	if (cpu_index == UINT_MAX) {
-		printf("cpu id %ld is invalid\n", cpuid);
-		return EINVAL;
-	}
-
+	cpu_index = iset->cpu_index;
 	if (!kcpuset_isset(kcpuset_running, cpu_index)) {
 		printf("cpu index %u is not running\n", cpu_index);
 		return EINVAL;

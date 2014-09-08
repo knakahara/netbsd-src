@@ -44,7 +44,7 @@
 
 struct intr_set {
 	char intrid[INTRID_LEN + 1];
-	cpuid_t cpuid;
+	u_int cpu_index;
 };
 
 #define	IOC_INTR_LIST		_IOR('c', 0, char[INTR_LIST_BUFSIZE])

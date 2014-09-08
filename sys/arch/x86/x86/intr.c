@@ -1890,7 +1890,7 @@ intr_loadcnt(char *buf, int length)
 		else
 			intr_enable = '+';
 
-		FILL_BUF(buf, buf_end, "\t  CPU#%02lu(%c)", ci->ci_cpuid,
+		FILL_BUF(buf, buf_end, "\tCPU#%02u(%c)", cpu_index(ci),
 			 intr_enable);
 	}
 	*(buf++) = '\n';
@@ -1946,12 +1946,12 @@ intr_shield_xcall(void *arg1, void *arg2)
 }
 
 static int
-intr_shield(cpuid_t cpuid, int shield)
+intr_shield(u_int cpu_index, int shield)
 {
 	struct cpu_info *ci;
 	struct schedstate_percpu *spc;
 
-	ci = intr_find_cpuinfo(cpuid);
+	ci = cpu_lookup(cpu_index);
 	if (ci == NULL) {
 		return EINVAL;
 	}
@@ -2020,7 +2020,7 @@ intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
 	}
 
 	kcpuset_create(&cpuset, true);
-	kcpuset_set(cpuset, newci->ci_cpuid); /* XXXX */
+	kcpuset_set(cpuset, cpu_index(newci));
 	error = intr_set_affinity(isp, cpuset);
 	if (error) {
 		kcpuset_destroy(cpuset);
@@ -2035,13 +2035,13 @@ intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
 }
 
 static int
-intr_avert_all_intr(cpuid_t cpuid)
+intr_avert_all_intr(u_int cpu_index)
 {
 	struct cpu_info *ci;
 	bool do_next = true;
 	int error;
 
-	ci = intr_find_cpuinfo(cpuid);
+	ci = cpu_lookup(cpu_index);
 	if (ci == NULL) {
 		return EINVAL;
 	}
@@ -2081,20 +2081,20 @@ intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
 int
 intrctl_intr_md(void *data)
 {
-	cpuid_t cpuid;
+	u_int cpu_index;
 
-	cpuid = *(cpuid_t *)data;
-	return intr_shield(cpuid, UNSET_NOINTR_SHIELD);
+	cpu_index = *(u_int *)data;
+	return intr_shield(cpu_index, UNSET_NOINTR_SHIELD);
 }
 int
 intrctl_nointr_md(void *data)
 {
-	cpuid_t cpuid;
+	u_int cpu_index;
 	int error;
 
-	cpuid = *(cpuid_t *)data;
-	error = intr_shield(cpuid, SET_NOINTR_SHIELD);
+	cpu_index = *(u_int *)data;
+	error = intr_shield(cpu_index, SET_NOINTR_SHIELD);
 	if (error)
 		return error;
-	return intr_avert_all_intr(cpuid);
+	return intr_avert_all_intr(cpu_index);
 }

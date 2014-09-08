@@ -46,17 +46,17 @@ Valid commands are:
 .Bl -tag -width XofflineXcpunoX
 .It list
 for each IRQ in the system, display interrupt counts per CPU.
-.It affinity Fl c Ar cpuid Fl i Ar irq
+.It affinity Fl c Ar cpu_index Fl i Ar irq
 set affinity
 .Ar irq
 interrupt to
-.Ar cpuid.
-.It intr Fl c Ar cpuid
+.Ar cpu_index.
+.It intr Fl c Ar cpu_index
 enable interrupts to set affinity to
-.Ar cpuid.
-.It nointr Fl c Ar cpuid
+.Ar cpu_index.
+.It nointr Fl c Ar cpu_index
 disable interrupts to set affinity to
-.Ar cpuid.
+.Ar cpu_index.
 .El
 .Sh FILES
 .Bl -tag -width /dev/intrctl -compact

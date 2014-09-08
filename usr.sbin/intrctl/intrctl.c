@@ -99,9 +99,9 @@ usage(void)
 	const char *progname = getprogname();
 
 	fprintf(stderr, "usage: %s list\n", progname);
-	fprintf(stderr, "       %s affinity -i interrupt_name -c cpuno\n", progname);
-	fprintf(stderr, "       %s intr -c cpuno\n", progname);
-	fprintf(stderr, "       %s nointr -c cpuno\n", progname);
+	fprintf(stderr, "       %s affinity -i interrupt_name -c cpu_index\n", progname);
+	fprintf(stderr, "       %s intr -c cpu_index\n", progname);
+	fprintf(stderr, "       %s nointr -c cpu_index\n", progname);
 	exit(EXIT_FAILURE);
 	/* NOTREACHED */
 }
@@ -132,14 +132,14 @@ intr_affinity(int argc, char **argv)
 	struct intr_set iset;
 	int ch;
 	int error;
+	unsigned long index = ULONG_MAX;
 
 	memset(&iset.intrid, 0, sizeof(iset.intrid));
-	iset.cpuid = ULONG_MAX;
 
 	while ((ch = getopt(argc, argv, "c:i:")) != -1) {
 		switch (ch) {
 		case 'c':
-			iset.cpuid = strtoul(optarg, NULL, 10);
+			index = strtoul(optarg, NULL, 10);
 			break;
 		case 'i':
 			if (strnlen(optarg, ARG_MAX) > INTRID_LEN)
@@ -151,9 +151,13 @@ intr_affinity(int argc, char **argv)
 		}
 	}
 
-	if (iset.intrid[0] == '\0' || iset.cpuid == ULONG_MAX)
+	if (iset.intrid[0] == '\0' || index == ULONG_MAX)
 		usage();
 
+	if (index > UINT_MAX)
+		err(EXIT_FAILURE, "cpu index too long");
+
+	iset.cpu_index = (u_int)index;
 	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_AFFINITY");
@@ -163,26 +167,31 @@ intr_affinity(int argc, char **argv)
 static void
 intr_intr(int argc, char **argv)
 {
-	cpuid_t cpuid;
+	unsigned long index;
+	u_int cpu_index;
 	int ch;
 	int error;
 
-	cpuid = ULONG_MAX;
+	index = ULONG_MAX;
 
 	while ((ch = getopt(argc, argv, "c:")) != -1) {
 		switch (ch) {
 		case 'c':
-			cpuid = strtoul(optarg, NULL, 10);
+			index = strtoul(optarg, NULL, 10);
 			break;
 		default:
 			usage();
 		}
 	}
 
-	if (cpuid == ULONG_MAX)
+	if (index == ULONG_MAX)
 		usage();
 
-	error = ioctl(fd, IOC_INTR_INTR, &cpuid);
+	if (index > UINT_MAX)
+		err(EXIT_FAILURE, "cpu index too long");
+
+	cpu_index = (u_int)index;
+	error = ioctl(fd, IOC_INTR_INTR, &cpu_index);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_INTR");
 	}
@@ -191,28 +200,32 @@ intr_intr(int argc, char **argv)
 static void
 intr_nointr(int argc, char **argv)
 {
-	cpuid_t cpuid;
+	unsigned long index;
+	u_int cpu_index;
 	int ch;
 	int error;
 
-	cpuid = ULONG_MAX;
+	index = ULONG_MAX;
 
 	while ((ch = getopt(argc, argv, "c:")) != -1) {
 		switch (ch) {
 		case 'c':
-			cpuid = strtoul(optarg, NULL, 10);
+			index = strtoul(optarg, NULL, 10);
 			break;
 		default:
 			usage();
 		}
 	}
 
-	if (cpuid == ULONG_MAX)
+	if (index == ULONG_MAX)
 		usage();
 
-	error = ioctl(fd, IOC_INTR_NOINTR, &cpuid);
+	if (index > UINT_MAX)
+		err(EXIT_FAILURE, "cpu index too long");
+
+	cpu_index = (u_int)index;
+	error = ioctl(fd, IOC_INTR_NOINTR, &cpu_index);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_NOINTR");
 	}
 }
-
