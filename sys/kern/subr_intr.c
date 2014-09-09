@@ -37,6 +37,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/intr.h>
 #include <sys/kcpuset.h>
 #include <sys/proc.h>
+#include <sys/xcall.h>
 
 #include <sys/conf.h>
 #include <sys/intrio.h>
@@ -78,25 +79,25 @@ intrctl_list(void *data)
 static int
 intrctl_affinity(void *data)
 {
-	struct kcpuset *intr_cpuset;
+	kcpuset_t *intr_cpuset;
 	struct intr_set *iset;
-	u_int cpu_index;
+	u_int cpu_idx;
 	void *ich;
 	int error;
 
 	iset = data;
-	cpu_index = iset->cpu_index;
-	if (!kcpuset_isset(kcpuset_running, cpu_index)) {
-		printf("cpu index %u is not running\n", cpu_index);
+	cpu_idx = iset->cpu_index;
+	if (!kcpuset_isset(kcpuset_running, cpu_idx)) {
+		printf("cpu index %u is not running\n", cpu_idx);
 		return EINVAL;
 	}
 
 	kcpuset_create(&intr_cpuset, true);
-	kcpuset_set(intr_cpuset, cpu_index);
+	kcpuset_set(intr_cpuset, cpu_idx);
 
 	mutex_enter(&cpu_lock);
 
-	ich = intr_intrctl_handler(iset->intrid);
+	ich = intr_get_handler(iset->intrid);
 	if (ich == NULL) {
 		error = EINVAL;
 		goto out;
@@ -110,28 +111,142 @@ out:
 	return error;
 }
 
+#define UNSET_NOINTR_SHIELD	0
+#define SET_NOINTR_SHIELD	1
+
+static void
+intr_shield_xcall(void *arg1, void *arg2)
+{
+	struct cpu_info *ci;
+	struct schedstate_percpu *spc;
+	int shield;
+	int s;
+
+	ci = arg1;
+	shield = (int)(intptr_t)arg2;
+
+	spc = &ci->ci_schedstate;
+	s = splsched();
+	if (shield == UNSET_NOINTR_SHIELD)
+		spc->spc_flags &= ~SPCF_NOINTR;
+	else if (shield == SET_NOINTR_SHIELD)
+		spc->spc_flags |= SPCF_NOINTR;
+	splx(s);
+
+	return;
+}
+
+static int
+intr_shield(u_int cpu_idx, int shield)
+{
+	struct cpu_info *ci;
+	struct schedstate_percpu *spc;
+
+	ci = cpu_lookup(cpu_idx);
+	if (ci == NULL) {
+		return EINVAL;
+	}
+	spc = &ci->ci_schedstate;
+
+	if (shield == UNSET_NOINTR_SHIELD) {
+		if ((spc->spc_flags & SPCF_NOINTR) == 0)
+			return 0;
+	}
+	else if (shield == SET_NOINTR_SHIELD) {
+		if ((spc->spc_flags & SPCF_NOINTR) != 0)
+			return 0;
+	}
+
+	if (ci == curcpu() || !mp_online) {
+		intr_shield_xcall(ci, (void *)(intptr_t)shield);
+	}
+	else {
+		uint64_t where;
+		where = xc_unicast(0, intr_shield_xcall, ci,
+			(void *)(intptr_t)shield, ci);
+		xc_wait(where);
+	}
+
+	spc->spc_lastmod = time_second;
+	return 0;
+}
+
+static int
+intr_avert_intr(u_int cpu_idx)
+{
+	kcpuset_t *cpuset;
+	void *ich;
+	u_int next;
+	int error;
+	int i;
+	int nids;
+	char **ids = NULL;
+
+	KASSERT(mutex_owned(&cpu_lock));
+
+	kcpuset_create(&cpuset, true);
+	kcpuset_set(cpuset, cpu_idx);
+
+	ids = intr_construct_intrids(cpuset, &nids);
+	if (nids == 0)
+		return 0;
+	if (ids == NULL)
+		return ENOMEM;
+
+	next = intr_next_assigned(cpu_idx);
+	kcpuset_zero(cpuset);
+	kcpuset_set(cpuset, next);
+
+	error = 0;
+	for (i = 0; i < nids; i++) {
+		ich = intr_get_handler(ids[i]);
+		if (ich == NULL) {
+			error = ENOENT;
+			break;
+		}
+		error = intr_distribute(ich, cpuset, NULL);
+		if (error)
+			break;
+	}
+
+	intr_destruct_intrids(ids, nids);
+	kcpuset_destroy(cpuset);
+	return error;
+}
+
 static int
 intrctl_intr(void *data)
 {
-	int ret;
+	int error;
+	u_int cpu_idx;
+
+	cpu_idx = *(u_int *)data;
 
 	mutex_enter(&cpu_lock);
-	ret = intrctl_intr_md(data);
+	error = intr_shield(cpu_idx, UNSET_NOINTR_SHIELD);
 	mutex_exit(&cpu_lock);
 
-	return ret;
+	return error;
 }
 
 static int
 intrctl_nointr(void *data)
 {
-	int ret;
+	int error;
+	u_int cpu_idx;
+
+	cpu_idx = *(u_int *)data;
 
 	mutex_enter(&cpu_lock);
-	ret = intrctl_nointr_md(data);
+	error = intr_shield(cpu_idx, SET_NOINTR_SHIELD);
+	if (error) {
+		mutex_exit(&cpu_lock);
+		return error;
+	}
+	error = intr_avert_intr(cpu_idx);
 	mutex_exit(&cpu_lock);
 
-	return ret;
+	return error;
 }
 
 int

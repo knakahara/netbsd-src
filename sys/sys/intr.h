@@ -60,8 +60,10 @@ void	softint_dispatch(lwp_t *, int);
 void	*intr_intrctl_handler(const char *);
 int	intrctl_list_md(void *);
 int	intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
-int	intrctl_intr_md(void *);
-int	intrctl_nointr_md(void *);
+void	*intr_get_handler(const char *);
+u_int	intr_next_assigned(u_int);
+char	**intr_construct_intrids(const kcpuset_t *, int *);
+void	intr_destruct_intrids(char **, int);
 
 /* Flags for softint_establish(). */
 #define	SOFTINT_BIO	0x0000

@@ -150,8 +150,9 @@ __weak_alias(kobj_renamespace, nullop);
 __weak_alias(intr_intrctl_handler, eopnotsupp);
 __weak_alias(intrctl_list, eopnotsupp);
 __weak_alias(intr_distribute, eopnotsupp);
-__weak_alias(intrctl_intr, eopnotsupp);
-__weak_alias(intrctl_nointr, eopnotsupp);
+__weak_alias(intr_next_assigned, eopnotsupp);
+__weak_alias(intr_construct_intrids, eopnotsupp);
+__weak_alias(intr_destruct_intrids, eopnotsupp);
 
 /*
  * Scheduler activations system calls.  These need to remain until libc's

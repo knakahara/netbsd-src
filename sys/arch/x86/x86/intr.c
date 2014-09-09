@@ -1920,146 +1920,84 @@ out:
 #undef FILL_BUF
 }
 
-#define UNSET_NOINTR_SHIELD	0
-#define SET_NOINTR_SHIELD	1
-
-static void
-intr_shield_xcall(void *arg1, void *arg2)
-{
-	struct cpu_info *ci;
-	struct schedstate_percpu *spc;
-	int shield;
-	int s;
-
-	ci = arg1;
-	shield = (int)(intptr_t)arg2;
-
-	spc = &ci->ci_schedstate;
-	s = splsched();
-	if (shield == UNSET_NOINTR_SHIELD)
-		spc->spc_flags &= ~SPCF_NOINTR;
-	else if (shield == SET_NOINTR_SHIELD)
-		spc->spc_flags |= SPCF_NOINTR;
-	splx(s);
-
-	return;
-}
-
-static int
-intr_shield(u_int cpu_index, int shield)
-{
-	struct cpu_info *ci;
-	struct schedstate_percpu *spc;
-
-	ci = cpu_lookup(cpu_index);
-	if (ci == NULL) {
-		return EINVAL;
-	}
-	spc = &ci->ci_schedstate;
-
-	if (shield == UNSET_NOINTR_SHIELD) {
-		if ((spc->spc_flags & SPCF_NOINTR) == 0)
-			return 0;
-	}
-	else if (shield == SET_NOINTR_SHIELD) {
-		if ((spc->spc_flags & SPCF_NOINTR) != 0)
-			return 0;
-	}
-
-	if (ci == curcpu() || !mp_online) {
-		intr_shield_xcall(ci, (void *)(intptr_t)shield);
-	}
-	else {
-		uint64_t where;
-		where = xc_unicast(0, intr_shield_xcall, ci,
-			(void *)(intptr_t)shield, ci);
-		xc_wait(where);
-	}
-
-	spc->spc_lastmod = time_second;
-	return 0;
-}
-
-static int
-intr_avert_one_intr(struct cpu_info *oldci, bool *do_next)
-{
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info  *newci, *lci;
-	struct intrsource *isp;
-	struct kcpuset *cpuset;
-	int i, error;
-
-	for (i = 0; i < MAX_INTR_SOURCES; i++) {
-		isp = oldci->ci_isources[i];
-		if (isp == NULL) {
-			continue;
-		}
-
-		if (isp->is_pic->pic_type == PIC_IOAPIC) { /* XXXX need MSI */
-			break;
-		}
-	}
-	if (i == MAX_INTR_SOURCES) {
-		/* done averting interrupts, or already averted */
-		*do_next = false;
-		return 0;
-	}
-
-	newci = NULL;
-	for (CPU_INFO_FOREACH(cii, lci)) {
-		if ((lci->ci_schedstate.spc_flags & SPCF_NOINTR) == 0) {
-			newci = lci;
-			break;
-		}
-	}
-	if (newci == NULL) {
-		/* cannot avert interrupts */
-		printf("cannot find the cpu to affinity\n");
-		*do_next = false;
-		return ENOMEM;
-	}
-
-	kcpuset_create(&cpuset, true);
-	kcpuset_set(cpuset, cpu_index(newci));
-	error = intr_set_affinity(isp, cpuset);
-	if (error) {
-		kcpuset_destroy(cpuset);
-		printf("cannot set affinity\n");
-		*do_next = false;
-		return error;
-	}
-
-	kcpuset_destroy(cpuset);
-	*do_next = true;
-	return 0;
-}
-
-static int
-intr_avert_all_intr(u_int cpu_index)
-{
-	struct cpu_info *ci;
-	bool do_next = true;
-	int error;
-
-	ci = cpu_lookup(cpu_index);
-	if (ci == NULL) {
-		return EINVAL;
-	}
-
-	while (do_next) {
-		error = intr_avert_one_intr(ci, &do_next);
-		if (error)
-			break;
-	}
-	return error;
-}
-
 void *
-intr_intrctl_handler(const char *intrid)
+intr_get_handler(const char *intrid)
 {
 	KASSERT(mutex_owned(&cpu_lock));
 
 	return intr_get_io_intrsource(intrid);
+}
+
+/*
+ * if there are no appropriate cpu, return "old_index"
+ */
+u_int
+intr_next_assigned(u_int old_index)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		if ((ci->ci_schedstate.spc_flags & SPCF_NOINTR) == 0) {
+			return cpu_index(ci);
+		}
+	}
+	return old_index;
+}
+
+char **
+intr_construct_intrids(const kcpuset_t *cpuset, int *count)
+{
+	struct intrsource *isp;
+	char **ids, **lids;
+
+	KASSERT(count != NULL);
+
+	if (kcpuset_iszero(cpuset))
+		return NULL;
+
+	*count = 0;
+	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
+		(*count)++;
+	}
+	if (*count == 0) {
+		return NULL;
+	}
+
+	ids = kmem_zalloc(sizeof(char*) * (*count), KM_SLEEP);
+	if (ids == NULL) {
+		return NULL;
+	}
+
+	lids = ids;
+	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
+		size_t idlen = strlen(isp->is_intrid);
+
+		*lids = kmem_zalloc(idlen + 1, KM_SLEEP);
+		if (*lids == NULL) {
+			while (lids != ids) {
+				kmem_free(*lids, idlen + 1);
+				lids--;
+			}
+			kmem_free(ids, sizeof(ids));
+			return NULL;
+		}
+
+		strncpy(*lids, isp->is_intrid, idlen + 1);
+		lids++;
+	}
+	return ids;
+}
+
+void
+intr_destruct_intrids(char **intrids, int count)
+{
+	int i;
+
+	for (i = 0; i < count; i++)
+		kmem_free(*intrids, strlen(*intrids) + 1);
+
+	kmem_free(intrids, sizeof(char*) * count);
 }
 
 int
@@ -2076,25 +2014,4 @@ intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
 	}
 
 	return intr_set_affinity(ich, newset);
-}
-
-int
-intrctl_intr_md(void *data)
-{
-	u_int cpu_index;
-
-	cpu_index = *(u_int *)data;
-	return intr_shield(cpu_index, UNSET_NOINTR_SHIELD);
-}
-int
-intrctl_nointr_md(void *data)
-{
-	u_int cpu_index;
-	int error;
-
-	cpu_index = *(u_int *)data;
-	error = intr_shield(cpu_index, SET_NOINTR_SHIELD);
-	if (error)
-		return error;
-	return intr_avert_all_intr(cpu_index);
 }
