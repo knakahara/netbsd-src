@@ -1945,11 +1945,23 @@ intr_next_assigned(u_int old_index)
 	return old_index;
 }
 
+static bool
+intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
+{
+	struct cpu_info *ci;
+
+	ci = isp->is_handlers->ih_cpu;
+	KASSERT(ci != NULL);
+
+	return kcpuset_isset(cpuset, cpu_index(ci));
+}
+
 char **
 intr_construct_intrids(const kcpuset_t *cpuset, int *count)
 {
 	struct intrsource *isp;
 	char **ids, **lids;
+	size_t idlen;
 
 	KASSERT(count != NULL);
 
@@ -1958,7 +1970,8 @@ intr_construct_intrids(const kcpuset_t *cpuset, int *count)
 
 	*count = 0;
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
-		(*count)++;
+		if (intr_is_affinity_intrsource(isp, cpuset))
+			(*count)++;
 	}
 	if (*count == 0) {
 		return NULL;
@@ -1971,8 +1984,10 @@ intr_construct_intrids(const kcpuset_t *cpuset, int *count)
 
 	lids = ids;
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
-		size_t idlen = strlen(isp->is_intrid);
+		if (!intr_is_affinity_intrsource(isp, cpuset))
+			continue;
 
+		idlen = strlen(isp->is_intrid);
 		*lids = kmem_zalloc(idlen + 1, KM_SLEEP);
 		if (*lids == NULL) {
 			while (lids != ids) {
