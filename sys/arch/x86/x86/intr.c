@@ -1926,21 +1926,18 @@ intr_get_handler(const char *intrid)
 	return intr_get_io_intrsource(intrid);
 }
 
-/*
- * if there are no appropriate cpu, return "old_index"
- */
-u_int
-intr_next_assigned(u_int old_index)
+void
+intr_get_available(kcpuset_t *cpuset)
 {
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
 
+	kcpuset_zero(cpuset);
 	for (CPU_INFO_FOREACH(cii, ci)) {
 		if ((ci->ci_schedstate.spc_flags & SPCF_NOINTR) == 0) {
-			return cpu_index(ci);
+			kcpuset_set(cpuset, cpu_index(ci));
 		}
 	}
-	return old_index;
 }
 
 static bool

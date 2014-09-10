@@ -176,7 +176,6 @@ intr_avert_intr(u_int cpu_idx)
 {
 	kcpuset_t *cpuset;
 	void *ich;
-	u_int next;
 	int error;
 	int i;
 	int nids;
@@ -193,9 +192,12 @@ intr_avert_intr(u_int cpu_idx)
 	if (nids == 0)
 		return 0; /* nothing to do */
 
-	next = intr_next_assigned(cpu_idx);
-	kcpuset_zero(cpuset);
-	kcpuset_set(cpuset, next);
+	intr_get_available(cpuset);
+	kcpuset_clear(cpuset, cpu_idx);
+	if (kcpuset_iszero(cpuset)) {
+		printf("no available cpu\n");
+		return ENOENT;
+	}
 
 	for (i = 0; i < nids; i++) {
 		ich = intr_get_handler(ids[i]);
