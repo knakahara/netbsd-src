@@ -1956,17 +1956,18 @@ intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
 	return kcpuset_isset(cpuset, cpu_index(ci));
 }
 
-char **
-intr_construct_intrids(const kcpuset_t *cpuset, int *count)
+int
+intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 {
 	struct intrsource *isp;
-	char **ids, **lids;
-	size_t idlen;
+	char **ids;
+	int i;
 
-	KASSERT(count != NULL);
+	if (count == NULL)
+		return EINVAL;
 
 	if (kcpuset_iszero(cpuset))
-		return NULL;
+		return 0;
 
 	*count = 0;
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
@@ -1974,34 +1975,35 @@ intr_construct_intrids(const kcpuset_t *cpuset, int *count)
 			(*count)++;
 	}
 	if (*count == 0) {
-		return NULL;
+		return 0;
 	}
 
 	ids = kmem_zalloc(sizeof(char*) * (*count), KM_SLEEP);
 	if (ids == NULL) {
-		return NULL;
+		return ENOMEM;
 	}
 
-	lids = ids;
+	i = 0;
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
 		if (!intr_is_affinity_intrsource(isp, cpuset))
 			continue;
 
-		idlen = strlen(isp->is_intrid);
-		*lids = kmem_zalloc(idlen + 1, KM_SLEEP);
-		if (*lids == NULL) {
-			while (lids != ids) {
-				kmem_free(*lids, idlen + 1);
-				lids--;
+		ids[i] = kmem_zalloc(INTRID_LEN + 1, KM_NOSLEEP);
+		if (ids[i] == NULL) {
+			int j;
+			for (j = i - 1; j >= 0; i--) {
+				kmem_free(ids[i], INTRID_LEN + 1);
 			}
-			kmem_free(ids, sizeof(ids));
-			return NULL;
+			kmem_free(ids, sizeof(char*) * (*count));
+			return ENOMEM;
 		}
 
-		strncpy(*lids, isp->is_intrid, idlen + 1);
-		lids++;
+		strncpy(ids[i], isp->is_intrid, INTRID_LEN + 1);
+		i++;
 	}
-	return ids;
+
+	*intrids = ids;
+	return 0;
 }
 
 void
@@ -2010,7 +2012,7 @@ intr_destruct_intrids(char **intrids, int count)
 	int i;
 
 	for (i = 0; i < count; i++)
-		kmem_free(*intrids, strlen(*intrids) + 1);
+		kmem_free(intrids[i], INTRID_LEN + 1);
 
 	kmem_free(intrids, sizeof(char*) * count);
 }

@@ -62,7 +62,7 @@ int	intrctl_list_md(void *);
 int	intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
 void	*intr_get_handler(const char *);
 u_int	intr_next_assigned(u_int);
-char	**intr_construct_intrids(const kcpuset_t *, int *);
+int	intr_construct_intrids(const kcpuset_t *, char ***, int *);
 void	intr_destruct_intrids(char **, int);
 
 /* Flags for softint_establish(). */

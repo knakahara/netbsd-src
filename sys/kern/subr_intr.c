@@ -180,24 +180,23 @@ intr_avert_intr(u_int cpu_idx)
 	int error;
 	int i;
 	int nids;
-	char **ids = NULL;
+	char **ids;
 
 	KASSERT(mutex_owned(&cpu_lock));
 
 	kcpuset_create(&cpuset, true);
 	kcpuset_set(cpuset, cpu_idx);
 
-	ids = intr_construct_intrids(cpuset, &nids);
+	error = intr_construct_intrids(cpuset, &ids, &nids);
+	if (error)
+		return error;
 	if (nids == 0)
-		return 0;
-	if (ids == NULL)
-		return ENOMEM;
+		return 0; /* nothing to do */
 
 	next = intr_next_assigned(cpu_idx);
 	kcpuset_zero(cpuset);
 	kcpuset_set(cpuset, next);
 
-	error = 0;
 	for (i = 0; i < nids; i++) {
 		ich = intr_get_handler(ids[i]);
 		if (ich == NULL) {
