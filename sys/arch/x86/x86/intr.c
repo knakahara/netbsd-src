@@ -1741,7 +1741,7 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	struct intrhand *ih, *lih;
 	struct pic *pic;
 	struct cpu_info *oldci, *newci;
-	u_int cpu_index;
+	u_int cpu_idx;
 	int idt_vec;
 	int oldslot, newslot;
 	int err;
@@ -1749,19 +1749,17 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 
 	KASSERT(mutex_owned(&cpu_lock));
 
-	if (kcpuset_countset(cpuset) > 1) {
-		printf("logical destination mode is not supported\n");
-		return EINVAL;
-	}
-
-	cpu_index = kcpuset_ffs(cpuset) - 1;
-	newci = cpu_lookup(cpu_index);
+	/*
+	 * logical destination mode is not supported, use lowest index cpu.
+	 */
+	cpu_idx = kcpuset_ffs(cpuset) - 1;
+	newci = cpu_lookup(cpu_idx);
 	if (newci == NULL) {
-		printf("invalid cpu index: %u\n", cpu_index);
+		printf("invalid cpu index: %u\n", cpu_idx);
 		return EINVAL;
 	}
 	if ((newci->ci_schedstate.spc_flags & SPCF_NOINTR) != 0) {
-		printf("set nointr shield cpu index:%u\n", cpu_index);
+		printf("set nointr shield cpu index:%u\n", cpu_idx);
 		return EINVAL;
 	}
 
