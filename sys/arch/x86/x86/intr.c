@@ -429,20 +429,14 @@ intr_scan_bus(int bus, int pin, int *handle)
 static const char *
 create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 {
-	static int seq = 0;
 	int ih;
-
-	if (pin == 0) {
-		snprintf(buf, len, "root device %d", seq);
-		seq++;
-		return buf;
-	}
 
 	ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
 		((pin << APIC_INT_PIN_SHIFT) & APIC_INT_PIN_MASK);
 	if (pic->pic_type == PIC_IOAPIC) {
 		ih |= APIC_INT_VIA_APIC;
 	}
+	KASSERT(ih != 0);
 
 	return intr_string(ih, buf, len);
 }
