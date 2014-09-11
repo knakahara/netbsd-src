@@ -36,6 +36,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/cpu.h>
 #include <sys/intr.h>
 #include <sys/kcpuset.h>
+#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/xcall.h>
 
@@ -71,9 +72,100 @@ intrctlattach(int dummy)
 }
 
 static int
-intrctl_list(void *data)
+intrctl_list(void *data, int length)
 {
-	return intrctl_list_md(data);
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+	kcpuset_t *avail, *assigned;
+	int cpu_idx, intr_idx;
+	int nids, nrunning;
+	int ret;
+	uint64_t *counts;
+	char *buf, *buf_end;
+	char **ids;
+	void *ich;
+
+	buf = data;
+	if (buf == NULL)
+		return EINVAL;
+
+	if (length < 0)
+		return EINVAL;
+
+	nrunning = kcpuset_countset(kcpuset_running);
+	counts = kmem_zalloc(sizeof(uint64_t) * nrunning, KM_SLEEP);
+	if (counts == NULL)
+		return ENOMEM;
+
+	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
+	if (ret != 0) {
+		kmem_free(counts, sizeof(uint64_t) * nrunning);
+		return ret;
+	}
+
+	kcpuset_create(&avail, true);
+	kcpuset_create(&assigned, true);
+
+	buf_end = buf + length;
+
+#define FILL_BUF(cur, end, fmt, ...) do{				\
+		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
+		if (ret < 0) {						\
+			goto out;					\
+		}							\
+		cur += ret;						\
+		if (cur > end) {					\
+			ret = ENOBUFS;					\
+			goto out;					\
+		}							\
+	}while(0)
+
+	FILL_BUF(buf, buf_end, " interrupt name");
+	intr_get_available(avail);
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		char intr_enable;
+		if (kcpuset_isset(avail, cpu_index(ci)))
+			intr_enable = '+';
+		else
+			intr_enable = '-';
+
+		FILL_BUF(buf, buf_end, "\tCPU#%02u(%c)", cpu_index(ci),
+			 intr_enable);
+	}
+	*(buf++) = '\n';
+
+	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
+		FILL_BUF(buf, buf_end, " %s", ids[intr_idx]);
+
+		mutex_enter(&cpu_lock);
+		ich = intr_get_handler(ids[intr_idx]);
+		mutex_exit(&cpu_lock);
+		KASSERT(ich != NULL);
+
+		intr_get_counts(ich, &counts);
+		intr_get_assigned(ich, assigned);
+		for (cpu_idx = 0; cpu_idx < nrunning; cpu_idx++) {
+			if (kcpuset_isset(assigned, cpu_idx)) {
+				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", counts[cpu_idx]);
+			} else {
+				FILL_BUF(buf, buf_end, "\t%8" PRIu64, counts[cpu_idx]);
+			}
+
+		}
+		FILL_BUF(buf, buf_end, "\t%s", intr_get_devname(ich));
+		*(buf++) = '\n';
+	}
+
+	*(buf++) = '\0';
+	ret = 0;
+out:
+	kcpuset_destroy(assigned);
+	kcpuset_destroy(avail);
+	intr_destruct_intrids(ids, nids);
+	kmem_free(counts, sizeof(uint64_t) * nrunning);
+	return ret;
+
+#undef FILL_BUF
 }
 
 static int
@@ -257,7 +349,7 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 
 	switch (cmd) {
 	case IOC_INTR_LIST:
-		error = intrctl_list(data);
+		error = intrctl_list(data, INTR_LIST_BUFSIZE);
 		break;
 	case IOC_INTR_AFFINITY:
 		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,

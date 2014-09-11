@@ -1844,80 +1844,6 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	return err;
 }
 
-static int
-intr_loadcnt(char *buf, int length)
-{
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-
-	int ret, i;
-	char *buf_end;
-	struct intrsource *isp;
-	struct percpu_evcnt pep;
-
-	if (buf == NULL) {
-		ret = EINVAL;
-		goto out;
-	}
-	if (length < 0) {
-		ret = EINVAL;
-		goto out;
-	}
-
-	buf_end = buf + length;
-
-#define FILL_BUF(cur, end, fmt, ...) do{				\
-		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
-		if (ret < 0) {						\
-			ret = EIO;					\
-			goto out;					\
-		}							\
-		cur += ret;						\
-		if (cur > end) {					\
-			ret = EINVAL;					\
-			goto out;					\
-		}							\
-	}while(0)
-
-	/* print header */
-	FILL_BUF(buf, buf_end, "interrupt name");
-	for (CPU_INFO_FOREACH(cii, ci)) {
-		char intr_enable;
-		if (ci->ci_schedstate.spc_flags & SPCF_NOINTR)
-			intr_enable = '-';
-		else
-			intr_enable = '+';
-
-		FILL_BUF(buf, buf_end, "\tCPU#%02u(%c)", cpu_index(ci),
-			 intr_enable);
-	}
-	*(buf++) = '\n';
-
-	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
-		FILL_BUF(buf, buf_end, " %s", isp->is_intrid);
-
-		for (i = 0; i < ncpuonline; i++) {
-			pep = isp->is_saved_evcnt[i];
-			if (isp->is_active_cpu == pep.cpuid) {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", isp->is_evcnt.ev_count);
-			}
-			else {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64, pep.count);
-			}
-		}
-		FILL_BUF(buf, buf_end, "\t%s", isp->is_xname);
-		*(buf++) = '\n';
-	}
-
-	*(buf++) = '\0';
-
-	ret = 0;
-out:
-	return ret;
-
-#undef FILL_BUF
-}
-
 void *
 intr_get_handler(const char *intrid)
 {
@@ -2012,10 +1938,44 @@ intr_destruct_intrids(char **intrids, int count)
 	kmem_free(intrids, sizeof(char*) * count);
 }
 
-int
-intrctl_list_md(void *data)
+void
+intr_get_counts(void *ich, uint64_t **counts)
 {
-	return intr_loadcnt((char *)data, INTR_LIST_BUFSIZE);
+	struct percpu_evcnt pep;
+	struct intrsource *isp;
+	int i, nrunning;
+
+	isp = ich;
+	nrunning = kcpuset_countset(kcpuset_running);
+	for (i = 0; i < nrunning; i++) {
+		pep = isp->is_saved_evcnt[i];
+		if (isp->is_active_cpu == pep.cpuid) {
+			(*counts)[i] = isp->is_evcnt.ev_count;
+		}
+		else {
+			(*counts)[i] = pep.count;
+		}
+	}
+}
+
+void
+intr_get_assigned(void *ich, kcpuset_t *cpuset)
+{
+	struct cpu_info *ci;
+	struct intrsource *isp = ich;
+
+	ci = isp->is_handlers->ih_cpu;
+	KASSERT(ci != NULL);
+
+	kcpuset_set(cpuset, cpu_index(ci));
+}
+
+char *
+intr_get_devname(void *ich)
+{
+	struct intrsource *isp = ich;
+
+	return isp->is_xname;
 }
 
 int

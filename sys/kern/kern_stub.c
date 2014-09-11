@@ -147,10 +147,11 @@ __weak_alias(userconf_prompt, voidop);
 
 __weak_alias(kobj_renamespace, nullop);
 
-__weak_alias(intr_intrctl_handler, eopnotsupp);
-__weak_alias(intrctl_list, eopnotsupp);
+__weak_alias(intr_get_handler, eopnotsupp);
+__weak_alias(intr_get_counts, eopnotsupp);
+__weak_alias(intr_get_assigned, eopnotsupp);
+__weak_alias(intr_get_devname, eopnotsupp);
 __weak_alias(intr_distribute, eopnotsupp);
-__weak_alias(intr_next_assigned, eopnotsupp);
 __weak_alias(intr_construct_intrids, eopnotsupp);
 __weak_alias(intr_destruct_intrids, eopnotsupp);
 
