@@ -1967,6 +1967,7 @@ intr_get_assigned(void *ich, kcpuset_t *cpuset)
 	ci = isp->is_handlers->ih_cpu;
 	KASSERT(ci != NULL);
 
+	kcpuset_zero(cpuset);
 	kcpuset_set(cpuset, cpu_index(ci));
 }
 
