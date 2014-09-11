@@ -144,7 +144,6 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/kernel.h>
 #include <sys/syslog.h>
 #include <sys/device.h>
-#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/errno.h>
 #include <sys/intr.h>
@@ -1848,24 +1847,30 @@ intr_get_handler(const char *intrid)
 	return intr_get_io_intrsource(intrid);
 }
 
-void
-intr_get_counts(void *ich, uint64_t **counts)
+uint64_t
+intr_get_count(void *ich, u_int cpu_idx)
 {
 	struct percpu_evcnt pep;
 	struct intrsource *isp;
-	int i, nrunning;
+	struct cpu_info *ci;
+	cpuid_t cpuid;
+	int i;
+
+	ci = cpu_lookup(cpu_idx);
+	cpuid = ci->ci_cpuid;
 
 	isp = ich;
-	nrunning = kcpuset_countset(kcpuset_running);
-	for (i = 0; i < nrunning; i++) {
+	for (i = 0; i < ncpuonline; i++) {
 		pep = isp->is_saved_evcnt[i];
-		if (isp->is_active_cpu == pep.cpuid) {
-			(*counts)[i] = isp->is_evcnt.ev_count;
-		}
-		else {
-			(*counts)[i] = pep.count;
+		if (cpuid == pep.cpuid) {
+			if (isp->is_active_cpu == pep.cpuid) {
+				return isp->is_evcnt.ev_count;
+			} else {
+				return pep.count;
+			}
 		}
 	}
+	return 0;
 }
 
 void

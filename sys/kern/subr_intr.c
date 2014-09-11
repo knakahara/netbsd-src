@@ -77,10 +77,9 @@ intrctl_list(void *data, int length)
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
 	kcpuset_t *avail, *assigned;
-	int cpu_idx, intr_idx;
-	int nids, nrunning;
-	int ret;
-	uint64_t *counts;
+	uint64_t intr_count;
+	u_int cpu_idx;
+	int intr_idx, nids, nrunning, ret;
 	char *buf, *buf_end;
 	char **ids;
 	void *ich;
@@ -92,14 +91,8 @@ intrctl_list(void *data, int length)
 	if (length < 0)
 		return EINVAL;
 
-	nrunning = kcpuset_countset(kcpuset_running);
-	counts = kmem_zalloc(sizeof(uint64_t) * nrunning, KM_SLEEP);
-	if (counts == NULL)
-		return ENOMEM;
-
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
 	if (ret != 0) {
-		kmem_free(counts, sizeof(uint64_t) * nrunning);
 		return ret;
 	}
 
@@ -142,13 +135,14 @@ intrctl_list(void *data, int length)
 		mutex_exit(&cpu_lock);
 		KASSERT(ich != NULL);
 
-		intr_get_counts(ich, &counts);
 		intr_get_assigned(ich, assigned);
+		nrunning = kcpuset_countset(kcpuset_running);
 		for (cpu_idx = 0; cpu_idx < nrunning; cpu_idx++) {
+			intr_count = intr_get_count(ich, cpu_idx);
 			if (kcpuset_isset(assigned, cpu_idx)) {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", counts[cpu_idx]);
+				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", intr_count);
 			} else {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64, counts[cpu_idx]);
+				FILL_BUF(buf, buf_end, "\t%8" PRIu64, intr_count);
 			}
 
 		}
@@ -162,7 +156,6 @@ out:
 	kcpuset_destroy(assigned);
 	kcpuset_destroy(avail);
 	intr_destruct_intrids(ids, nids);
-	kmem_free(counts, sizeof(uint64_t) * nrunning);
 	return ret;
 
 #undef FILL_BUF
