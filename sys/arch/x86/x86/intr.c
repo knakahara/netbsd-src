@@ -1606,21 +1606,6 @@ cpu_intr_count(struct cpu_info *ci)
 	return ci->ci_nintrhand;
 }
 
-static struct cpu_info *
-intr_find_cpuinfo(cpuid_t cpuid)
-{
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-
-	for (CPU_INFO_FOREACH(cii, ci)) {
-		if (ci->ci_cpuid == cpuid) {
-			return ci;
-		}
-	}
-
-	return NULL;
-}
-
 static int
 intr_find_unused_slot(struct cpu_info *ci, struct pic *pic, int *index)
 {
@@ -1724,7 +1709,7 @@ intr_get_affinity(void *ich, kcpuset_t *cpuset)
 	}
 
 	isp = ich;
-	ci = intr_find_cpuinfo(isp->is_active_cpu);
+	ci = isp->is_handlers->ih_cpu;
 	if (ci == NULL) {
 		kcpuset_zero(cpuset);
 		return;
@@ -1844,12 +1829,56 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	return err;
 }
 
+static bool
+intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
+{
+	struct cpu_info *ci;
+
+	ci = isp->is_handlers->ih_cpu;
+	KASSERT(ci != NULL);
+
+	return kcpuset_isset(cpuset, cpu_index(ci));
+}
+
 void *
 intr_get_handler(const char *intrid)
 {
 	KASSERT(mutex_owned(&cpu_lock));
 
 	return intr_get_io_intrsource(intrid);
+}
+
+void
+intr_get_counts(void *ich, uint64_t **counts)
+{
+	struct percpu_evcnt pep;
+	struct intrsource *isp;
+	int i, nrunning;
+
+	isp = ich;
+	nrunning = kcpuset_countset(kcpuset_running);
+	for (i = 0; i < nrunning; i++) {
+		pep = isp->is_saved_evcnt[i];
+		if (isp->is_active_cpu == pep.cpuid) {
+			(*counts)[i] = isp->is_evcnt.ev_count;
+		}
+		else {
+			(*counts)[i] = pep.count;
+		}
+	}
+}
+
+void
+intr_get_assigned(void *ich, kcpuset_t *cpuset)
+{
+	struct cpu_info *ci;
+	struct intrsource *isp = ich;
+
+	ci = isp->is_handlers->ih_cpu;
+	KASSERT(ci != NULL);
+
+	kcpuset_zero(cpuset);
+	kcpuset_set(cpuset, cpu_index(ci));
 }
 
 void
@@ -1866,15 +1895,22 @@ intr_get_available(kcpuset_t *cpuset)
 	}
 }
 
-static bool
-intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
+char *
+intr_get_devname(void *ich)
 {
-	struct cpu_info *ci;
+	struct intrsource *isp = ich;
 
-	ci = isp->is_handlers->ih_cpu;
-	KASSERT(ci != NULL);
+	return isp->is_xname;
+}
 
-	return kcpuset_isset(cpuset, cpu_index(ci));
+int
+intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
+{
+	if(oldset != NULL) {
+		intr_get_affinity(ich, oldset);
+	}
+
+	return intr_set_affinity(ich, newset);
 }
 
 int
@@ -1936,55 +1972,4 @@ intr_destruct_intrids(char **intrids, int count)
 		kmem_free(intrids[i], INTRID_LEN + 1);
 
 	kmem_free(intrids, sizeof(char*) * count);
-}
-
-void
-intr_get_counts(void *ich, uint64_t **counts)
-{
-	struct percpu_evcnt pep;
-	struct intrsource *isp;
-	int i, nrunning;
-
-	isp = ich;
-	nrunning = kcpuset_countset(kcpuset_running);
-	for (i = 0; i < nrunning; i++) {
-		pep = isp->is_saved_evcnt[i];
-		if (isp->is_active_cpu == pep.cpuid) {
-			(*counts)[i] = isp->is_evcnt.ev_count;
-		}
-		else {
-			(*counts)[i] = pep.count;
-		}
-	}
-}
-
-void
-intr_get_assigned(void *ich, kcpuset_t *cpuset)
-{
-	struct cpu_info *ci;
-	struct intrsource *isp = ich;
-
-	ci = isp->is_handlers->ih_cpu;
-	KASSERT(ci != NULL);
-
-	kcpuset_zero(cpuset);
-	kcpuset_set(cpuset, cpu_index(ci));
-}
-
-char *
-intr_get_devname(void *ich)
-{
-	struct intrsource *isp = ich;
-
-	return isp->is_xname;
-}
-
-int
-intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
-{
-	if(oldset != NULL) {
-		intr_get_affinity(ich, oldset);
-	}
-
-	return intr_set_affinity(ich, newset);
 }

@@ -61,9 +61,9 @@ void	softint_dispatch(lwp_t *, int);
 void	*intr_get_handler(const char *);
 void	intr_get_counts(void *, uint64_t **);
 void	intr_get_assigned(void *, kcpuset_t *);
+void	intr_get_available(kcpuset_t *);
 char	*intr_get_devname(void *);
 int	intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
-void	intr_get_available(kcpuset_t *);
 int	intr_construct_intrids(const kcpuset_t *, char ***, int *);
 void	intr_destruct_intrids(char **, int);
 

@@ -150,6 +150,7 @@ __weak_alias(kobj_renamespace, nullop);
 __weak_alias(intr_get_handler, eopnotsupp);
 __weak_alias(intr_get_counts, eopnotsupp);
 __weak_alias(intr_get_assigned, eopnotsupp);
+__weak_alias(intr_get_available, eopnotsupp);
 __weak_alias(intr_get_devname, eopnotsupp);
 __weak_alias(intr_distribute, eopnotsupp);
 __weak_alias(intr_construct_intrids, eopnotsupp);
