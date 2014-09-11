@@ -32,6 +32,10 @@
 #include <sys/ioccom.h>
 #include <sys/types.h>
 
+#ifndef _KERNEL
+#include <sched.h>
+#endif
+
 #define INTR_LIST_BUFSIZE 4096
 
 #define INTRID_LEN 47 /* should use max size of interrupt name of supporting
@@ -44,12 +48,13 @@
 
 struct intr_set {
 	char intrid[INTRID_LEN + 1];
-	u_int cpu_index;
+	cpuset_t *cpuset;
+	size_t cpuset_size;
 };
 
 #define	IOC_INTR_LIST		_IOR('c', 0, char[INTR_LIST_BUFSIZE])
 #define	IOC_INTR_AFFINITY	_IOW('c', 1, struct intr_set)
-#define	IOC_INTR_INTR		_IOW('c', 2, cpuid_t)
-#define	IOC_INTR_NOINTR		_IOW('c', 3, cpuid_t)
+#define	IOC_INTR_INTR		_IOW('c', 2, struct intr_set)
+#define	IOC_INTR_NOINTR		_IOW('c', 3, struct intr_set)
 
 #endif /* !_SYS_INTRIO_H_ */

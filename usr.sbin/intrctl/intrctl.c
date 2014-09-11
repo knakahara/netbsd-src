@@ -37,6 +37,7 @@ __RCSID("$NetBSD$");
 #include <fcntl.h>
 #include <limits.h>
 #include <paths.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -130,10 +131,12 @@ static void
 intr_affinity(int argc, char **argv)
 {
 	struct intr_set iset;
+	cpuset_t *cpuset;
+	unsigned long index;
 	int ch;
 	int error;
-	unsigned long index = ULONG_MAX;
 
+	index = ULONG_MAX;
 	memset(&iset.intrid, 0, sizeof(iset.intrid));
 
 	while ((ch = getopt(argc, argv, "c:i:")) != -1) {
@@ -154,10 +157,17 @@ intr_affinity(int argc, char **argv)
 	if (iset.intrid[0] == '\0' || index == ULONG_MAX)
 		usage();
 
-	if (index > UINT_MAX)
-		err(EXIT_FAILURE, "cpu index too long");
+	if (index >= (u_long)sysconf(_SC_NPROCESSORS_CONF))
+		err(EXIT_FAILURE, "invalid cpu index");
 
-	iset.cpu_index = (u_int)index;
+	cpuset = cpuset_create();
+	if (cpuset == NULL)
+		err(EXIT_FAILURE, "create_cpuset()");
+
+	cpuset_zero(cpuset);
+	cpuset_set(index, cpuset);
+	iset.cpuset = cpuset;
+	iset.cpuset_size = cpuset_size(cpuset);
 	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_AFFINITY");
@@ -167,8 +177,9 @@ intr_affinity(int argc, char **argv)
 static void
 intr_intr(int argc, char **argv)
 {
+	struct intr_set iset;
+	cpuset_t *cpuset;
 	unsigned long index;
-	u_int cpu_index;
 	int ch;
 	int error;
 
@@ -187,11 +198,19 @@ intr_intr(int argc, char **argv)
 	if (index == ULONG_MAX)
 		usage();
 
-	if (index > UINT_MAX)
-		err(EXIT_FAILURE, "cpu index too long");
+	if (index >= (u_long)sysconf(_SC_NPROCESSORS_CONF))
+		err(EXIT_FAILURE, "invalid cpu index");
 
-	cpu_index = (u_int)index;
-	error = ioctl(fd, IOC_INTR_INTR, &cpu_index);
+	cpuset = cpuset_create();
+	if (cpuset == NULL)
+		err(EXIT_FAILURE, "create_cpuset()");
+
+	cpuset_zero(cpuset);
+	cpuset_set(index, cpuset);
+	iset.cpuset = cpuset;
+	iset.cpuset_size = cpuset_size(cpuset);
+	error = ioctl(fd, IOC_INTR_INTR, &iset);
+	cpuset_destroy(cpuset);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_INTR");
 	}
@@ -200,8 +219,9 @@ intr_intr(int argc, char **argv)
 static void
 intr_nointr(int argc, char **argv)
 {
+	struct intr_set iset;
+	cpuset_t *cpuset;
 	unsigned long index;
-	u_int cpu_index;
 	int ch;
 	int error;
 
@@ -220,11 +240,18 @@ intr_nointr(int argc, char **argv)
 	if (index == ULONG_MAX)
 		usage();
 
-	if (index > UINT_MAX)
-		err(EXIT_FAILURE, "cpu index too long");
+	if (index >= (u_long)sysconf(_SC_NPROCESSORS_CONF))
+		err(EXIT_FAILURE, "invalid cpu index");
 
-	cpu_index = (u_int)index;
-	error = ioctl(fd, IOC_INTR_NOINTR, &cpu_index);
+	cpuset = cpuset_create();
+	if (cpuset == NULL)
+		err(EXIT_FAILURE, "create_cpuset()");
+
+	cpuset_zero(cpuset);
+	cpuset_set(index, cpuset);
+	iset.cpuset = cpuset;
+	iset.cpuset_size = cpuset_size(cpuset);
+	error = ioctl(fd, IOC_INTR_NOINTR, &iset);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_NOINTR");
 	}

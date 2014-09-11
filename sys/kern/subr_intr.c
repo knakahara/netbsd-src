@@ -164,33 +164,32 @@ out:
 static int
 intrctl_affinity(void *data)
 {
-	kcpuset_t *intr_cpuset;
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
 	struct intr_set *iset;
-	u_int cpu_idx;
 	void *ich;
 	int error;
 
 	iset = data;
-	cpu_idx = iset->cpu_index;
-	if (!kcpuset_isset(kcpuset_running, cpu_idx)) {
-		printf("cpu index %u is not running\n", cpu_idx);
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
 		return EINVAL;
 	}
 
-	kcpuset_create(&intr_cpuset, true);
-	kcpuset_set(intr_cpuset, cpu_idx);
-
 	mutex_enter(&cpu_lock);
-
 	ich = intr_get_handler(iset->intrid);
 	if (ich == NULL) {
 		error = EINVAL;
 		goto out;
 	}
-	error = intr_distribute(ich, intr_cpuset, NULL);
+	error = intr_distribute(ich, kcpuset, NULL);
 out:
 	mutex_exit(&cpu_lock);
-	kcpuset_destroy(intr_cpuset);
+
+	kcpuset_destroy(kcpuset);
 	return error;
 }
 
@@ -299,10 +298,17 @@ intr_avert_intr(u_int cpu_idx)
 static int
 intrctl_intr(void *data)
 {
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
+	struct intr_set *iset;
 	u_int cpu_idx;
 	int error;
 
-	cpu_idx = *(u_int *)data;
+	iset = data;
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
 
 	mutex_enter(&cpu_lock);
 	error = intr_shield(cpu_idx, UNSET_NOINTR_SHIELD);
@@ -314,10 +320,17 @@ intrctl_intr(void *data)
 static int
 intrctl_nointr(void *data)
 {
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
+	struct intr_set *iset;
 	u_int cpu_idx;
 	int error;
 
-	cpu_idx = *(u_int *)data;
+	iset = data;
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
 
 	mutex_enter(&cpu_lock);
 	error = intr_shield(cpu_idx, SET_NOINTR_SHIELD);
