@@ -132,8 +132,8 @@ intrctl_list(void *data, int length)
 
 		mutex_enter(&cpu_lock);
 		ich = intr_get_handler(ids[intr_idx]);
-		mutex_exit(&cpu_lock);
 		KASSERT(ich != NULL);
+		mutex_exit(&cpu_lock);
 
 		intr_get_assigned(ich, assigned);
 		nrunning = kcpuset_countset(kcpuset_running);
@@ -188,11 +188,9 @@ intrctl_affinity(void *data)
 		goto out;
 	}
 	error = intr_distribute(ich, intr_cpuset, NULL);
-
 out:
 	mutex_exit(&cpu_lock);
 	kcpuset_destroy(intr_cpuset);
-
 	return error;
 }
 
@@ -209,8 +207,8 @@ intr_shield_xcall(void *arg1, void *arg2)
 
 	ci = arg1;
 	shield = (int)(intptr_t)arg2;
-
 	spc = &ci->ci_schedstate;
+
 	s = splsched();
 	if (shield == UNSET_NOINTR_SHIELD)
 		spc->spc_flags &= ~SPCF_NOINTR;
@@ -236,16 +234,14 @@ intr_shield(u_int cpu_idx, int shield)
 	if (shield == UNSET_NOINTR_SHIELD) {
 		if ((spc->spc_flags & SPCF_NOINTR) == 0)
 			return 0;
-	}
-	else if (shield == SET_NOINTR_SHIELD) {
+	} else if (shield == SET_NOINTR_SHIELD) {
 		if ((spc->spc_flags & SPCF_NOINTR) != 0)
 			return 0;
 	}
 
 	if (ci == curcpu() || !mp_online) {
 		intr_shield_xcall(ci, (void *)(intptr_t)shield);
-	}
-	else {
+	} else {
 		uint64_t where;
 		where = xc_unicast(0, intr_shield_xcall, ci,
 			(void *)(intptr_t)shield, ci);
@@ -303,8 +299,8 @@ intr_avert_intr(u_int cpu_idx)
 static int
 intrctl_intr(void *data)
 {
-	int error;
 	u_int cpu_idx;
+	int error;
 
 	cpu_idx = *(u_int *)data;
 
@@ -318,8 +314,8 @@ intrctl_intr(void *data)
 static int
 intrctl_nointr(void *data)
 {
-	int error;
 	u_int cpu_idx;
+	int error;
 
 	cpu_idx = *(u_int *)data;
 
