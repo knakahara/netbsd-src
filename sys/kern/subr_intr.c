@@ -77,12 +77,13 @@ intrctl_list(void *data, int length)
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
 	kcpuset_t *avail, *assigned;
-	uint64_t intr_count;
-	u_int cpu_idx;
-	int intr_idx, nids, nrunning, ret;
+	void *ich;
 	char *buf, *buf_end;
 	char **ids;
-	void *ich;
+	uint64_t intr_count;
+	u_int cpu_idx;
+	int intr_idx, nids;
+	int ret;
 
 	buf = data;
 	if (buf == NULL)
@@ -92,9 +93,8 @@ intrctl_list(void *data, int length)
 		return EINVAL;
 
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
-	if (ret != 0) {
+	if (ret != 0)
 		return ret;
-	}
 
 	kcpuset_create(&avail, true);
 	kcpuset_create(&assigned, true);
@@ -123,7 +123,7 @@ intrctl_list(void *data, int length)
 			intr_enable = '-';
 
 		FILL_BUF(buf, buf_end, "\tCPU#%02u(%c)", cpu_index(ci),
-			 intr_enable);
+		    intr_enable);
 	}
 	*(buf++) = '\n';
 
@@ -136,8 +136,7 @@ intrctl_list(void *data, int length)
 		mutex_exit(&cpu_lock);
 
 		intr_get_assigned(ich, assigned);
-		nrunning = kcpuset_countset(kcpuset_running);
-		for (cpu_idx = 0; cpu_idx < nrunning; cpu_idx++) {
+		for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
 			intr_count = intr_get_count(ich, cpu_idx);
 			if (kcpuset_isset(assigned, cpu_idx)) {
 				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", intr_count);
@@ -182,11 +181,11 @@ intrctl_affinity(void *data)
 	mutex_enter(&cpu_lock);
 	ich = intr_get_handler(iset->intrid);
 	if (ich == NULL) {
-		error = EINVAL;
-		goto out;
+		mutex_exit(&cpu_lock);
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
 	}
 	error = intr_distribute(ich, kcpuset, NULL);
-out:
 	mutex_exit(&cpu_lock);
 
 	kcpuset_destroy(kcpuset);
@@ -214,8 +213,6 @@ intr_shield_xcall(void *arg1, void *arg2)
 	else if (shield == SET_NOINTR_SHIELD)
 		spc->spc_flags |= SPCF_NOINTR;
 	splx(s);
-
-	return;
 }
 
 static int
@@ -225,11 +222,10 @@ intr_shield(u_int cpu_idx, int shield)
 	struct schedstate_percpu *spc;
 
 	ci = cpu_lookup(cpu_idx);
-	if (ci == NULL) {
+	if (ci == NULL)
 		return EINVAL;
-	}
-	spc = &ci->ci_schedstate;
 
+	spc = &ci->ci_schedstate;
 	if (shield == UNSET_NOINTR_SHIELD) {
 		if ((spc->spc_flags & SPCF_NOINTR) == 0)
 			return 0;
@@ -256,10 +252,10 @@ intr_avert_intr(u_int cpu_idx)
 {
 	kcpuset_t *cpuset;
 	void *ich;
+	char **ids;
+	int nids;
 	int error;
 	int i;
-	int nids;
-	char **ids;
 
 	KASSERT(mutex_owned(&cpu_lock));
 

@@ -458,10 +458,10 @@ intr_get_io_intrsource(const char *intrid)
 struct intrsource *
 intr_allocate_io_intrsource(const char *intrid)
 {
-	struct intrsource *isp;
-	struct percpu_evcnt *pep;
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
+	struct intrsource *isp;
+	struct percpu_evcnt *pep;
 
 	if (intrid == NULL)
 		return NULL;
@@ -501,8 +501,6 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 	kmem_free(isp->is_saved_evcnt,
 	    sizeof(*(isp->is_saved_evcnt)) * ncpuonline);
 	kmem_free(isp, sizeof(*isp));
-
-	return;
 }
 
 void
@@ -517,7 +515,7 @@ intr_free_io_intrsource(const char *intrid)
 		return;
 	}
 
-	return intr_free_io_intrsource_direct(isp);
+	intr_free_io_intrsource_direct(isp);
 }
 
 static int
@@ -1357,8 +1355,8 @@ softint_init_md(lwp_t *l, u_int level, uintptr_t *machdep)
 static void
 intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
 {
-	uint64_t curcnt;
 	struct percpu_evcnt *pep;
+	uint64_t curcnt;
 	int i;
 
 	curcnt = source->is_evcnt.ev_count;
@@ -1626,13 +1624,13 @@ intr_find_unused_slot(struct cpu_info *ci, struct pic *pic, int *index)
 static void
 intr_activate_xcall(void *arg1, void *arg2)
 {
+	struct cpu_info *ci;
 	struct intrsource *source;
 	struct intrstub *stubp;
 	struct intrhand *ih;
-	struct cpu_info *ci;
+	u_long psl;
 	int idt_vec;
 	int slot;
-	u_long psl;
 
 	ih = arg1;
 
@@ -1650,8 +1648,7 @@ intr_activate_xcall(void *arg1, void *arg2)
 
 	if (source->is_type == IST_LEVEL) {
 		stubp = &source->is_pic->pic_level_stubs[slot];
-	}
-	else {
+	} else {
 		stubp = &source->is_pic->pic_edge_stubs[slot];
 	}
 	source->is_resume = stubp->ist_resume;
@@ -1665,8 +1662,8 @@ intr_activate_xcall(void *arg1, void *arg2)
 static void
 intr_deactivate_xcall(void *arg1, void *arg2)
 {
-	struct intrhand *ih, *lih;
 	struct cpu_info *ci;
+	struct intrhand *ih, *lih;
 	u_long psl;
 	int slot;
 
@@ -1693,8 +1690,8 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 static void
 intr_get_affinity(void *ich, kcpuset_t *cpuset)
 {
-	struct intrsource *isp;
 	struct cpu_info *ci;
+	struct intrsource *isp;
 
 	if (ich == NULL) {
 		kcpuset_zero(cpuset);
@@ -1715,10 +1712,10 @@ intr_get_affinity(void *ich, kcpuset_t *cpuset)
 static int
 intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 {
+	struct cpu_info *oldci, *newci;
 	struct intrsource *isp;
 	struct intrhand *ih, *lih;
 	struct pic *pic;
-	struct cpu_info *oldci, *newci;
 	u_int cpu_idx;
 	int idt_vec;
 	int oldslot, newslot;
@@ -1737,7 +1734,7 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 		return EINVAL;
 	}
 	if ((newci->ci_schedstate.spc_flags & SPCF_NOINTR) != 0) {
-		printf("set nointr shield cpu index:%u\n", cpu_idx);
+		printf("the cpu is set nointr shield. index:%u\n", cpu_idx);
 		return EINVAL;
 	}
 
@@ -1754,16 +1751,9 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	}
 
 	ih = isp->is_handlers;
-	if (ih == NULL) {
-		printf("intrid %s has no handler\n", isp->is_intrid);
-		return ENOENT;
-	}
-
 	oldci = ih->ih_cpu;
-	if (newci == oldci) {
-		/* nothing to do */
+	if (newci == oldci) /* nothing to do */
 		return 0;
-	}
 
 	oldslot = ih->ih_slot;
 	idt_vec = isp->is_idtvec;
@@ -1779,16 +1769,15 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	(*pic->pic_hwmask)(pic, pin); /* for ci_ipending check */
 	if (oldci->ci_ipending & (1 << oldslot)) {
 		(*pic->pic_hwunmask)(pic, pin);
-		printf("there are pending interrupts to pin on cpuid %ld: %d\n ",
-		       oldci->ci_cpuid, pin);
+		printf("pin %d on cpuid %ld has pending interrupts.\n",
+		    pin, oldci->ci_cpuid);
 		return EBUSY;
 	}
 
 	/* deactivate old interrupt setting */
 	if (oldci == curcpu() || !mp_online) {
 		intr_deactivate_xcall(ih, NULL);
-	}
-	else {
+	} else {
 		uint64_t where;
 		where = xc_unicast(0, intr_deactivate_xcall, ih,
 				   NULL, oldci);
@@ -1806,8 +1795,7 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	}
 	if (newci == curcpu() || !mp_online) {
 		intr_activate_xcall(ih, NULL);
-	}
-	else {
+	} else {
 		uint64_t where;
 		where = xc_unicast(0, intr_activate_xcall, ih,
 				   NULL, newci);
@@ -1844,9 +1832,9 @@ intr_get_handler(const char *intrid)
 uint64_t
 intr_get_count(void *ich, u_int cpu_idx)
 {
-	struct percpu_evcnt pep;
-	struct intrsource *isp;
 	struct cpu_info *ci;
+	struct intrsource *isp;
+	struct percpu_evcnt pep;
 	cpuid_t cpuid;
 	int i;
 
@@ -1871,8 +1859,9 @@ void
 intr_get_assigned(void *ich, kcpuset_t *cpuset)
 {
 	struct cpu_info *ci;
-	struct intrsource *isp = ich;
+	struct intrsource *isp;
 
+	isp = ich;
 	ci = isp->is_handlers->ih_cpu;
 	KASSERT(ci != NULL);
 
@@ -1897,15 +1886,16 @@ intr_get_available(kcpuset_t *cpuset)
 char *
 intr_get_devname(void *ich)
 {
-	struct intrsource *isp = ich;
+	struct intrsource *isp;
 
+	isp = ich;
 	return isp->is_xname;
 }
 
 int
 intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
 {
-	if(oldset != NULL) {
+	if (oldset != NULL) {
 		intr_get_affinity(ich, oldset);
 	}
 
@@ -1930,14 +1920,12 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		if (intr_is_affinity_intrsource(isp, cpuset))
 			(*count)++;
 	}
-	if (*count == 0) {
+	if (*count == 0)
 		return 0;
-	}
 
 	ids = kmem_zalloc(sizeof(char*) * (*count), KM_SLEEP);
-	if (ids == NULL) {
+	if (ids == NULL)
 		return ENOMEM;
-	}
 
 	i = 0;
 	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {

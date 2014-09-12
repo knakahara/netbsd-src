@@ -114,14 +114,12 @@ intr_list(int argc, char **argv)
 	int error;
 
 	buf = malloc(INTR_LIST_BUFSIZE);
-	if (buf == NULL) {
+	if (buf == NULL)
 		err(EXIT_FAILURE, "malloc");
-	}
 
 	error = ioctl(fd, IOC_INTR_LIST, buf);
-	if (error < 0) {
+	if (error < 0)
 		err(EXIT_FAILURE, "IOC_INTR_LIST");
-	}
 
 	printf("%s", buf);
 	free(buf);
@@ -169,9 +167,9 @@ intr_affinity(int argc, char **argv)
 	iset.cpuset = cpuset;
 	iset.cpuset_size = cpuset_size(cpuset);
 	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
-	if (error < 0) {
+	cpuset_destroy(cpuset);
+	if (error < 0)
 		err(EXIT_FAILURE, "IOC_INTR_AFFINITY");
-	}
 }
 
 static void
@@ -211,9 +209,8 @@ intr_intr(int argc, char **argv)
 	iset.cpuset_size = cpuset_size(cpuset);
 	error = ioctl(fd, IOC_INTR_INTR, &iset);
 	cpuset_destroy(cpuset);
-	if (error < 0) {
+	if (error < 0)
 		err(EXIT_FAILURE, "IOC_INTR_INTR");
-	}
 }
 
 static void
@@ -252,6 +249,7 @@ intr_nointr(int argc, char **argv)
 	iset.cpuset = cpuset;
 	iset.cpuset_size = cpuset_size(cpuset);
 	error = ioctl(fd, IOC_INTR_NOINTR, &iset);
+	cpuset_destroy(cpuset);
 	if (error < 0) {
 		err(EXIT_FAILURE, "IOC_INTR_NOINTR");
 	}
