@@ -1431,6 +1431,9 @@ file	kern/kern_drvctl.c		drvctl		needs-flag
 defpseudo cpuctl
 defflag				CPU_UCODE: firmload
 
+# interrupt control
+defpseudo intrctl
+
 # pass-to-userspace transporter
 defpseudo putter
 file	dev/putter/putter.c		putter
@@ -1617,6 +1620,7 @@ file	kern/subr_exec_fd.c
 file	kern/subr_extent.c
 file	kern/subr_hash.c
 file	kern/subr_humanize.c
+file	kern/subr_intr.c
 file	kern/subr_iostat.c
 file	kern/subr_ipi.c
 file	kern/subr_kcpuset.c
