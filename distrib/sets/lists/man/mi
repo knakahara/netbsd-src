@@ -2536,6 +2536,7 @@
 ./usr/share/man/cat8/inetd.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/init.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/installboot.0		man-sysutil-catman	.cat
+./usr/share/man/cat8/intrctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/intro.0			man-sys-catman		.cat
 ./usr/share/man/cat8/iopctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/iostat.0			man-sysutil-catman	.cat
@@ -5403,6 +5404,7 @@
 ./usr/share/man/html8/inetd.html		man-netutil-htmlman	html
 ./usr/share/man/html8/init.html			man-sysutil-htmlman	html
 ./usr/share/man/html8/installboot.html		man-sysutil-htmlman	html
+./usr/share/man/html8/intrctl.html		man-sysutil-htmlman	html
 ./usr/share/man/html8/intro.html		man-sys-htmlman		html
 ./usr/share/man/html8/iopctl.html		man-sysutil-htmlman	html
 ./usr/share/man/html8/iostat.html		man-sysutil-htmlman	html
@@ -8414,6 +8416,7 @@
 ./usr/share/man/man8/inetd.8			man-netutil-man		.man
 ./usr/share/man/man8/init.8			man-sysutil-man		.man
 ./usr/share/man/man8/installboot.8		man-sysutil-man		.man
+./usr/share/man/man8/intrctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/intro.8			man-sys-man		.man
 ./usr/share/man/man8/iopctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/iostat.8			man-sysutil-man		.man

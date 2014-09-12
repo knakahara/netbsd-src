@@ -35,6 +35,7 @@
 #ifdef _KERNEL
 
 #include <sys/types.h>
+#include <sys/kcpuset.h>
 
 struct cpu_info;
 
@@ -56,6 +57,15 @@ void	softint_init_md(lwp_t *, u_int, uintptr_t *);
 void	softint_trigger(uintptr_t);
 #endif
 void	softint_dispatch(lwp_t *, int);
+
+void		*intr_get_handler(const char *);
+uint64_t	intr_get_count(void *, u_int);
+void		intr_get_assigned(void *, kcpuset_t *);
+void		intr_get_available(kcpuset_t *);
+char		*intr_get_devname(void *);
+int		intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
+int		intr_construct_intrids(const kcpuset_t *, char ***, int *);
+void		intr_destruct_intrids(char **, int);
 
 /* Flags for softint_establish(). */
 #define	SOFTINT_BIO	0x0000
