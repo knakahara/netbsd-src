@@ -144,19 +144,13 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/kernel.h>
 #include <sys/syslog.h>
 #include <sys/device.h>
+#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/errno.h>
 #include <sys/intr.h>
 #include <sys/cpu.h>
 #include <sys/atomic.h>
 #include <sys/xcall.h>
-#include <sys/sysctl.h>
-
-#include <sys/stat.h>
-#include <sys/dirent.h>
-#include <sys/malloc.h>
-#include <sys/vnode.h>
-#include <miscfs/kernfs/kernfs.h>
 
 #include <sys/intrio.h>
 #include <sys/kauth.h>
@@ -730,8 +724,8 @@ intr_findpic(int num)
 static int
 intr_append_intrsource_xname(struct intrsource *isp, const char *xname)
 {
-	size_t len;
 	char *new;
+	size_t len;
 
 	/* 16 is same as device_xname(struct device) */
 	KASSERT(strlen(xname) < 16);
@@ -739,19 +733,18 @@ intr_append_intrsource_xname(struct intrsource *isp, const char *xname)
 	if (isp->is_xname == NULL) {
 		len = strlen(xname);
 		new = kmem_zalloc(len + 1, KM_SLEEP);
-		if (new == NULL) {
+		if (new == NULL)
 			return ENOMEM;
-		}
+
 		strncpy(new, xname, len);
 		isp->is_xname = new;
 		return 0;
-	}
-	else {
+	} else {
 		len = strlen(isp->is_xname) + strlen(xname) + 2;
 		new = kmem_zalloc(len + 1, KM_SLEEP);
-		if (new == NULL) {
+		if (new == NULL)
 			return ENOMEM;
-		}
+
 		snprintf(new, len + 1, "%s, %s", isp->is_xname, xname);
 		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
 		isp->is_xname = new;
@@ -1058,13 +1051,12 @@ intr_disestablish_xcall(void *arg1, void *arg2)
 static int
 intr_num_handlers(struct intrsource *isp)
 {
-	int num = 0;
-
 	struct intrhand *ih;
+	int num;
 
-	for (ih = isp->is_handlers; ih != NULL; ih = ih->ih_next) {
+	num = 0;
+	for (ih = isp->is_handlers; ih != NULL; ih = ih->ih_next)
 		num++;
-	}
 
 	return num;
 }
@@ -1076,8 +1068,8 @@ void
 intr_disestablish(struct intrhand *ih)
 {
 	struct cpu_info *ci;
-	uint64_t where;
 	struct intrsource *isp;
+	uint64_t where;
 
 	/*
 	 * Count the removal for load balancing.

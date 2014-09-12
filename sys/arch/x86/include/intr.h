@@ -93,10 +93,10 @@ struct intrsource {
 	int is_idtvec;
 	int is_minlevel;
 	char is_evname[32];		/* event counter name */
-	char *is_xname;			/* device name */
-	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
-	cpuid_t is_active_cpu;		/* active cpuid */
 	char is_intrid[INTRID_LEN + 1];	/* intrid created by create_intrid() */
+	char *is_xname;			/* device name */
+	cpuid_t is_active_cpu;		/* active cpuid */
+	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
 	LIST_ENTRY(intrsource) is_list;	/* link of intrsources */
 };
 
@@ -194,7 +194,6 @@ void cpu_intr_init(struct cpu_info *);
 int intr_find_mpmapping(int, int, int *);
 struct pic *intr_findpic(int);
 void intr_printconfig(void);
-void print_intrsource_list(void);
 
 struct intrsource *intr_allocate_io_intrsource(const char *);
 void intr_free_io_intrsource(const char *);

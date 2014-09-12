@@ -36,7 +36,6 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/cpu.h>
 #include <sys/intr.h>
 #include <sys/kcpuset.h>
-#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/xcall.h>
 
@@ -45,7 +44,6 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/kauth.h>
 
 #include <machine/limits.h>
-
 
 void	intrctlattach(int);
 
