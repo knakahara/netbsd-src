@@ -77,10 +77,10 @@ struct ioapic_softc {
 #define APIC_INT_PIN_MASK	0x0000ff00
 #define APIC_INT_PIN_SHIFT	8
 
-#define APIC_IRQ_APIC(x) ((x & APIC_INT_APIC_MASK) >> APIC_INT_APIC_SHIFT)
-#define APIC_IRQ_PIN(x) ((x & APIC_INT_PIN_MASK) >> APIC_INT_PIN_SHIFT)
-#define APIC_IRQ_ISLEGACY(x) (!((x) & APIC_INT_VIA_APIC))
-#define APIC_IRQ_LEGACY_IRQ(x) ((x) & 0xff)
+#define APIC_IRQ_APIC(x) (((int)(x) & APIC_INT_APIC_MASK) >> APIC_INT_APIC_SHIFT)
+#define APIC_IRQ_PIN(x) (((int)(x) & APIC_INT_PIN_MASK) >> APIC_INT_PIN_SHIFT)
+#define APIC_IRQ_ISLEGACY(x) (!((int)(x) & APIC_INT_VIA_APIC))
+#define APIC_IRQ_LEGACY_IRQ(x) ((int)(x) & 0xff)
 
 void ioapic_print_redir(struct ioapic_softc *, const char *, int);
 void ioapic_format_redir(char *, const char *, int, uint32_t, uint32_t);
