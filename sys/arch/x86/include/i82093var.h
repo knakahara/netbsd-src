@@ -68,10 +68,14 @@ struct ioapic_softc {
  * (ih&0xff0000)>>16 -> ioapic id.
  * (ih&0x00ff00)>>8 -> ioapic pin.
  *
+ * (ih&0x000ff80000000000)>>43 -> MSI/MSI-X device id.
+ * (ih&0x000007ff00000000)>>32 -> MSI/MSI-X vector id in a device.
+ *
  * 0x80000000 is used by pci_intr_machdep.c for MPSAFE_MASK
  */
 
 #define APIC_INT_VIA_APIC	0x10000000
+#define APIC_INT_VIA_MSG	0x20000000
 #define APIC_INT_APIC_MASK	0x00ff0000
 #define APIC_INT_APIC_SHIFT	16
 #define APIC_INT_PIN_MASK	0x0000ff00
@@ -81,6 +85,18 @@ struct ioapic_softc {
 #define APIC_IRQ_PIN(x) (((int)(x) & APIC_INT_PIN_MASK) >> APIC_INT_PIN_SHIFT)
 #define APIC_IRQ_ISLEGACY(x) (!((int)(x) & APIC_INT_VIA_APIC))
 #define APIC_IRQ_LEGACY_IRQ(x) ((int)(x) & 0xff)
+
+#define MSI_INT_MSIX		0x1000000000000000UL
+#define MSI_INT_DEV_MASK	0x000ff80000000000UL
+#define MSI_INT_DEV_SHIFT	43
+#define MSI_INT_VEC_MASK	0x000007ff00000000UL
+#define MSI_INT_VEC_SHIFT	32
+
+#define MSI_INT_IS_MSIX(x) ((bool)((x & MSI_INT_MSIX) != 0))
+#define MSI_INT_MAKE_MSI(x) (x |= ~MSI_INT_MSIX)
+#define MSI_INT_MAKE_MSIX(x) (x &= MSI_INT_MSIX)
+#define MSI_INT_DEV(x) ((x & MSI_INT_DEV_MASK) >> MSI_INT_DEV_SHIFT)
+#define MSI_INT_VEC(x) ((x & MSI_INT_VEC_MASK) >> MSI_INT_VEC_SHIFT)
 
 void ioapic_print_redir(struct ioapic_softc *, const char *, int);
 void ioapic_format_redir(char *, const char *, int, uint32_t, uint32_t);
