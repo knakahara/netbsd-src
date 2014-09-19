@@ -426,6 +426,21 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 {
 	int ih;
 
+	if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX) {
+		uint64_t pih;
+		int dev, vec;
+
+		dev = msi_get_devid(pic);
+		vec = msi_get_vecid(pic);
+		pih = (dev << MSI_INT_DEV_SHIFT) | (vec << MSI_INT_VEC_SHIFT);
+		if (pic->pic_type == PCI_MSI)
+			MSI_INT_MAKE_MSI(pih);
+		else if (pic->pic_type == PCI_MSIX)
+			MSI_INT_MAKE_MSIX(pih);
+
+		return msi_string(pih, buf, len);
+	}
+
 	ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
 		((pin << APIC_INT_PIN_SHIFT) & APIC_INT_PIN_MASK);
 	if (pic->pic_type == PIC_IOAPIC) {
@@ -1105,7 +1120,6 @@ intr_string(int ih, char *buf, size_t len)
 
 	if (ih == 0)
 		panic("%s: bogus handle 0x%x", __func__, ih);
-
 
 #if NIOAPIC > 0
 	if (ih & APIC_INT_VIA_APIC) {

@@ -22,6 +22,7 @@ struct pic {
 	struct intrstub *pic_level_stubs;
 	struct intrstub *pic_edge_stubs;
 	struct ioapic_softc *pic_ioapic; /* if pic_type == PIC_IOAPIC */
+	struct msipic *pic_msipic; /* if (pic_type == PIC_MSI) || (pic_type == PIC_MSIX) */
 };
 
 /*
