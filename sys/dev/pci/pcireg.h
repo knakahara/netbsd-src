@@ -639,7 +639,9 @@ typedef u_int8_t pci_revision_t;
 #define	PCI_MSI_CTL_PERVEC_MASK	__SHIFTIN(__BIT(8), PCI_MSI_CTL_MASK)
 #define	PCI_MSI_CTL_64BIT_ADDR	__SHIFTIN(__BIT(7), PCI_MSI_CTL_MASK)
 #define	PCI_MSI_CTL_MME_MASK	__SHIFTIN(__BITS(6, 4), PCI_MSI_CTL_MASK)
+#define	PCI_MSI_CTL_MME(reg)	((reg & PCI_MSI_CTL_MME_MASK) >> 4)
 #define	PCI_MSI_CTL_MMC_MASK	__SHIFTIN(__BITS(3, 1), PCI_MSI_CTL_MASK)
+#define	PCI_MSI_CTL_MMC(reg)	((reg & PCI_MSI_CTL_MMC_MASK) >> 1)
 #define	PCI_MSI_CTL_MSI_ENABLE	__SHIFTIN(__BIT(0), PCI_MSI_CTL_MASK)
 
 /*
@@ -1054,13 +1056,18 @@ typedef u_int8_t pci_revision_t;
 #define	PCI_MSIX_PBAOFFSET_MASK	0xfffffff8
 #define	PCI_MSIX_PBABIR_MASK	0x00000007
 
+#define PCI_MSIX_TABLE_ENTRY_SIZE	16
+#define PCI_MSIX_TABLE_ENTRY_ADDR_LO	0x0
+#define PCI_MSIX_TABLE_ENTRY_ADDR_HI	0x4
+#define PCI_MSIX_TABLE_ENTRY_DATA	0x8
+#define PCI_MSIX_TABLE_ENTRY_VECTCTL	0xc
 struct pci_msix_table_entry {
 	uint32_t pci_msix_addr_lo;
 	uint32_t pci_msix_addr_hi;
 	uint32_t pci_msix_value;
-	uint32_t pci_msix_vendor_control;
+	uint32_t pci_msix_vector_control;
 };
-#define	PCI_MSIX_VENDCTL_MASK	0x00000001
+#define	PCI_MSIX_VECTCTL_MASK	0x00000001
 
 
 /*

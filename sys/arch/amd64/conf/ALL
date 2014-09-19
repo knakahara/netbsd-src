@@ -418,6 +418,7 @@ applesmcfan*	at applesmcbus?
 applesmctemp*	at applesmcbus?
 
 # PCI bus support
+#options 	PCI_MSI_ASSIGN_RR	# assign MSI to CPU round-robin
 pci*	at mainbus? bus ?
 pci*	at pchb? bus ?
 pci*	at ppb? bus ?

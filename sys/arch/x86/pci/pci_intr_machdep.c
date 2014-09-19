@@ -336,6 +336,7 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 	intr_disestablish(cookie);
 }
 
+#if 0
 #if NIOAPIC > 0
 /*
  * experimental support for MSI, does support a single vector,
@@ -343,7 +344,6 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
  * (while it doesn't need the ioapic technically, it borrows
  * from its kernel support)
  */
-
 /* dummies, needed by common intr_establish code */
 static void
 msipic_hwmask(struct pic *pic, int pin)
@@ -438,4 +438,5 @@ pci_msi_disestablish(void *ih)
 	intr_disestablish(msih->ih);
 	free(msih, M_DEVBUF);
 }
+#endif
 #endif

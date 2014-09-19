@@ -30,7 +30,9 @@ struct pic {
 #define PIC_I8259	0
 #define PIC_IOAPIC	1
 #define PIC_LAPIC	2
-#define PIC_SOFT	3
+#define PIC_MSI		3
+#define PIC_MSIX	4
+#define PIC_SOFT	5
 
 extern struct pic i8259_pic;
 extern struct pic local_pic;
