@@ -113,8 +113,9 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #define	MPSAFE_MASK	0x80000000
 
 int
-pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
+pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *pihp)
 {
+	int *ihp = (int *)pihp; /* IRQ interrupts use lower 32bit only */
 	int pin = pa->pa_intrpin;
 	int line = pa->pa_intrline;
 	pci_chipset_tag_t ipc, pc = pa->pa_pc;
@@ -126,7 +127,7 @@ pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_MAP) == 0)
 			continue;
-		return (*ipc->pc_ov->ov_intr_map)(ipc->pc_ctx, pa, ihp);
+		return (*ipc->pc_ov->ov_intr_map)(ipc->pc_ctx, pa, pihp);
 	}
 
 	if (pin == 0) {
