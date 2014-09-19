@@ -84,6 +84,45 @@ get_msix_table_handler(int vector)
 	return &msix_table_handlers[vector - FIRST_MSI_INT];
 }
 
+const char *
+msi_string(uint64_t ih, char *buf, size_t len)
+{
+	char *type;
+	int dev, vec;
+
+	KASSERT(INT_VIA_MSG(ih));
+
+	if (MSI_INT_IS_MSIX(ih))
+		type = "msix";
+	else
+		type = "msi";
+
+	dev = MSI_INT_DEV(ih);
+	vec = MSI_INT_VEC(ih);
+	snprintf(buf, len "%s%d vec %d", type, dev, vec);
+}
+
+struct msipic {
+	int mp_devid;
+	int mp_vecid;
+};
+
+int
+msi_get_devid(struct pic *pic)
+{
+	KASSERT(pic->pic_msipic != NULL);
+
+	return pic->pic_msipic->mp_devid;
+}
+
+int
+msi_get_vecid(struct pic *pic)
+{
+	KASSERT(pic->pic_msipic != NULL);
+
+	return pic->pic_msipic->mp_vecid;
+}
+
 #define MSI_MSICTL_ENABLE 1
 #define MSI_MSICTL_DISABLE 0
 static void

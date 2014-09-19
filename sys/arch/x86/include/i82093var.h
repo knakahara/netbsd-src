@@ -86,6 +86,8 @@ struct ioapic_softc {
 #define APIC_IRQ_ISLEGACY(x) (!((int)(x) & APIC_INT_VIA_APIC))
 #define APIC_IRQ_LEGACY_IRQ(x) ((int)(x) & 0xff)
 
+#define INT_VIA_MSG(x) ((x & APIC_INT_VIA_MSG) != 0)
+
 #define MSI_INT_MSIX		0x1000000000000000UL
 #define MSI_INT_DEV_MASK	0x000ff80000000000UL
 #define MSI_INT_DEV_SHIFT	43
