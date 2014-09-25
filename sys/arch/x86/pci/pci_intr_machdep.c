@@ -110,8 +110,6 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include <machine/mpacpi.h>
 #endif
 
-#define	MPSAFE_MASK	0x80000000
-
 int
 pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *pihp)
 {
@@ -226,7 +224,7 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 {
 	pci_chipset_tag_t ipc;
 
-	if (INT_VIA_MSG(ih))
+	if (INT_VIA_MSI(ih))
 		return msi_string(ih, buf, len);
 
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {

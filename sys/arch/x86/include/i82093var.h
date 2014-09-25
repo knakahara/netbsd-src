@@ -70,12 +70,11 @@ struct ioapic_softc {
  *
  * (ih&0x000ff80000000000)>>43 -> MSI/MSI-X device id.
  * (ih&0x000007ff00000000)>>32 -> MSI/MSI-X vector id in a device.
- *
- * 0x80000000 is used by pci_intr_machdep.c for MPSAFE_MASK
  */
+#define	MPSAFE_MASK		0x80000000
 
 #define APIC_INT_VIA_APIC	0x10000000
-#define APIC_INT_VIA_MSG	0x20000000
+#define APIC_INT_VIA_MSI	0x20000000
 #define APIC_INT_APIC_MASK	0x00ff0000
 #define APIC_INT_APIC_SHIFT	16
 #define APIC_INT_PIN_MASK	0x0000ff00
@@ -86,7 +85,7 @@ struct ioapic_softc {
 #define APIC_IRQ_ISLEGACY(x) (!((int)(x) & APIC_INT_VIA_APIC))
 #define APIC_IRQ_LEGACY_IRQ(x) ((int)(x) & 0xff)
 
-#define INT_VIA_MSG(x) ((x & APIC_INT_VIA_MSG) != 0)
+#define INT_VIA_MSI(x) ((x & APIC_INT_VIA_MSI) != 0)
 
 #define MSI_INT_MSIX		0x1000000000000000UL
 #define MSI_INT_DEV_MASK	0x000ff80000000000UL

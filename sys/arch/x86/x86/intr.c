@@ -565,6 +565,21 @@ intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
 	return vectors;
 }
 
+void
+intr_free_msi_vectors(struct pic *msi_pic, int count)
+{
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+	int i;
+
+	mutex_enter(&cpu_lock);
+	for (i = 0; i < count; i++) {
+		intrstr = create_intrid(i, msi_pic, intrstr_buf, sizeof(intrstr_buf));
+		intr_free_io_intrsource(intrstr);
+	}
+	mutex_exit(&cpu_lock);
+}
+
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		       int *index, struct intrsource *chained)
@@ -896,8 +911,15 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 	/* allocate intrsource pool, if not yet. */
 	chained = intr_get_io_intrsource(intrstr);
 	if (chained == NULL) {
+		if (is_msi_pic(pic)) {
+			mutex_exit(&cpu_lock);
+			printf("%s: %s has no intrsource\n", __func__, intrstr);
+			return NULL;
+		}
+
 		chained = intr_allocate_io_intrsource(intrstr);
 		if (chained == NULL) {
+			mutex_exit(&cpu_lock);
 			printf("%s: can't allocate io_intersource\n", __func__);
 			return NULL;
 		}
@@ -1140,7 +1162,7 @@ intr_disestablish(struct intrhand *ih)
 		where = xc_unicast(0, intr_disestablish_xcall, ih, NULL, ci);
 		xc_wait(where);
 	}	
-	if (intr_num_handlers(isp) < 1) {
+	if (!is_msi_pic(isp->is_pic) && intr_num_handlers(isp) < 1) {
 		intr_free_io_intrsource_direct(isp);
 	}
 	mutex_exit(&cpu_lock);
