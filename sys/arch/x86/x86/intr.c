@@ -431,11 +431,12 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 		int dev, vec;
 
 		dev = msi_get_devid(pic);
-		vec = msi_get_vecid(pic);
-		pih = (dev << MSI_INT_DEV_SHIFT) | (vec << MSI_INT_VEC_SHIFT);
-		if (pic->pic_type == PCI_MSI)
+		vec = pin;
+		pih = ((uint64_t)dev << MSI_INT_DEV_SHIFT) |
+			((uint64_t)vec << MSI_INT_VEC_SHIFT);
+		if (pic->pic_type == PIC_MSI)
 			MSI_INT_MAKE_MSI(pih);
-		else if (pic->pic_type == PCI_MSIX)
+		else if (pic->pic_type == PIC_MSIX)
 			MSI_INT_MAKE_MSIX(pih);
 
 		return msi_string(pih, buf, len);
@@ -526,6 +527,42 @@ intr_free_io_intrsource(const char *intrid)
 	}
 
 	intr_free_io_intrsource_direct(isp);
+}
+
+uint64_t *
+intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
+{
+	struct intrsource *isp;
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+	uint64_t *vectors;
+	int i;
+
+	/* XXXXX fallback to power of 2 count */
+
+	vectors = kmem_zalloc(sizeof(int) * (*count), KM_SLEEP);
+	if (vectors == NULL) {
+		printf("cannot allocate vectors\n");
+		return NULL;
+	}
+
+	mutex_enter(&cpu_lock);
+	for (i = 0; i < *count; i++) {
+		intrstr = create_intrid(i, msi_pic, intrstr_buf, sizeof(intrstr_buf));
+		KASSERT(intrstr != NULL);
+
+		isp = intr_allocate_io_intrsource(intrstr);
+		if (isp == NULL) {
+			printf("%s: can't allocate io_intersource\n", __func__);
+			return NULL;
+		}
+
+		vectors[i] = ((uint64_t)msi_get_devid(msi_pic) << MSI_INT_DEV_SHIFT) |
+			((uint64_t)i << MSI_INT_VEC_SHIFT);
+	}
+	mutex_exit(&cpu_lock);
+
+	return vectors;
 }
 
 static int

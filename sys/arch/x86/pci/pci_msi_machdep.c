@@ -36,6 +36,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/errno.h>
 #include <sys/device.h>
 #include <sys/intr.h>
+#include <sys/kmem.h>
 #include <sys/malloc.h>
 
 #include <dev/pci/pcivar.h>
@@ -48,18 +49,24 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
 
+/* XXXX */
+#define NUM_MSI_INTS 512
+#define FIRST_MSI_INT 256
 static struct pci_attach_args msi_pci_attach_args[NUM_MSI_INTS];
+#if 0
 static void
 set_msi_pci_attach_args(int vector, struct pci_attach_args *pa)
 {
 	memcpy(&msi_pci_attach_args[vector - FIRST_MSI_INT], pa, sizeof(*pa));
 }
+#endif
 static struct pci_attach_args *
 get_msi_pci_attach_args(int vector)
 {
 	return &msi_pci_attach_args[vector - FIRST_MSI_INT];
 }
 
+#if 0
 struct msix_table_handler {
 	int mth_table_index;
 	bus_space_tag_t mth_tag;
@@ -83,28 +90,34 @@ get_msix_table_handler(int vector)
 {
 	return &msix_table_handlers[vector - FIRST_MSI_INT];
 }
+#endif
 
 const char *
 msi_string(uint64_t ih, char *buf, size_t len)
 {
-	char *type;
 	int dev, vec;
 
 	KASSERT(INT_VIA_MSG(ih));
 
-	if (MSI_INT_IS_MSIX(ih))
-		type = "msix";
-	else
-		type = "msi";
-
 	dev = MSI_INT_DEV(ih);
 	vec = MSI_INT_VEC(ih);
-	snprintf(buf, len "%s%d vec %d", type, dev, vec);
+	if (MSI_INT_IS_MSIX(ih))
+		snprintf(buf, len, "msix%d vec %d", dev, vec);
+	else
+		snprintf(buf, len, "msi%d vec %d", dev, vec);
+
+	return buf;
 }
 
 struct msipic {
+	u_int mp_bus;
+	u_int mp_device;
+	u_int mp_function;
+
 	int mp_devid;
 	int mp_vecid;
+	struct pic *mp_pic;
+	LIST_ENTRY(msipic) mp_list;
 };
 
 int
@@ -203,7 +216,7 @@ msi_delroute(struct pic *pic, struct cpu_info *ci,
 	msi_hwmask(pic, pin);
 }
 
-static struct pic msi_pic = {
+static struct pic msi_pic_tmpl = {
 	.pic_name = "msi",
 	.pic_type = PIC_MSI,
 	.pic_vecbase = 0,
@@ -214,7 +227,58 @@ static struct pic msi_pic = {
 	.pic_addroute = msi_addroute,
 	.pic_delroute = msi_delroute,
 	.pic_edge_stubs = ioapic_edge_stubs,
+	.pic_ioapic = NULL,
 };
+
+static LIST_HEAD(, msipic) msipic_list =
+	LIST_HEAD_INITIALIZER(msipic_list);
+
+struct pic *
+find_msi_pic(struct pci_attach_args *pa)
+{
+	struct msipic *mpp;
+
+	LIST_FOREACH(mpp, &msipic_list, mp_list) {
+		if (mpp->mp_bus == pa->pa_bus &&
+		    mpp->mp_device == pa->pa_device &&
+		    mpp->mp_function == pa->pa_function) {
+			return mpp->mp_pic;
+		}
+	}
+	return NULL;
+}
+
+struct pic *
+create_msi_pic(struct pci_attach_args *pa)
+{
+	struct pic *pic;
+	struct msipic *msipic;
+	static int dev_seq = 0;
+
+	pic = kmem_zalloc(sizeof(*pic), KM_SLEEP);
+	if (pic == NULL) {
+		return NULL;
+	}
+	memcpy(pic, &msi_pic_tmpl, sizeof(*pic));
+
+	msipic = kmem_zalloc(sizeof(*msipic), KM_SLEEP);
+	if (msipic == NULL) {
+		kmem_free(pic, sizeof(*msipic));
+		return NULL;
+	}
+
+	pic->pic_msipic = msipic;
+	msipic->mp_pic = pic;
+
+	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
+
+	msipic->mp_devid = dev_seq;
+	dev_seq++;
+
+	return pic;
+}
+
+#ifdef NOTYET
 
 #define MSIX_VECCTL_HWMASK 1
 #define MSIX_VECCTL_HWUNMASK 0
@@ -339,27 +403,37 @@ static struct pic msix_pic = {
 	.pic_edge_stubs = ioapic_edge_stubs,
 };
 
+#endif /* NOTYET */
+
 /* XXXX tentative function name */
 static int
 pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
-	int *vectors;
-	int i;
+	struct pic *msi_pic;
+	uint64_t *vectors;
 
-	vectors = intr_allocate_msi_vectors(count);
-	if (vectors == NULL) {
-		aprint_normal("cannot allocate MSI vectors.\n");
+	/*
+	 * pci_msi_alloc() must be called only ont time in the device driver.
+	 */
+	KASSERT(find_msi_pic(pa) == NULL);
+
+	msi_pic = create_msi_pic(pa);
+	if (msi_pic == NULL) {
+		aprint_normal("cannot allocate MSI pic.\n");
 		return 1;
 	}
 
-	for (i = 0; i < *count; i++) {
-		set_msi_pci_attach_args(vectors[i], pa);
+	vectors = intr_allocate_msi_vectors(msi_pic, count);
+	if (vectors == NULL) {
+		aprint_normal("cannot allocate MSI vectors.\n");
+		return 1;
 	}
 
 	*ihps = vectors;
 	return 0;
 }
 
+#ifdef NOTYET
 static void
 pci_msi_release_md(void **cookies, int count)
 {
@@ -457,6 +531,7 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 	*ihps = vectors;
 	return 0;
 }
+#endif /* NOTYET */
 
 /*****************************************************************************/
 /*
@@ -527,6 +602,7 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 	return pci_msi_alloc_md(ihps, count, pa);
 }
 
+#ifdef NOTYET
 void
 pci_msi_release(void **cookie, int count)
 {
@@ -550,7 +626,9 @@ pci_msi_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
 	pci_msi_common_disestablish(pc, cookie);
 }
+#endif /* NOTYET */
 
+#ifdef NOTYET
 /*
  * return number of the devices's MSI-X vectors
  * return 0 if the device does not support MSI-X
@@ -620,5 +698,6 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
 	pci_msi_common_disestablish(pc, cookie);
 }
+#endif /* NOTYET */
 
 /* XXXX not yet implement MSI-X remap */
