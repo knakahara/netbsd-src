@@ -214,7 +214,12 @@ struct vmxnet3_rxcompdesc {
 #define VMXNET3_MAX_TX_QUEUES 8
 #define VMXNET3_MAX_RX_QUEUES 16
 #define VMXNET3_MAX_INTRS (VMXNET3_MAX_TX_QUEUES + VMXNET3_MAX_RX_QUEUES + 1)
-#define VMXNET3_NINTR 1
+#define TRY_MSIX
+
+#define VMXNET3_NINTR 3
+#define VMXNET3_RX_INTR_INDEX 0
+#define VMXNET3_TX_INTR_INDEX 1
+#define VMXNET3_EV_INTR_INDEX 2
 
 #define VMXNET3_ICTRL_DISABLE_ALL 0x01
 
@@ -235,6 +240,7 @@ struct vmxnet3_rxcompdesc {
 
 #define VMXNET3_IT_LEGACY 0x01
 #define VMXNET3_IT_MSI    0x02
+#define VMXNET3_IT_MSIX   0x03
 
 struct vmxnet3_driver_shared {
 	uint32_t magic;
