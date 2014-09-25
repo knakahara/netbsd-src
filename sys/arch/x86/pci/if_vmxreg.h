@@ -233,6 +233,9 @@ struct vmxnet3_rxcompdesc {
 #define VMXNET3_MAX_MTU 9000
 #define VMXNET3_MIN_MTU 60
 
+#define VMXNET3_IT_LEGACY 0x01
+#define VMXNET3_IT_MSI    0x02
+
 struct vmxnet3_driver_shared {
 	uint32_t magic;
 	uint32_t pad1;
