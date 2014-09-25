@@ -97,7 +97,7 @@ msi_string(uint64_t ih, char *buf, size_t len)
 {
 	int dev, vec;
 
-	KASSERT(INT_VIA_MSG(ih));
+	KASSERT(INT_VIA_MSI(ih));
 
 	dev = MSI_INT_DEV(ih);
 	vec = MSI_INT_VEC(ih);
@@ -107,6 +107,12 @@ msi_string(uint64_t ih, char *buf, size_t len)
 		snprintf(buf, len, "msi%d vec %d", dev, vec);
 
 	return buf;
+}
+
+bool
+is_msi_pic(struct pic *pic)
+{
+	return (pic->pic_msipic != NULL);
 }
 
 struct msipic {
@@ -233,8 +239,8 @@ static struct pic msi_pic_tmpl = {
 static LIST_HEAD(, msipic) msipic_list =
 	LIST_HEAD_INITIALIZER(msipic_list);
 
-struct pic *
-find_msi_pic(struct pci_attach_args *pa)
+static struct pic *
+find_msi_pic_by_pa(struct pci_attach_args *pa)
 {
 	struct msipic *mpp;
 
@@ -248,7 +254,19 @@ find_msi_pic(struct pci_attach_args *pa)
 	return NULL;
 }
 
-struct pic *
+static struct pic *
+find_msi_pic(int devid)
+{
+	struct msipic *mpp;
+
+	LIST_FOREACH(mpp, &msipic_list, mp_list) {
+		if(mpp->mp_devid == devid)
+			return mpp->mp_pic;
+	}
+	return NULL;
+}
+
+static struct pic *
 create_msi_pic(struct pci_attach_args *pa)
 {
 	struct pic *pic;
@@ -415,7 +433,7 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 	/*
 	 * pci_msi_alloc() must be called only ont time in the device driver.
 	 */
-	KASSERT(find_msi_pic(pa) == NULL);
+	KASSERT(find_msi_pic_by_pa(pa) == NULL);
 
 	msi_pic = create_msi_pic(pa);
 	if (msi_pic == NULL) {
@@ -433,14 +451,18 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 	return 0;
 }
 
-#ifdef NOTYET
 static void
 pci_msi_release_md(void **cookies, int count)
 {
-	int *vectors;
+	uint64_t *vectors;
+	struct pic *pic;
 
 	vectors = *cookies;
-	return intr_free_msi_vectors(vectors, count);
+	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
+	if (pic == NULL)
+		return;
+
+	intr_free_msi_vectors(pic, count);
 }
 
 static void *
@@ -450,8 +472,10 @@ pci_msi_common_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	int pin, irq;
 	bool mpsafe;
 
+	KASSERT(INT_VIA_MSI(ih));
+
 	irq = -1;
-	pin = ih & (~MPSAFE_MASK); /* hint to search pcitag_t */
+	pin = MSI_INT_VEC(ih);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
 	return intr_establish(irq, pic, pin, IST_EDGE, level, func, arg,
@@ -464,6 +488,7 @@ pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
 	intr_disestablish(cookie);
 }
 
+#ifdef NOTYET
 /* XXXX tentative function name */
 static int
 pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
@@ -602,7 +627,6 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 	return pci_msi_alloc_md(ihps, count, pa);
 }
 
-#ifdef NOTYET
 void
 pci_msi_release(void **cookie, int count)
 {
@@ -618,7 +642,15 @@ void *
 pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
     int level, int (*func)(void *), void *arg)
 {
-	return pci_msi_common_establish(pc, ih, level, func, arg, &msi_pic);
+	struct pic *pic;
+
+	pic = find_msi_pic(MSI_INT_DEV(ih));
+	if (pic == NULL) {
+		aprint_normal("pci_intr_handler has no msi_pic\n");
+		return NULL;
+	}
+
+	return pci_msi_common_establish(pc, ih, level, func, arg, pic);
 }
 
 void
@@ -626,7 +658,6 @@ pci_msi_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
 	pci_msi_common_disestablish(pc, cookie);
 }
-#endif /* NOTYET */
 
 #ifdef NOTYET
 /*

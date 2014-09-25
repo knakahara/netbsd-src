@@ -199,8 +199,8 @@ struct intrsource *intr_allocate_io_intrsource(const char *);
 void intr_free_io_intrsource(const char *);
 
 uint64_t *intr_allocate_msi_vectors(struct pic *, int *);
+void intr_free_msi_vectors(struct pic *, int);
 #ifdef NOTYET
-void intr_free_msi_vectors(int *, int);
 int *intr_allocate_msix_vectors(int *);
 void intr_free_msix_vectors(int *, int);
 #endif
