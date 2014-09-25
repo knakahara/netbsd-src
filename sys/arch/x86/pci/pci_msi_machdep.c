@@ -47,7 +47,76 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <machine/i82093var.h>
 #include <machine/pic.h>
 
+#define MSI_FIRST_DEVID 0
+
 #define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
+
+struct msipic {
+	u_int mp_bus;
+	u_int mp_device;
+	u_int mp_function;
+
+	int mp_devid;
+	int *mp_vecids;
+	int mp_veccnt;
+
+	struct pci_attach_args mp_pa;
+	bus_space_tag_t mp_bstag;
+	bus_space_handle_t mp_bshandle;
+	struct pic *mp_pic;
+	LIST_ENTRY(msipic) mp_list;
+};
+
+static LIST_HEAD(, msipic) msipic_list =
+	LIST_HEAD_INITIALIZER(msipic_list);
+
+static struct pic *
+find_msi_pic(int devid)
+{
+	struct msipic *mpp;
+
+	LIST_FOREACH(mpp, &msipic_list, mp_list) {
+		if(mpp->mp_devid == devid)
+			return mpp->mp_pic;
+	}
+	return NULL;
+}
+
+static struct pic *
+create_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
+{
+	struct pic *pic;
+	struct msipic *msipic;
+
+	static int dev_seq = MSI_FIRST_DEVID;
+
+	pic = kmem_zalloc(sizeof(*pic), KM_SLEEP);
+	if (pic == NULL) {
+		return NULL;
+	}
+	memcpy(pic, pic_tmpl, sizeof(*pic));
+
+	msipic = kmem_zalloc(sizeof(*msipic), KM_SLEEP);
+	if (msipic == NULL) {
+		kmem_free(pic, sizeof(*msipic));
+		return NULL;
+	}
+
+	pic->pic_msipic = msipic;
+	msipic->mp_pic = pic;
+	memcpy(&msipic->mp_pa, pa, sizeof(msipic->mp_pa));
+	msipic->mp_devid = dev_seq;
+	/*
+	 * pci_msi_alloc() must be called only ont time in the device driver.
+	 */
+	KASSERT(find_msi_pic(msipic->mp_devid) == NULL);
+	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
+
+	KASSERT(dev_seq != INT_MAX);
+	dev_seq++;
+
+	return pic;
+}
 
 const char *
 msi_string(uint64_t ih, char *buf, size_t len)
@@ -72,22 +141,6 @@ is_msi_pic(struct pic *pic)
 	return (pic->pic_msipic != NULL);
 }
 
-struct msipic {
-	u_int mp_bus;
-	u_int mp_device;
-	u_int mp_function;
-
-	int mp_devid;
-	int *mp_vecids;
-	int mp_veccnt;
-
-	struct pci_attach_args mp_pa;
-	bus_space_tag_t mp_bstag;
-	bus_space_handle_t mp_bshandle;
-	struct pic *mp_pic;
-	LIST_ENTRY(msipic) mp_list;
-};
-
 int
 msi_get_devid(struct pic *pic)
 {
@@ -111,7 +164,6 @@ get_msi_pci_attach_args(struct pic *pic)
 
 	return &pic->pic_msipic->mp_pa;
 }
-
 
 #define MSI_MSICTL_ENABLE 1
 #define MSI_MSICTL_DISABLE 0
@@ -207,67 +259,6 @@ static struct pic msi_pic_tmpl = {
 	.pic_ioapic = NULL,
 };
 
-static LIST_HEAD(, msipic) msipic_list =
-	LIST_HEAD_INITIALIZER(msipic_list);
-
-static struct pic *
-find_msi_pic_by_pa(struct pci_attach_args *pa)
-{
-	struct msipic *mpp;
-
-	LIST_FOREACH(mpp, &msipic_list, mp_list) {
-		if (mpp->mp_bus == pa->pa_bus &&
-		    mpp->mp_device == pa->pa_device &&
-		    mpp->mp_function == pa->pa_function) {
-			return mpp->mp_pic;
-		}
-	}
-	return NULL;
-}
-
-static struct pic *
-find_msi_pic(int devid)
-{
-	struct msipic *mpp;
-
-	LIST_FOREACH(mpp, &msipic_list, mp_list) {
-		if(mpp->mp_devid == devid)
-			return mpp->mp_pic;
-	}
-	return NULL;
-}
-
-static struct pic *
-create_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
-{
-	struct pic *pic;
-	struct msipic *msipic;
-	static int dev_seq = 0;
-
-	pic = kmem_zalloc(sizeof(*pic), KM_SLEEP);
-	if (pic == NULL) {
-		return NULL;
-	}
-	memcpy(pic, pic_tmpl, sizeof(*pic));
-
-	msipic = kmem_zalloc(sizeof(*msipic), KM_SLEEP);
-	if (msipic == NULL) {
-		kmem_free(pic, sizeof(*msipic));
-		return NULL;
-	}
-
-	pic->pic_msipic = msipic;
-	msipic->mp_pic = pic;
-	memcpy(&msipic->mp_pa, pa, sizeof(msipic->mp_pa));
-
-	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
-
-	msipic->mp_devid = dev_seq;
-	dev_seq++;
-
-	return pic;
-}
-
 static struct pic *
 create_msi_pic(struct pci_attach_args *pa)
 {
@@ -283,20 +274,15 @@ msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
 	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pcitag_t tag = pa->pa_tag;
 	pcireg_t reg;
-	int off;
 	uint64_t table_off;
-
-	bus_space_tag_t bstag;
-	bus_space_handle_t bshandle;
-	int table_idx;
-
 	uint64_t entry_base;
 	uint32_t vecctl;
 	pcireg_t tbl;
+	int off;
 
-	bstag = pic->pic_msipic->mp_bstag;
-	bshandle = pic->pic_msipic->mp_bshandle;
-	table_idx = msi_get_vecid(pic, pin);
+	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
+	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
+	int table_idx = msi_get_vecid(pic, pin);
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, &reg) == 0)
 		panic("%s: no msix capability", __func__);
@@ -337,19 +323,14 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
-	int off;
 	uint64_t table_off;
-
-	bus_space_tag_t bstag;
-	bus_space_handle_t bshandle;
-	int table_idx;
-
 	uint64_t entry_base;
 	pcireg_t tbl, addr, data, ctl;
+	int off;
 
-	bstag = pic->pic_msipic->mp_bstag;
-	bshandle = pic->pic_msipic->mp_bshandle;
-	table_idx = msi_get_vecid(pic, pin);
+	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
+	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
+	int table_idx = msi_get_vecid(pic, pin);
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
 		panic("%s: no msix capability", __func__);
@@ -418,11 +399,6 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 	struct pic *msi_pic;
 	uint64_t *vectors;
 
-	/*
-	 * pci_msi_alloc() must be called only ont time in the device driver.
-	 */
-	KASSERT(find_msi_pic_by_pa(pa) == NULL);
-
 	msi_pic = create_msi_pic(pa);
 	if (msi_pic == NULL) {
 		aprint_normal("cannot allocate MSI pic.\n");
@@ -442,8 +418,8 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 static void
 pci_msi_release_md(void **cookies, int count)
 {
-	uint64_t *vectors;
 	struct pic *pic;
+	uint64_t *vectors;
 
 	vectors = *cookies;
 	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
@@ -482,21 +458,14 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 {
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
-	struct pic *msix_pic;
-	int off, bir, bar;
 	pcireg_t tbl;
 	bus_space_tag_t bstag;
 	bus_space_handle_t bshandle;
-
+	u_int memtype;
+	int off, bir, bar, i, err;
+	struct pic *msix_pic;
 	uint64_t *vectors;
 	int *vecs;
-	int i, err;
-	u_int memtype;
-
-	/*
-	 * pci_msix_alloc() must be called only ont time in the device driver.
-	 */
-	KASSERT(find_msi_pic_by_pa(pa) == NULL);
 
 	msix_pic = create_msix_pic(pa);
 	if (msix_pic == NULL) {
@@ -676,9 +645,8 @@ pci_msix_count(struct pci_attach_args *pa)
 {
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
-
-	int offset;
 	pcireg_t reg;
+	int offset;
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &offset, NULL) == 0)
 		return 0;
