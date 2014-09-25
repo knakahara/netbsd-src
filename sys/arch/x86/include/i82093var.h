@@ -85,7 +85,7 @@ struct ioapic_softc {
 #define APIC_IRQ_ISLEGACY(x) (!((int)(x) & APIC_INT_VIA_APIC))
 #define APIC_IRQ_LEGACY_IRQ(x) ((int)(x) & 0xff)
 
-#define INT_VIA_MSI(x) ((x & APIC_INT_VIA_MSI) != 0)
+#define INT_VIA_MSI(x) (((int)(x) & APIC_INT_VIA_MSI) != 0)
 
 #define MSI_INT_MSIX		0x1000000000000000UL
 #define MSI_INT_DEV_MASK	0x000ff80000000000UL
@@ -94,8 +94,8 @@ struct ioapic_softc {
 #define MSI_INT_VEC_SHIFT	32
 
 #define MSI_INT_IS_MSIX(x) ((bool)((x & MSI_INT_MSIX) != 0))
-#define MSI_INT_MAKE_MSI(x) (x |= ~MSI_INT_MSIX)
-#define MSI_INT_MAKE_MSIX(x) (x &= MSI_INT_MSIX)
+#define MSI_INT_MAKE_MSI(x) (x &= ~MSI_INT_MSIX)
+#define MSI_INT_MAKE_MSIX(x) (x |= MSI_INT_MSIX)
 #define MSI_INT_DEV(x) ((x & MSI_INT_DEV_MASK) >> MSI_INT_DEV_SHIFT)
 #define MSI_INT_VEC(x) ((x & MSI_INT_VEC_MASK) >> MSI_INT_VEC_SHIFT)
 

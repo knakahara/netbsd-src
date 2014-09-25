@@ -433,7 +433,7 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 		dev = msi_get_devid(pic);
 		vec = pin;
 		pih = ((uint64_t)dev << MSI_INT_DEV_SHIFT) |
-			((uint64_t)vec << MSI_INT_VEC_SHIFT);
+			((uint64_t)vec << MSI_INT_VEC_SHIFT) | APIC_INT_VIA_MSI;
 		if (pic->pic_type == PIC_MSI)
 			MSI_INT_MAKE_MSI(pih);
 		else if (pic->pic_type == PIC_MSIX)
@@ -558,7 +558,7 @@ intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
 		}
 
 		vectors[i] = ((uint64_t)msi_get_devid(msi_pic) << MSI_INT_DEV_SHIFT) |
-			((uint64_t)i << MSI_INT_VEC_SHIFT);
+			((uint64_t)i << MSI_INT_VEC_SHIFT) | APIC_INT_VIA_MSI;
 	}
 	mutex_exit(&cpu_lock);
 
@@ -593,13 +593,18 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		KASSERT(CPU_IS_PRIMARY(ci));
 		slot = pin;
 	} else {
+		int start = 0;
 		slot = -1;
+
+		/* avoid reserved slots for legacy interrupts. */
+		if (is_msi_pic(pic))
+			start = NUM_LEGACY_IRQS;
 
 		/*
 		 * intr_allocate_slot has checked for an existing mapping.
 		 * Now look for a free slot.
 		 */
-		for (i = 0; i < MAX_INTR_SOURCES ; i++) {
+		for (i = start; i < MAX_INTR_SOURCES ; i++) {
 			if (ci->ci_isources[i] == NULL) {
 				slot = i;
 				break;

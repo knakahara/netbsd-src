@@ -52,19 +52,6 @@ __KERNEL_RCSID(0, "$NetBSD$");
 /* XXXX */
 #define NUM_MSI_INTS 512
 #define FIRST_MSI_INT 256
-static struct pci_attach_args msi_pci_attach_args[NUM_MSI_INTS];
-#if 0
-static void
-set_msi_pci_attach_args(int vector, struct pci_attach_args *pa)
-{
-	memcpy(&msi_pci_attach_args[vector - FIRST_MSI_INT], pa, sizeof(*pa));
-}
-#endif
-static struct pci_attach_args *
-get_msi_pci_attach_args(int vector)
-{
-	return &msi_pci_attach_args[vector - FIRST_MSI_INT];
-}
 
 #if 0
 struct msix_table_handler {
@@ -122,6 +109,7 @@ struct msipic {
 
 	int mp_devid;
 	int mp_vecid;
+	struct pci_attach_args mp_pa;
 	struct pic *mp_pic;
 	LIST_ENTRY(msipic) mp_list;
 };
@@ -142,13 +130,22 @@ msi_get_vecid(struct pic *pic)
 	return pic->pic_msipic->mp_vecid;
 }
 
+static struct pci_attach_args *
+get_msi_pci_attach_args(struct pic *pic)
+{
+	KASSERT(is_msi_pic(pic));
+
+	return &pic->pic_msipic->mp_pa;
+}
+
+
 #define MSI_MSICTL_ENABLE 1
 #define MSI_MSICTL_DISABLE 0
 static void
 msi_set_msictl_enablebit(struct pic *pic, int pin, int flag)
 {
 	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
+	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pcitag_t tag = pa->pa_tag;
 	pcireg_t ctl;
 	int off;
@@ -183,7 +180,7 @@ msi_addroute(struct pic *pic, struct cpu_info *ci,
 	     int pin, int vec, int type)
 {
 	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
+	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pcitag_t tag = pa->pa_tag;
 	pcireg_t addr, data, ctl;
 	int off;
@@ -287,6 +284,7 @@ create_msi_pic(struct pci_attach_args *pa)
 
 	pic->pic_msipic = msipic;
 	msipic->mp_pic = pic;
+	memcpy(&msipic->mp_pa, pa, sizeof(msipic->mp_pa));
 
 	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
 
@@ -304,7 +302,7 @@ static void
 msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
 {
 	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
+	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pcitag_t tag = pa->pa_tag;
 	pcireg_t reg;
 	int off;
@@ -354,7 +352,7 @@ static void
 msix_addroute(struct pic *pic, struct cpu_info *ci,
 	     int pin, int vec, int type)
 {
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pin);
+	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
 	int off;

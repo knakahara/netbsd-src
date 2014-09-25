@@ -292,7 +292,7 @@ pci_intr_establish_xname(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	}
 
 	pic = &i8259_pic;
-	pin = irq = (ih & ~MPSAFE_MASK);
+	pin = irq = ((int)ih & ~MPSAFE_MASK);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
 #if NIOAPIC > 0
