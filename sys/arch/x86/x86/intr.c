@@ -529,8 +529,8 @@ intr_free_io_intrsource(const char *intrid)
 	intr_free_io_intrsource_direct(isp);
 }
 
-uint64_t *
-intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
+static uint64_t *
+intr_allocate_msi_common_vectors(struct pic *msi_pic, int *count)
 {
 	struct intrsource *isp;
 	const char *intrstr;
@@ -565,6 +565,18 @@ intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
 	return vectors;
 }
 
+uint64_t *
+intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
+{
+	return intr_allocate_msi_common_vectors(msi_pic, count);
+}
+
+uint64_t *
+intr_allocate_msix_vectors(struct pic *msi_pic, int *count)
+{
+	return intr_allocate_msi_common_vectors(msi_pic, count);
+}
+
 void
 intr_free_msi_vectors(struct pic *msi_pic, int count)
 {
@@ -578,6 +590,12 @@ intr_free_msi_vectors(struct pic *msi_pic, int count)
 		intr_free_io_intrsource(intrstr);
 	}
 	mutex_exit(&cpu_lock);
+}
+
+void
+intr_free_msix_vectors(struct pic *msi_pic, int count)
+{
+	return intr_free_msi_vectors(msi_pic, count);
 }
 
 static int
