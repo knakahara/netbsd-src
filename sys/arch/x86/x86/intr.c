@@ -529,8 +529,8 @@ intr_free_io_intrsource(const char *intrid)
 	intr_free_io_intrsource_direct(isp);
 }
 
-static uint64_t *
-intr_allocate_msi_common_vectors(struct pic *msi_pic, int *count)
+uint64_t *
+intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
 {
 	struct intrsource *isp;
 	const char *intrstr;
@@ -538,9 +538,7 @@ intr_allocate_msi_common_vectors(struct pic *msi_pic, int *count)
 	uint64_t *vectors;
 	int i;
 
-	/* XXXXX fallback to power of 2 count */
-
-	vectors = kmem_zalloc(sizeof(int) * (*count), KM_SLEEP);
+	vectors = kmem_zalloc(sizeof(vectors[0]) * (*count), KM_SLEEP);
 	if (vectors == NULL) {
 		printf("cannot allocate vectors\n");
 		return NULL;
@@ -566,15 +564,9 @@ intr_allocate_msi_common_vectors(struct pic *msi_pic, int *count)
 }
 
 uint64_t *
-intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
-{
-	return intr_allocate_msi_common_vectors(msi_pic, count);
-}
-
-uint64_t *
 intr_allocate_msix_vectors(struct pic *msi_pic, int *count)
 {
-	return intr_allocate_msi_common_vectors(msi_pic, count);
+	return intr_allocate_msi_vectors(msi_pic, count);
 }
 
 void
