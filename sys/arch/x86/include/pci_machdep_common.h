@@ -123,7 +123,6 @@ void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 const char *msi_string(uint64_t, char *, size_t);
 bool is_msi_pic(struct pic *);
 int msi_get_devid(struct pic *);
-int msi_get_vecid(struct pic *);
 
 int pci_msi_count(struct pci_attach_args *);
 int pci_msi_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);

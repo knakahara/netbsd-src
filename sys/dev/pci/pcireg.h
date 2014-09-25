@@ -1067,8 +1067,7 @@ struct pci_msix_table_entry {
 	uint32_t pci_msix_value;
 	uint32_t pci_msix_vector_control;
 };
-#define	PCI_MSIX_VECTCTL_MASK	0x00000001
-
+#define	PCI_MSIX_VECTCTL_HWMASK_MASK	0x00000001
 
 /*
  * Capability ID: 0x12

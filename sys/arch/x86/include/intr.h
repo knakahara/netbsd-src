@@ -200,10 +200,8 @@ void intr_free_io_intrsource(const char *);
 
 uint64_t *intr_allocate_msi_vectors(struct pic *, int *);
 void intr_free_msi_vectors(struct pic *, int);
-#ifdef NOTYET
-int *intr_allocate_msix_vectors(int *);
-void intr_free_msix_vectors(int *, int);
-#endif
+uint64_t *intr_allocate_msix_vectors(struct pic *, int *);
+void intr_free_msix_vectors(struct pic *, int);
 
 int x86_send_ipi(struct cpu_info *, int);
 void x86_broadcast_ipi(int);
