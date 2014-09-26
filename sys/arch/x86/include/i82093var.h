@@ -89,15 +89,13 @@ struct ioapic_softc {
 
 #define MSI_INT_MSIX		0x1000000000000000UL
 #define MSI_INT_DEV_MASK	0x000ff80000000000UL
-#define MSI_INT_DEV_SHIFT	43
 #define MSI_INT_VEC_MASK	0x000007ff00000000UL
-#define MSI_INT_VEC_SHIFT	32
 
-#define MSI_INT_IS_MSIX(x) ((bool)((x & MSI_INT_MSIX) != 0))
-#define MSI_INT_MAKE_MSI(x) (x &= ~MSI_INT_MSIX)
-#define MSI_INT_MAKE_MSIX(x) (x |= MSI_INT_MSIX)
-#define MSI_INT_DEV(x) ((x & MSI_INT_DEV_MASK) >> MSI_INT_DEV_SHIFT)
-#define MSI_INT_VEC(x) ((x & MSI_INT_VEC_MASK) >> MSI_INT_VEC_SHIFT)
+#define MSI_INT_IS_MSIX(x) ((bool)(((x) & MSI_INT_MSIX) != 0))
+#define MSI_INT_MAKE_MSI(x) ((x) &= ~MSI_INT_MSIX)
+#define MSI_INT_MAKE_MSIX(x) ((x) |= MSI_INT_MSIX)
+#define MSI_INT_DEV(x) __SHIFTOUT((x), MSI_INT_DEV_MASK)
+#define MSI_INT_VEC(x) __SHIFTOUT((x), MSI_INT_VEC_MASK)
 
 void ioapic_print_redir(struct ioapic_softc *, const char *, int);
 void ioapic_format_redir(char *, const char *, int, uint32_t, uint32_t);

@@ -432,8 +432,8 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 
 		dev = msi_get_devid(pic);
 		vec = pin;
-		pih = ((uint64_t)dev << MSI_INT_DEV_SHIFT) |
-			((uint64_t)vec << MSI_INT_VEC_SHIFT) | APIC_INT_VIA_MSI;
+		pih = __SHIFTIN((uint64_t)dev, MSI_INT_DEV_MASK) |
+			__SHIFTIN((uint64_t)vec, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
 		if (pic->pic_type == PIC_MSI)
 			MSI_INT_MAKE_MSI(pih);
 		else if (pic->pic_type == PIC_MSIX)
@@ -555,8 +555,8 @@ intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
 			return NULL;
 		}
 
-		vectors[i] = ((uint64_t)msi_get_devid(msi_pic) << MSI_INT_DEV_SHIFT) |
-			((uint64_t)i << MSI_INT_VEC_SHIFT) | APIC_INT_VIA_MSI;
+		vectors[i] = __SHIFTIN((uint64_t)msi_get_devid(msi_pic), MSI_INT_DEV_MASK) |
+			__SHIFTIN((uint64_t)i, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
 	}
 	mutex_exit(&cpu_lock);
 
