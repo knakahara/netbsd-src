@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1911 2014/08/25 18:44:03 pooka Exp $
+#	$NetBSD: mi,v 1.1913 2014/09/24 18:16:37 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -6908,6 +6908,7 @@
 ./usr/share/man/cat3/hdestroy.0			comp-c-catman		.cat
 ./usr/share/man/cat3/hdestroy1.0		comp-c-catman		.cat
 ./usr/share/man/cat3/hdestroy1_r.0		comp-c-catman		.cat
+./usr/share/man/cat3/hdestroy_r.0		comp-c-catman		.cat
 ./usr/share/man/cat3/heapsort.0			comp-c-catman		.cat
 ./usr/share/man/cat3/herror.0			comp-c-catman		.cat
 ./usr/share/man/cat3/hesiod.0			comp-c-catman		hesiod,.cat
@@ -9147,6 +9148,7 @@
 ./usr/share/man/cat3/strncpy.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strndup.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strnlen.0			comp-c-catman		.cat
+./usr/share/man/cat3/strnstr.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strnunvis.0		comp-c-catman		.cat
 ./usr/share/man/cat3/strnunvisx.0		comp-c-catman		.cat
 ./usr/share/man/cat3/strnvis.0			comp-c-catman		.cat
@@ -15916,6 +15918,7 @@
 ./usr/share/man/html3/strncpy.html		comp-c-htmlman		html
 ./usr/share/man/html3/strndup.html		comp-c-htmlman		html
 ./usr/share/man/html3/strnlen.html		comp-c-htmlman		html
+./usr/share/man/html3/strnstr.html		comp-c-htmlman		html
 ./usr/share/man/html3/strnunvis.html		comp-c-htmlman		html
 ./usr/share/man/html3/strnunvisx.html		comp-c-htmlman		html
 ./usr/share/man/html3/strnvis.html		comp-c-htmlman		html
@@ -22721,6 +22724,7 @@
 ./usr/share/man/man3/strncpy.3			comp-c-man		.man
 ./usr/share/man/man3/strndup.3			comp-c-man		.man
 ./usr/share/man/man3/strnlen.3			comp-c-man		.man
+./usr/share/man/man3/strnstr.3			comp-c-man		.man
 ./usr/share/man/man3/strnunvis.3		comp-c-man		.man
 ./usr/share/man/man3/strnunvisx.3		comp-c-man		.man
 ./usr/share/man/man3/strnvis.3			comp-c-man		.man

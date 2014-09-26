@@ -42,6 +42,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <dev/pci/pcivar.h>
 
 #include <machine/i82489reg.h>
+#include <machine/lock.h>
 
 #include <machine/i82093reg.h>
 #include <machine/i82093var.h>
@@ -67,6 +68,7 @@ struct msipic {
 	LIST_ENTRY(msipic) mp_list;
 };
 
+static __cpu_simple_lock_t msipic_list_lock = __SIMPLELOCK_UNLOCKED;
 static LIST_HEAD(, msipic) msipic_list =
 	LIST_HEAD_INITIALIZER(msipic_list);
 
@@ -75,10 +77,14 @@ find_msi_pic(int devid)
 {
 	struct msipic *mpp;
 
+	__cpu_simple_lock(&msipic_list_lock);
 	LIST_FOREACH(mpp, &msipic_list, mp_list) {
-		if(mpp->mp_devid == devid)
+		if(mpp->mp_devid == devid) {
+			__cpu_simple_unlock(&msipic_list_lock);
 			return mpp->mp_pic;
+		}
 	}
+	__cpu_simple_unlock(&msipic_list_lock);
 	return NULL;
 }
 
@@ -110,12 +116,37 @@ create_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	 * pci_msi_alloc() must be called only ont time in the device driver.
 	 */
 	KASSERT(find_msi_pic(msipic->mp_devid) == NULL);
+
+	__cpu_simple_lock(&msipic_list_lock);
 	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
+	__cpu_simple_unlock(&msipic_list_lock);
 
 	KASSERT(dev_seq != INT_MAX);
 	dev_seq++;
 
 	return pic;
+}
+
+static void
+delete_common_msi_pic(struct pic *pic)
+{
+	struct msipic *msipic;
+
+	if (pic == NULL)
+		return;
+
+	msipic = pic->pic_msipic;
+
+	__cpu_simple_lock(&msipic_list_lock);
+	LIST_REMOVE(msipic, mp_list);
+	__cpu_simple_unlock(&msipic_list_lock);
+
+	if (msipic->mp_vecids != NULL)
+		kmem_free(msipic->mp_vecids,
+		    sizeof(msipic->mp_vecids[0]) * msipic->mp_veccnt);
+
+	kmem_free(msipic, sizeof(*msipic));
+	kmem_free(pic, sizeof(*pic));
 }
 
 const char *
@@ -427,6 +458,7 @@ pci_msi_release_md(void **cookies, int count)
 		return;
 
 	intr_free_msi_vectors(pic, count);
+	delete_common_msi_pic(pic);
 }
 
 static void *

@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: ipv6nd.c,v 1.10 2014/07/30 15:47:32 roy Exp $");
+ __RCSID("$NetBSD: ipv6nd.c,v 1.12 2014/09/18 20:46:30 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -35,11 +35,6 @@
 #include <netinet/in.h>
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
-
-#ifdef __linux__
-#  define _LINUX_IN6_H
-#  include <linux/ipv6.h>
-#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -221,12 +216,13 @@ ipv6nd_open(struct dhcpcd_ctx *dctx)
 	    &filt, sizeof(filt)) == -1)
 		goto eexit;
 
-	eloop_event_add(dctx->eloop, ctx->nd_fd, ipv6nd_handledata, dctx);
+	eloop_event_add(dctx->eloop, ctx->nd_fd,
+	    ipv6nd_handledata, dctx, NULL, NULL);
 	return ctx->nd_fd;
 
 eexit:
 	if (ctx->nd_fd != -1) {
-		eloop_event_delete(dctx->eloop, ctx->nd_fd);
+		eloop_event_delete(dctx->eloop, ctx->nd_fd, 0);
 		close(ctx->nd_fd);
 		ctx->nd_fd = -1;
 	}
@@ -289,7 +285,7 @@ ipv6nd_sendrsprobe(void *arg)
 
 	state = RS_STATE(ifp);
 	ctx = ifp->ctx->ipv6;
-	ctx->sndhdr.msg_name = (caddr_t)&dst;
+	ctx->sndhdr.msg_name = (void *)&dst;
 	ctx->sndhdr.msg_iov[0].iov_base = state->rs;
 	ctx->sndhdr.msg_iov[0].iov_len = state->rslen;
 
@@ -404,6 +400,9 @@ ipv6nd_addrexists(struct dhcpcd_ctx *ctx, const struct ipv6_addr *addr)
 	struct ra *rap;
 	struct ipv6_addr *ap;
 
+	if (ctx->ipv6 == NULL)
+		return 0;
+
 	TAILQ_FOREACH(rap, ctx->ipv6->ra_routers, next) {
 		TAILQ_FOREACH(ap, &rap->addrs, next) {
 			if (addr == NULL) {
@@ -469,7 +468,7 @@ ipv6nd_free(struct interface *ifp)
 	}
 	if (ifp == NULL) {
 		if (ctx->ipv6->nd_fd != -1) {
-			eloop_event_delete(ctx->eloop, ctx->ipv6->nd_fd);
+			eloop_event_delete(ctx->eloop, ctx->ipv6->nd_fd, 0);
 			close(ctx->ipv6->nd_fd);
 			ctx->ipv6->nd_fd = -1;
 		}
@@ -580,6 +579,24 @@ ipv6nd_addaddr(void *arg)
 	struct ipv6_addr *ap = arg;
 
 	ipv6_addaddr(ap);
+}
+
+int
+ipv6nd_dadcompleted(const struct interface *ifp)
+{
+	const struct ra *rap;
+	const struct ipv6_addr *ap;
+
+	TAILQ_FOREACH(rap, ifp->ctx->ipv6->ra_routers, next) {
+		if (rap->iface != ifp)
+			continue;
+		TAILQ_FOREACH(ap, &rap->addrs, next) {
+			if (ap->flags & IPV6_AF_AUTOCONF &&
+			    !(ap->flags & IPV6_AF_DADCOMPLETED))
+			    	return 0;
+		}
+	}
+	return 1;
 }
 
 static void
@@ -1457,7 +1474,7 @@ ipv6nd_handledata(void *arg)
 	len = recvmsg(ctx->nd_fd, &ctx->rcvhdr, 0);
 	if (len == -1 || len == 0) {
 		syslog(LOG_ERR, "recvmsg: %m");
-		eloop_event_delete(dhcpcd_ctx->eloop, ctx->nd_fd);
+		eloop_event_delete(dhcpcd_ctx->eloop, ctx->nd_fd, 0);
 		close(ctx->nd_fd);
 		ctx->nd_fd = -1;
 		return;
