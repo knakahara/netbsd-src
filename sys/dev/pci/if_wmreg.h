@@ -324,8 +324,11 @@ struct livengood_tcpip_ctxdesc {
 #define	CTRL_EXT_LINK_MODE_TBI		0x00C00000
 #define	CTRL_EXT_LINK_MODE_PCIE_SERDES	0x00C00000
 #define	CTRL_EXT_PHYPDEN	0x00100000
+#define	CTRL_EXT_EIAME		0x01000000
 #define CTRL_EXT_I2C_ENA	0x02000000  /* I2C enable */
 #define	CTRL_EXT_DRV_LOAD	0x10000000
+#define CTRL_EXT_INT_TIMER_CLR	0x20000000
+#define	CTRL_EXT_PBA_CLR	0x80000000 /* PBA clear: set in MSI-X mode */
 
 #define	WMREG_MDIC	0x0020	/* MDI Control Register */
 #define	MDIC_DATA(x)	((x) & 0xffff)
@@ -428,6 +431,11 @@ struct livengood_tcpip_ctxdesc {
 #define	ICR_MDAC	(1U << 9)	/* MDIO access complete */
 #define	ICR_RXCFG	(1U << 10)	/* Receiving /C/ */
 #define	ICR_GPI(x)	(1U << (x))	/* general purpose interrupts */
+#define ICR_RXQ0	(1U << 20)	/* Rx queue 0 (for 82574) */
+#define ICR_RXQ1	(1U << 21)	/* Rx queue 1 (for 82574) */
+#define ICR_TXQ0	(1U << 22)	/* Tx queue 0 (for 82574) */
+#define ICR_TXQ1	(1U << 23)	/* Tx queue 1 (for 82574) */
+#define ICR_OTHER	(1U << 24)	/* other interrupt (for 82574) */
 #define	ICR_INT		(1U << 31)	/* device generated an interrupt */
 
 #define WMREG_ITR	0x00c4	/* Interrupt Throttling Register */
@@ -442,6 +450,36 @@ struct livengood_tcpip_ctxdesc {
 
 #define	WMREG_IMC	0x00d8	/* Interrupt Mask Clear Register */
 	/* See ICR bits. */
+
+#define WMREG_EIAC_82574	0x00dc		/* Interrupt Auto Clear */
+#define WMREG_EIAC_MSIX_MASK	0x01f00000	/* For 82574 use */
+#define EM_MSIX_LINK		0x01000000	/* For 82574 use */
+
+#define WMREG_IAM		0x00e0		/* Interrupt Acknowledge Auto–Mask */
+
+#define WMREG_IVAL	0x00e4	/* Interrupt Vector Allocation Register */
+#define WMREG_IVAR0	0x01700	/* Interrupt Vector Allocation */
+#define WMREG_IVAR_MISC	0x01740	/* IVAR for other causes */
+
+#define WMREG_GPIE	0x01514	/* General Purpose Interrupt Enable */
+#define WMREG_GPIE_NSICR        0x00000001
+#define WMREG_GPIE_MSIX_MODE    0x00000010
+#define WMREG_GPIE_EIAME        0x40000000
+#define WMREG_GPIE_PBA          0x80000000
+
+#define WMREG_IVAL_RX0_ALLOC_MASK	__BITS(2, 0)
+#define WMREG_IVAL_RX0_ENABLE		__BIT(3)
+#define WMREG_IVAL_RX1_ALLOC_MASK	__BITS(6, 4)
+#define WMREG_IVAL_RX1_ENABLE		__BIT(7)
+#define WMREG_IVAL_TX0_ALLOC_MASK	__BITS(10, 8)
+#define WMREG_IVAL_TX0_ENABLE		__BIT(11)
+#define WMREG_IVAL_TX1_ALLOC_MASK	__BITS(14, 12)
+#define WMREG_IVAL_TX1_ENABLE		__BIT(15)
+#define WMREG_IVAL_OTH_ALLOC_MASK	__BITS(18, 16)
+#define WMREG_IVAL_OTH_ENABLE		__BIT(19)
+#define WMREG_IVAL_INTR_ALL_WB		__BIT(31) /* If set, Tx interrupts occur on every write back. */
+
+#define WMREG_IVAR_VALID	0x80
 
 #define	WMREG_RCTL	0x0100	/* Receive Control */
 #define	RCTL_EN		(1U << 1)	/* receiver enable */
@@ -738,6 +776,8 @@ struct livengood_tcpip_ctxdesc {
 #define WMREG_EITR(x)	(0x01680 + (0x4 * (x)))
 #define EITR_ITR_INT_MASK	0x0000ffff
 
+#define WMREG_EITR_82574(x)	(0x000E8 + (0x4 * (x)))
+
 #define	WMREG_RDFH	0x2410	/* Receive Data FIFO Head */
 #define	WMREG_RDFT	0x2418	/* Receive Data FIFO Tail */
 #define	WMREG_RDFHS	0x2420	/* Receive Data FIFO Head Saved */
@@ -798,6 +838,9 @@ struct livengood_tcpip_ctxdesc {
 #define	RXCSUM_IPV6OFL	(1U << 10)	/* IPv6 checksum offload */
 
 #define WMREG_RLPML	0x5004	/* Rx Long Packet Max Length */
+
+#define WMREG_RFCTL	0x5008	/* Receive Filter Control */
+#define WMREG_RFCTL_ACKDIS	0x00001000 /* ACK Accelerate Disable */
 
 #define	WMREG_WUC	0x5800	/* Wakeup Control */
 #define	WUC_APME		0x00000001 /* APM Enable */
