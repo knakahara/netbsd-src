@@ -1,4 +1,4 @@
-/* $NetBSD: if.h,v 1.1.1.3 2014/07/30 15:44:11 roy Exp $ */
+/* $NetBSD: if.h,v 1.1.1.5 2014/09/18 20:43:58 roy Exp $ */
 
 /*
  * dhcpcd - DHCP client daemon
@@ -96,6 +96,7 @@ int if_setflag(struct interface *ifp, short flag);
 #define if_up(ifp) if_setflag((ifp), (IFF_UP | IFF_RUNNING))
 struct if_head *if_discover(struct dhcpcd_ctx *, int, char * const *);
 struct interface *if_find(struct dhcpcd_ctx *, const char *);
+struct interface *if_findindex(struct dhcpcd_ctx *, unsigned int);
 void if_free(struct interface *);
 int if_domtu(const char *, short int);
 #define if_getmtu(iface) if_domtu(iface, 0)
@@ -105,7 +106,7 @@ int if_carrier(struct interface *);
 /* The below functions are provided by if-KERNEL.c */
 int if_conf(struct interface *);
 int if_init(struct interface *);
-int if_getssid(const char *, char *);
+int if_getssid(struct interface *);
 int if_vimaster(const char *);
 int if_openlinksocket(void);
 int if_managelink(struct dhcpcd_ctx *);
@@ -133,7 +134,7 @@ int if_route(const struct rt *rt, int);
 #endif
 
 #ifdef INET6
-int if_checkipv6(struct dhcpcd_ctx *ctx, const char *, int);
+int if_checkipv6(struct dhcpcd_ctx *ctx, const struct interface *, int);
 int if_nd6reachable(const char *ifname, struct in6_addr *addr);
 
 int if_address6(const struct ipv6_addr *, int);
