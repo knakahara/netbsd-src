@@ -99,6 +99,7 @@ struct vmxnet3_softc {
 	struct ethercom sc_ethercom;
 	struct ifmedia sc_media;
 
+	struct pci_attach_args *sc_pa;
 	bus_space_tag_t	sc_iot0;
 	bus_space_tag_t	sc_iot1;
 	bus_space_handle_t sc_ioh0;
@@ -145,6 +146,8 @@ struct {
 
 int vmxnet3_match(device_t, cfdata_t, void *);
 void vmxnet3_attach(device_t, device_t, void *);
+int vmxnet3_alloc_pci_resources(struct vmxnet3_softc *);
+int vmxnet3_check_version(struct vmxnet3_softc *);
 int vmxnet3_dma_init(struct vmxnet3_softc *);
 int vmxnet3_alloc_txring(struct vmxnet3_softc *, int);
 int vmxnet3_alloc_rxring(struct vmxnet3_softc *, int);
@@ -202,11 +205,12 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 	struct pci_attach_args *pa = aux;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	pci_intr_handle_t *ihs;
+	int error;
 	int vmxnet3_msi_num = 1; /* if use multi MSI, vih must be array */
 	pci_intr_handle_t ih;
 	const char *intrstr;
 	void *vih;
-	u_int memtype, ver, macl, mach;
+	u_int macl, mach;
 	pcireg_t preg;
 	u_char enaddr[ETHER_ADDR_LEN];
 	char intrbuf[PCI_INTRSTR_LEN];
@@ -216,37 +220,17 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 	int done_establish = 0;
 
 	sc->sc_dev = self;
+	sc->sc_pa = pa;
 
 	pci_aprint_devinfo_fancy(pa, "Ethernet controller", "vmxnet3", 1);
 
-	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, 0x10);
-	if (pci_mapreg_map(pa, 0x10, memtype, 0, &sc->sc_iot0, &sc->sc_ioh0,
-	    NULL, NULL)) {
-		aprint_error_dev(sc->sc_dev, "failed to map BAR0\n");
+	error = vmxnet3_alloc_pci_resources(sc);
+	if (error)
 		return;
-	}
-	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, 0x14);
-	if (pci_mapreg_map(pa, 0x14, memtype, 0, &sc->sc_iot1, &sc->sc_ioh1,
-	    NULL, NULL)) {
-		aprint_error_dev(sc->sc_dev, "failed to map BAR1\n");
-		return;
-	}
 
-	ver = READ_BAR1(sc, VMXNET3_BAR1_VRRS);
-	if ((ver & 0x1) == 0) {
-		aprint_error_dev(sc->sc_dev,
-		    "unsupported hardware version 0x%x\n", ver);
+	error = vmxnet3_check_version(sc);
+	if (error)
 		return;
-	}
-	WRITE_BAR1(sc, VMXNET3_BAR1_VRRS, 1);
-
-	ver = READ_BAR1(sc, VMXNET3_BAR1_UVRS);
-	if ((ver & 0x1) == 0) {
-		aprint_error_dev(sc->sc_dev,
-		    "incompatiable UPT version 0x%x\n", ver);
-		return;
-	}
-	WRITE_BAR1(sc, VMXNET3_BAR1_UVRS, 1);
 
 	preg = pci_conf_read(pa->pa_pc, pa->pa_tag, PCI_COMMAND_STATUS_REG);
 	preg |= PCI_COMMAND_MASTER_ENABLE;
@@ -397,6 +381,52 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 	ether_ifattach(ifp, enaddr);
 	ether_set_ifflags_cb(&sc->sc_ethercom, vmxnet3_ifflags_cb);
 	vmxnet3_link_state(sc);
+}
+
+int
+vmxnet3_alloc_pci_resources(struct vmxnet3_softc *sc)
+{
+	struct pci_attach_args *pa = sc->sc_pa;
+	pcireg_t memtype;
+
+	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, 0x10);
+	if (pci_mapreg_map(pa, 0x10, memtype, 0, &sc->sc_iot0, &sc->sc_ioh0,
+	    NULL, NULL)) {
+		aprint_error_dev(sc->sc_dev, "failed to map BAR0\n");
+		return (ENXIO);
+	}
+	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, 0x14);
+	if (pci_mapreg_map(pa, 0x14, memtype, 0, &sc->sc_iot1, &sc->sc_ioh1,
+	    NULL, NULL)) {
+		aprint_error_dev(sc->sc_dev, "failed to map BAR1\n");
+		return (ENXIO);
+	}
+
+	return (0);
+}
+
+int
+vmxnet3_check_version(struct vmxnet3_softc *sc)
+{
+	u_int ver;
+
+	ver = READ_BAR1(sc, VMXNET3_BAR1_VRRS);
+	if ((ver & 0x1) == 0) {
+		aprint_error_dev(sc->sc_dev,
+		    "unsupported hardware version 0x%x\n", ver);
+		return (ENOTSUP);
+	}
+	WRITE_BAR1(sc, VMXNET3_BAR1_VRRS, 1);
+
+	ver = READ_BAR1(sc, VMXNET3_BAR1_UVRS);
+	if ((ver & 0x1) == 0) {
+		aprint_error_dev(sc->sc_dev,
+		    "incompatiable UPT version 0x%x\n", ver);
+		return (ENOTSUP);
+	}
+	WRITE_BAR1(sc, VMXNET3_BAR1_UVRS, 1);
+
+	return (0);
 }
 
 int
