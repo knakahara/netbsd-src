@@ -79,6 +79,7 @@ struct UPT1_RxStats {
 #define VMXNET3_CMD_GET_LINK	0xf00d0002	/* get link status */
 #define VMXNET3_CMD_GET_MACL	0xf00d0003
 #define VMXNET3_CMD_GET_MACH	0xf00d0004
+#define VMXNET3_CMD_GET_INTRCFG	0xf00d0008	/* get interrupt config */
 
 #define VMXNET3_DMADESC_ALIGN	128
 
@@ -238,6 +239,7 @@ struct vmxnet3_rxcompdesc {
 #define VMXNET3_MAX_MTU 9000
 #define VMXNET3_MIN_MTU 60
 
+#define VMXNET3_IT_AUTO   0x00
 #define VMXNET3_IT_LEGACY 0x01
 #define VMXNET3_IT_MSI    0x02
 #define VMXNET3_IT_MSIX   0x03
