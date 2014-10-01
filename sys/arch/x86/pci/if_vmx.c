@@ -100,8 +100,8 @@ struct vmxnet3_softc {
 	struct ifmedia sc_media;
 
 	struct pci_attach_args *sc_pa;
-	bus_space_tag_t	sc_iot0;
-	bus_space_tag_t	sc_iot1;
+	bus_space_tag_t sc_iot0;
+	bus_space_tag_t sc_iot1;
 	bus_space_handle_t sc_ioh0;
 	bus_space_handle_t sc_ioh1;
 	bus_dma_tag_t sc_dmat;
