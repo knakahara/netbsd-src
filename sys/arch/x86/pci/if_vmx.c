@@ -416,14 +416,14 @@ vmxnet3_alloc_pci_resources(struct vmxnet3_softc *sc)
 	struct pci_attach_args *pa = sc->vmx_pa;
 	pcireg_t memtype;
 
-	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, 0x10);
-	if (pci_mapreg_map(pa, 0x10, memtype, 0, &sc->vmx_iot0, &sc->vmx_ioh0,
+	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, PCI_BAR(0));
+	if (pci_mapreg_map(pa, PCI_BAR(0), memtype, 0, &sc->vmx_iot0, &sc->vmx_ioh0,
 	    NULL, NULL)) {
 		aprint_error_dev(sc->vmx_dev, "failed to map BAR0\n");
 		return (ENXIO);
 	}
-	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, 0x14);
-	if (pci_mapreg_map(pa, 0x14, memtype, 0, &sc->vmx_iot1, &sc->vmx_ioh1,
+	memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, PCI_BAR(1));
+	if (pci_mapreg_map(pa, PCI_BAR(1), memtype, 0, &sc->vmx_iot1, &sc->vmx_ioh1,
 	    NULL, NULL)) {
 		aprint_error_dev(sc->vmx_dev, "failed to map BAR1\n");
 		return (ENXIO);
