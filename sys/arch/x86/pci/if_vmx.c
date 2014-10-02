@@ -135,13 +135,6 @@ struct {
 #define JUMBO_LEN (MCLBYTES - ETHER_ALIGN)	/* XXX */
 #define DMAADDR(map) ((map)->dm_segs[0].ds_addr)
 
-#define READ_BAR0(sc, reg) bus_space_read_4((sc)->vmx_iot0, (sc)->vmx_ioh0, reg)
-#define READ_BAR1(sc, reg) bus_space_read_4((sc)->vmx_iot1, (sc)->vmx_ioh1, reg)
-#define WRITE_BAR0(sc, reg, val) \
-	bus_space_write_4((sc)->vmx_iot0, (sc)->vmx_ioh0, reg, val)
-#define WRITE_BAR1(sc, reg, val) \
-	bus_space_write_4((sc)->vmx_iot1, (sc)->vmx_ioh1, reg, val)
-#define WRITE_CMD(sc, cmd) WRITE_BAR1(sc, VMXNET3_BAR1_CMD, cmd)
 #define vtophys(va) 0		/* XXX ok? */
 
 int vmxnet3_match(device_t, cfdata_t, void *);
@@ -185,6 +178,42 @@ void *vmxnet3_dma_allocmem(struct vmxnet3_softc *, u_int, u_int, bus_addr_t *);
 
 CFATTACH_DECL3_NEW(vmx, sizeof(struct vmxnet3_softc),
     vmxnet3_match, vmxnet3_attach, NULL, NULL, NULL, NULL, 0);
+
+static inline void
+vmxnet3_write_bar0(struct vmxnet3_softc *sc, bus_size_t r, uint32_t v)
+{
+
+	bus_space_write_4(sc->vmx_iot0, sc->vmx_ioh0, r, v);
+}
+
+static inline uint32_t
+vmxnet3_read_bar1(struct vmxnet3_softc *sc, bus_size_t r)
+{
+
+	return (bus_space_read_4(sc->vmx_iot1, sc->vmx_ioh1, r));
+}
+
+static inline void
+vmxnet3_write_bar1(struct vmxnet3_softc *sc, bus_size_t r, uint32_t v)
+{
+
+	bus_space_write_4(sc->vmx_iot1, sc->vmx_ioh1, r, v);
+}
+
+static inline void
+vmxnet3_write_cmd(struct vmxnet3_softc *sc, uint32_t cmd)
+{
+
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_CMD, cmd);
+}
+
+static inline uint32_t
+vmxnet3_read_cmd(struct vmxnet3_softc *sc, uint32_t cmd)
+{
+
+	vmxnet3_write_cmd(sc, cmd);
+	return (vmxnet3_read_bar1(sc, VMXNET3_BAR1_CMD));
+}
 
 int
 vmxnet3_match(device_t parent, cfdata_t match, void *aux)
@@ -332,19 +361,17 @@ vmxnet3_attach(device_t parent, device_t self, void *aux)
 		sc->vmx_txq[0].vxtxq_ts->intr_idx = 0;
 	}
 
-	WRITE_CMD(sc, VMXNET3_CMD_GET_MACL);
-	macl = READ_BAR1(sc, VMXNET3_BAR1_CMD);
+	macl = vmxnet3_read_cmd(sc, VMXNET3_CMD_GET_MACL);
 	enaddr[0] = macl;
 	enaddr[1] = macl >> 8;
 	enaddr[2] = macl >> 16;
 	enaddr[3] = macl >> 24;
-	WRITE_CMD(sc, VMXNET3_CMD_GET_MACH);
-	mach = READ_BAR1(sc, VMXNET3_BAR1_CMD);
+	mach = vmxnet3_read_cmd(sc, VMXNET3_CMD_GET_MACH);
 	enaddr[4] = mach;
 	enaddr[5] = mach >> 8;
 
-	WRITE_BAR1(sc, VMXNET3_BAR1_MACL, macl);
-	WRITE_BAR1(sc, VMXNET3_BAR1_MACH, mach);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_MACL, macl);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_MACH, mach);
 	aprint_normal_dev(sc->vmx_dev, "Ethernet address %s\n",
 	    ether_sprintf(enaddr));
 
@@ -410,21 +437,21 @@ vmxnet3_check_version(struct vmxnet3_softc *sc)
 {
 	u_int ver;
 
-	ver = READ_BAR1(sc, VMXNET3_BAR1_VRRS);
+	ver = vmxnet3_read_bar1(sc, VMXNET3_BAR1_VRRS);
 	if ((ver & 0x1) == 0) {
 		aprint_error_dev(sc->vmx_dev,
 		    "unsupported hardware version 0x%x\n", ver);
 		return (ENOTSUP);
 	}
-	WRITE_BAR1(sc, VMXNET3_BAR1_VRRS, 1);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_VRRS, 1);
 
-	ver = READ_BAR1(sc, VMXNET3_BAR1_UVRS);
+	ver = vmxnet3_read_bar1(sc, VMXNET3_BAR1_UVRS);
 	if ((ver & 0x1) == 0) {
 		aprint_error_dev(sc->vmx_dev,
 		    "incompatiable UPT version 0x%x\n", ver);
 		return (ENOTSUP);
 	}
-	WRITE_BAR1(sc, VMXNET3_BAR1_UVRS, 1);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_UVRS, 1);
 
 	return (0);
 }
@@ -505,8 +532,8 @@ vmxnet3_dma_init(struct vmxnet3_softc *sc)
 	ds->ictrl = VMXNET3_ICTRL_DISABLE_ALL;
 	for (i = 0; i < VMXNET3_NINTR; i++)
 		ds->modlevel[i] = UPT1_IMOD_ADAPTIVE;
-	WRITE_BAR1(sc, VMXNET3_BAR1_DSL, ds_pa);
-	WRITE_BAR1(sc, VMXNET3_BAR1_DSH, (uint64_t)ds_pa >> 32);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_DSL, ds_pa);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_DSH, (uint64_t)ds_pa >> 32);
 	return 0;
 }
 
@@ -675,8 +702,7 @@ vmxnet3_link_state(struct vmxnet3_softc *sc)
 	struct ifnet *ifp = &sc->vmx_ethercom.ec_if;
 	u_int x, link, speed;
 
-	WRITE_CMD(sc, VMXNET3_CMD_GET_LINK);
-	x = READ_BAR1(sc, VMXNET3_BAR1_CMD);
+	x = vmxnet3_read_cmd(sc, VMXNET3_CMD_GET_LINK);
 	speed = x >> 16;
 	if (x & 1) {
 		ifp->if_baudrate = IF_Mbps(speed);
@@ -690,13 +716,13 @@ vmxnet3_link_state(struct vmxnet3_softc *sc)
 static inline void
 vmxnet3_enable_intr(struct vmxnet3_softc *sc, int irq)
 {
-	WRITE_BAR0(sc, VMXNET3_BAR0_IMASK(irq), 0);
+	vmxnet3_write_bar0(sc, VMXNET3_BAR0_IMASK(irq), 0);
 }
 
 static inline void
 vmxnet3_disable_intr(struct vmxnet3_softc *sc, int irq)
 {
-	WRITE_BAR0(sc, VMXNET3_BAR0_IMASK(irq), 1);
+	vmxnet3_write_bar0(sc, VMXNET3_BAR0_IMASK(irq), 1);
 }
 
 void
@@ -782,7 +808,7 @@ vmxnet3_intr(void *arg)
 	if ((ifp->if_flags & IFF_RUNNING) == 0)
 		return 0;
 	if (sc->vmx_intr_type == VMXNET3_IT_LEGACY) {
-		if (READ_BAR1(sc, VMXNET3_BAR1_INTR) == 0)
+		if (vmxnet3_read_bar1(sc, VMXNET3_BAR1_INTR) == 0)
 			return 0;
 	}
 
@@ -806,7 +832,7 @@ vmxnet3_evintr(struct vmxnet3_softc *sc)
 	struct vmxnet3_rxq_shared *rs;
 
 	/* Clear events. */
-	WRITE_BAR1(sc, VMXNET3_BAR1_EVENT, event);
+	vmxnet3_write_bar1(sc, VMXNET3_BAR1_EVENT, event);
 
 	/* Link state change? */
 	if (event & VMXNET3_EVENT_LINK)
@@ -814,7 +840,7 @@ vmxnet3_evintr(struct vmxnet3_softc *sc)
 
 	/* Queue error? */
 	if (event & (VMXNET3_EVENT_TQERROR | VMXNET3_EVENT_RQERROR)) {
-		WRITE_CMD(sc, VMXNET3_CMD_GET_STATUS);
+		vmxnet3_write_cmd(sc, VMXNET3_CMD_GET_STATUS);
 
 		ts = sc->vmx_txq[0].vxtxq_ts;
 		if (ts->stopped)
@@ -954,10 +980,10 @@ skip_buffer:
 
 			idx = (idx + 1) % NRXDESC;
 			if (qid < NRXQUEUE) {
-				WRITE_BAR0(sc, VMXNET3_BAR0_RXH1(qid), idx);
+				vmxnet3_write_bar0(sc, VMXNET3_BAR0_RXH1(qid), idx);
 			} else {
 				qid -= NRXQUEUE;
-				WRITE_BAR0(sc, VMXNET3_BAR0_RXH2(qid), idx);
+				vmxnet3_write_bar0(sc, VMXNET3_BAR0_RXH2(qid), idx);
 			}
 		}
 	}
@@ -1031,9 +1057,9 @@ allmulti:
 		SET(mode, VMXNET3_RXMODE_PROMISC);
 
 setit:
-	WRITE_CMD(sc, VMXNET3_CMD_SET_FILTER);
+	vmxnet3_write_cmd(sc, VMXNET3_CMD_SET_FILTER);
 	ds->rxmode = mode;
-	WRITE_CMD(sc, VMXNET3_CMD_SET_RXMODE);
+	vmxnet3_write_cmd(sc, VMXNET3_CMD_SET_RXMODE);
 }
 
 int
@@ -1147,7 +1173,7 @@ vmxnet3_stop(struct ifnet *ifp, int disable)
 	if (!disable)
 		return;
 
-	WRITE_CMD(sc, VMXNET3_CMD_DISABLE);
+	vmxnet3_write_cmd(sc, VMXNET3_CMD_DISABLE);
 
 	for (queue = 0; queue < NTXQUEUE; queue++)
 		vmxnet3_txstop(sc, &sc->vmx_txq[queue]);
@@ -1161,7 +1187,7 @@ vmxnet3_reset(struct ifnet *ifp)
 	struct vmxnet3_softc *sc = ifp->if_softc;
 
 	vmxnet3_stop(ifp, 1);
-	WRITE_CMD(sc, VMXNET3_CMD_RESET);
+	vmxnet3_write_cmd(sc, VMXNET3_CMD_RESET);
 	vmxnet3_init(ifp);
 }
 
@@ -1182,16 +1208,15 @@ vmxnet3_init(struct ifnet *ifp)
 	for (queue = 0; queue < NRXQUEUE; queue++)
 		vmxnet3_rxinit(sc, &sc->vmx_rxq[queue]);
 
-	WRITE_CMD(sc, VMXNET3_CMD_ENABLE);
-	if (READ_BAR1(sc, VMXNET3_BAR1_CMD)) {
+	if (vmxnet3_read_cmd(sc, VMXNET3_CMD_ENABLE)) {
 		printf("%s: failed to initialize\n", ifp->if_xname);
 		vmxnet3_stop(ifp, 1);
 		return EIO;
 	}
 
 	for (queue = 0; queue < NRXQUEUE; queue++) {
-		WRITE_BAR0(sc, VMXNET3_BAR0_RXH1(queue), 0);
-		WRITE_BAR0(sc, VMXNET3_BAR0_RXH2(queue), 0);
+		vmxnet3_write_bar0(sc, VMXNET3_BAR0_RXH1(queue), 0);
+		vmxnet3_write_bar0(sc, VMXNET3_BAR0_RXH2(queue), 0);
 	}
 
 	vmxnet3_iff(sc);
@@ -1280,7 +1305,7 @@ vmxnet3_start(struct ifnet *ifp)
 	}
 
 	if (n > 0)
-		WRITE_BAR0(sc, VMXNET3_BAR0_TXH(0), ring->vxtxr_head);
+		vmxnet3_write_bar0(sc, VMXNET3_BAR0_TXH(0), ring->vxtxr_head);
 #ifdef VMXNET3_STAT
 	vmxstat.txhead = ring->vxtxr_head;
 	vmxstat.txdone = ring->vxtxr_next;
