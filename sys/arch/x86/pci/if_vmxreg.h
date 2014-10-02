@@ -200,6 +200,12 @@ struct vmxnet3_rxcompdesc {
 #define VMXNET3_RXC_GEN_S	31
 } __packed;
 
+#define VMXNET3_RCD_RSS_TYPE_NONE	0
+#define VMXNET3_RCD_RSS_TYPE_IPV4	1
+#define VMXNET3_RCD_RSS_TYPE_TCPIPV4	2
+#define VMXNET3_RCD_RSS_TYPE_IPV6	3
+#define VMXNET3_RCD_RSS_TYPE_TCPIPV6	4
+
 #define VMXNET3_REV1_MAGIC 0xbabefee1
 
 #define VMXNET3_GOS_UNKNOWN 0x00
