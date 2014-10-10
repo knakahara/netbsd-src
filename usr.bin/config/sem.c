@@ -1,4 +1,4 @@
-/*	$NetBSD: sem.c,v 1.43 2014/05/29 07:47:45 mrg Exp $	*/
+/*	$NetBSD: sem.c,v 1.47 2014/10/09 16:08:36 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -65,6 +65,7 @@ const char *s_none;
 
 static struct hashtab *cfhashtab;	/* for config lookup */
 struct hashtab *devitab;		/* etc */
+struct attr allattr;
 
 static struct attr errattr;
 static struct devbase errdev;
@@ -95,6 +96,12 @@ initsem(void)
 {
 
 	attrtab = ht_new();
+
+	allattr.a_name = "netbsd";
+	TAILQ_INIT(&allattr.a_files);
+	(void)ht_insert(attrtab, allattr.a_name, &allattr);
+	selectattr(&allattr);
+
 	errattr.a_name = "<internal>";
 
 	TAILQ_INIT(&allbases);
@@ -269,6 +276,7 @@ defattr(const char *name, struct loclist *locs, struct attrlist *deps,
 	a->a_refs = NULL;
 	a->a_deps = deps;
 	a->a_expanding = 0;
+	TAILQ_INIT(&a->a_files);
 
 	/* Expand the attribute to check for cycles in the graph. */
 	expandattr(a, NULL);
@@ -1765,6 +1773,7 @@ selectattr(struct attr *a)
 {
 
 	(void)ht_insert(selecttab, a->a_name, __UNCONST(a->a_name));
+	CFGDBG(3, "attr selected `%s'", a->a_name);
 }
 
 /*
@@ -1778,12 +1787,14 @@ selectbase(struct devbase *d, struct deva *da)
 	struct attrlist *al;
 
 	(void)ht_insert(selecttab, d->d_name, __UNCONST(d->d_name));
+	CFGDBG(3, "devbase selected `%s'", d->d_name);
 	for (al = d->d_attrs; al != NULL; al = al->al_next) {
 		a = al->al_this;
 		expandattr(a, selectattr);
 	}
 	if (da != NULL) {
 		(void)ht_insert(selecttab, da->d_name, __UNCONST(da->d_name));
+		CFGDBG(3, "devattr selected `%s'", da->d_name);
 		for (al = da->d_attrs; al != NULL; al = al->al_next) {
 			a = al->al_this;
 			expandattr(a, selectattr);

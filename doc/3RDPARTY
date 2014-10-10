@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1151 2014/09/18 20:47:39 roy Exp $
+#	$NetBSD: 3RDPARTY,v 1.1156 2014/10/07 21:52:41 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.4.5
-Current Vers:	6.4.5
+Version:	6.5.0
+Current Vers:	6.5.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -1312,8 +1312,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2014f / tzdata2014g
-Current Vers:	tzcode2014g / tzdata2014g
+Version:	tzcode2014h / tzdata2014h
+Current Vers:	tzcode2014h / tzdata2014h
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/

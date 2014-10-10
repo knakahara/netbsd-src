@@ -26,17 +26,20 @@
  * CRC32 code derived from work by Gary S. Brown.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifdef __FBSDID
 __FBSDID("$FreeBSD: src/sbin/gpt/gpt.c,v 1.16 2006/07/07 02:44:23 marcel Exp $");
 #endif
 #ifdef __RCSID
-__RCSID("$NetBSD: gpt.c,v 1.29 2014/09/23 07:47:54 jnemeth Exp $");
+__RCSID("$NetBSD: gpt.c,v 1.36 2014/10/04 01:00:42 christos Exp $");
 #endif
 
 #include <sys/param.h>
 #include <sys/types.h>
-#include <sys/disk.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/bootblock.h>
@@ -50,10 +53,12 @@ __RCSID("$NetBSD: gpt.c,v 1.29 2014/09/23 07:47:54 jnemeth Exp $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <util.h>
 #include <ctype.h>
+#ifndef HAVE_NBTOOL_CONFIG_H
 #include <prop/proplib.h>
 #include <sys/drvctlio.h>
+#include <sys/disk.h>
+#endif
 
 #include "map.h"
 #include "gpt.h"
@@ -240,98 +245,6 @@ utf8_to_utf16(const uint8_t *s8, uint16_t *s16, size_t s16len)
 	} while (c != 0);
 }
 
-int
-parse_uuid(const char *s, uuid_t *uuid)
-{
-	uint32_t status;
-
-	uuid_from_string(s, uuid, &status);
-	if (status == uuid_s_ok)
-		return (0);
-
-	switch (*s) {
-	case 'b':
-		if (strcmp(s, "bios") == 0) {
-			static const uuid_t bios = GPT_ENT_TYPE_BIOS;
-			*uuid = bios;
-			return (0);
-		}
-		break;
-	case 'c':
-		if (strcmp(s, "ccd") == 0) {
-			static const uuid_t ccd = GPT_ENT_TYPE_NETBSD_CCD;
-			*uuid = ccd;
-			return (0);
-		} else if (strcmp(s, "cgd") == 0) {
-			static const uuid_t cgd = GPT_ENT_TYPE_NETBSD_CGD;
-			*uuid = cgd;
-			return (0);
-		}
-		break;
-	case 'e':
-		if (strcmp(s, "efi") == 0) {
-			static const uuid_t efi = GPT_ENT_TYPE_EFI;
-			*uuid = efi;
-			return (0);
-		}
-		break;
-	case 'f':
-		if (strcmp(s, "ffs") == 0) {
-			static const uuid_t nb_ffs = GPT_ENT_TYPE_NETBSD_FFS;
-			*uuid = nb_ffs;
-			return (0);
-		}
-		break;
-	case 'h':
-		if (strcmp(s, "hfs") == 0) {
-			static const uuid_t hfs = GPT_ENT_TYPE_APPLE_HFS;
-			*uuid = hfs;
-			return (0);
-		}
-		break;
-	case 'l':
-		if (strcmp(s, "lfs") == 0) {
-			static const uuid_t lfs = GPT_ENT_TYPE_NETBSD_LFS;
-			*uuid = lfs;
-			return (0);
-		} else if (strcmp(s, "linux") == 0) {
-			static const uuid_t lnx = GPT_ENT_TYPE_LINUX_DATA;
-			*uuid = lnx;
-			return (0);
-		}
-		break;
-	case 'r':
-		if (strcmp(s, "raid") == 0) {
-			static const uuid_t raid = GPT_ENT_TYPE_NETBSD_RAIDFRAME;
-			*uuid = raid;
-			return (0);
-		}
-		break;
-	case 's':
-		if (strcmp(s, "swap") == 0) {
-			static const uuid_t sw = GPT_ENT_TYPE_NETBSD_SWAP;
-			*uuid = sw;
-			return (0);
-		}
-		break;
-	case 'u':
-		if (strcmp(s, "ufs") == 0) {
-			static const uuid_t ufs = GPT_ENT_TYPE_NETBSD_FFS;
-			*uuid = ufs;
-			return (0);
-		}
-		break;
-	case 'w':
-		if (strcmp(s, "windows") == 0) {
-			static const uuid_t win = GPT_ENT_TYPE_MS_BASIC_DATA;
-			*uuid = win;
-			return (0);
-		}
-		break;
-	}
-	return (EINVAL);
-}
-
 void*
 gpt_read(int fd, off_t lba, size_t count)
 {
@@ -451,6 +364,7 @@ gpt_mbr(int fd, off_t lba)
 	return (0);
 }
 
+#ifndef HAVE_NBTOOL_CONFIG_H
 static int
 drvctl(const char *name, u_int *sector_size, off_t *media_size)
 {
@@ -460,6 +374,9 @@ drvctl(const char *name, u_int *sector_size, off_t *media_size)
 	prop_number_t number;
 	int dfd, res;
 	char *dname, *p;
+
+	if (*sector_size && *media_size)
+		return 0;
 
 	if ((dfd = open("/dev/drvctl", O_RDONLY)) == -1) {
 		warn("%s: /dev/drvctl", __func__);
@@ -520,28 +437,30 @@ drvctl(const char *name, u_int *sector_size, off_t *media_size)
 	if (number == NULL)
 		goto out;
 
-	*sector_size = prop_number_integer_value(number);
+	if (*sector_size == 0)
+		*sector_size = prop_number_integer_value(number);
 
 	number = prop_dictionary_get(geometry, "sectors-per-unit");
 	if (number == NULL)
 		goto out;
 
-	*media_size = prop_number_integer_value(number) * *sector_size;
+	if (*media_size == 0)
+		*media_size = prop_number_integer_value(number) * *sector_size;
 
 	return 0;
 out:
 	errno = EINVAL;
 	return -1;
 }
+#endif
 
 int
 gpt_gpt(int fd, off_t lba, int found)
 {
-	uuid_t type;
 	off_t size;
 	struct gpt_ent *ent;
 	struct gpt_hdr *hdr;
-	char *p, *s;
+	char *p;
 	map_t *m;
 	size_t blocks, tblsz;
 	unsigned int i;
@@ -606,19 +525,19 @@ gpt_gpt(int fd, off_t lba, int found)
 
 	for (i = 0; i < le32toh(hdr->hdr_entries); i++) {
 		ent = (void*)(p + i * le32toh(hdr->hdr_entsz));
-		if (uuid_is_nil((uuid_t *)&ent->ent_type, NULL))
+		if (gpt_uuid_is_nil(ent->ent_type))
 			continue;
 
 		size = le64toh(ent->ent_lba_end) - le64toh(ent->ent_lba_start) +
 		    1LL;
 		if (verbose > 2) {
-			le_uuid_dec(&ent->ent_type, &type);
-			uuid_to_string(&type, &s, NULL);
-			warnx(
-	"%s: GPT partition: type=%s, start=%llu, size=%llu", device_name, s,
+			char buf[128];
+			gpt_uuid_snprintf(buf, sizeof(buf), "%s", 
+			    ent->ent_type);
+			warnx("%s: GPT partition: type=%s, start=%llu, "
+			    "size=%llu", device_name, buf,
 			    (long long)le64toh(ent->ent_lba_start),
 			    (long long)size);
-			free(s);
 		}
 		m = map_add(le64toh(ent->ent_lba_start), size,
 		    MAP_TYPE_GPT_PART, ent);
@@ -658,19 +577,26 @@ gpt_open(const char *dev)
 
 	if ((sb.st_mode & S_IFMT) != S_IFREG) {
 #ifdef DIOCGSECTORSIZE
-		if (ioctl(fd, DIOCGSECTORSIZE, &secsz) == -1 ||
-		    ioctl(fd, DIOCGMEDIASIZE, &mediasz) == -1)
+		if ((secsz == 0 && ioctl(fd, DIOCGSECTORSIZE, &secsz) == -1) ||
+		    (mediasz == 0 && ioctl(fd, DIOCGMEDIASIZE, &mediasz) == -1))
 			goto close;
 #endif
+#ifndef HAVE_NBTOOL_CONFIG_H
 		if (drvctl(device_name, &secsz, &mediasz) == -1)
 			goto close;
+#endif
+		if (secsz == 0 || mediasz == 0)
+			errx(1, "Please specify sector/media size");
 	} else {
-		secsz = 512;	/* Fixed size for files. */
-		if (sb.st_size % secsz) {
-			errno = EINVAL;
-			goto close;
+		if (secsz == 0)
+			secsz = 512;	/* Fixed size for files. */
+		if (mediasz == 0) {
+			if (sb.st_size % secsz) {
+				errno = EINVAL;
+				goto close;
+			}
+			mediasz = sb.st_size;
 		}
-		mediasz = sb.st_size;
 	}
 
 	/*
@@ -717,7 +643,9 @@ static struct {
 	const char *name;
 } cmdsw[] = {
 	{ cmd_add, "add" },
+#ifndef HAVE_NBTOOL_CONFIG_H
 	{ cmd_backup, "backup" },
+#endif
 	{ cmd_biosboot, "biosboot" },
 	{ cmd_create, "create" },
 	{ cmd_destroy, "destroy" },
@@ -729,9 +657,12 @@ static struct {
 	{ NULL, "rename" },
 	{ cmd_resize, "resize" },
 	{ cmd_resizedisk, "resizedisk" },
+#ifndef HAVE_NBTOOL_CONFIG_H
 	{ cmd_restore, "restore" },
+#endif
 	{ cmd_set, "set" },
 	{ cmd_show, "show" },
+	{ cmd_type, "type" },
 	{ cmd_unset, "unset" },
 	{ NULL, "verify" },
 	{ NULL, NULL }
@@ -740,51 +671,62 @@ static struct {
 __dead static void
 usage(void)
 {
-	extern const char addmsg1[], addmsg2[], backupmsg[], biosbootmsg[];
+	extern const char addmsg1[], addmsg2[], biosbootmsg[];
 	extern const char createmsg[], destroymsg[], labelmsg1[], labelmsg2[];
 	extern const char labelmsg3[], migratemsg[], recovermsg[], removemsg1[];
 	extern const char removemsg2[], resizemsg[], resizediskmsg[];
-	extern const char restoremsg[], setmsg[], showmsg[], unsetmsg[];
+	extern const char setmsg[], showmsg[], typemsg1[];
+	extern const char typemsg2[], typemsg3[], unsetmsg[];
+#ifndef HAVE_NBTOOL_CONFIG_H
+	extern const char backupmsg[], restoremsg[];
+#endif
+	const char *p = getprogname();
+	const char *f =
+	    "[-rv] [-m <mediasize>] [-p <partitionnum>] [-s <sectorsize>]";
 
 	fprintf(stderr,
-	    "usage: %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %*s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n"
-	    "       %s %s\n",
-	    getprogname(), addmsg1,
-	    getprogname(), addmsg2,
-	    getprogname(), backupmsg,
-	    getprogname(), biosbootmsg,
-	    getprogname(), createmsg,
-	    getprogname(), destroymsg,
-	    getprogname(), labelmsg1,
-	    getprogname(), labelmsg2,
-	    (int)strlen(getprogname()), "", labelmsg3,
-	    getprogname(), migratemsg,
-	    getprogname(), recovermsg,
-	    getprogname(), removemsg1,
-	    getprogname(), removemsg2,
-	    getprogname(), resizemsg,
-	    getprogname(), resizediskmsg,
-	    getprogname(), restoremsg,
-	    getprogname(), setmsg,
-	    getprogname(), showmsg,
-	    getprogname(), unsetmsg);
+	    "Usage: %s %s <command> [<args>]\n", p, f);
+	fprintf(stderr, 
+	    "Commands:\n"
+#ifndef HAVE_NBTOOL_CONFIG_H
+	    "       %s\n"
+	    "       %s\n"
+#endif
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n"
+	    "       %s\n",
+	    addmsg1, addmsg2,
+#ifndef HAVE_NBTOOL_CONFIG_H
+	    backupmsg,
+#endif
+	    biosbootmsg, createmsg, destroymsg,
+	    labelmsg1, labelmsg2, labelmsg3,
+	    migratemsg, recovermsg,
+	    removemsg1, removemsg2,
+	    resizemsg, resizediskmsg,
+#ifndef HAVE_NBTOOL_CONFIG_H
+	    restoremsg,
+#endif
+	    setmsg, showmsg,
+	    typemsg1, typemsg2, typemsg3,
+	    unsetmsg);
 	exit(1);
 }
 
@@ -811,8 +753,15 @@ main(int argc, char *argv[])
 	int ch, i;
 
 	/* Get the generic options */
-	while ((ch = getopt(argc, argv, "p:rv")) != -1) {
+	while ((ch = getopt(argc, argv, "m:p:rs:v")) != -1) {
 		switch(ch) {
+		case 'm':
+			if (mediasz > 0)
+				usage();
+			mediasz = strtoul(optarg, &p, 10);
+			if (*p != 0 || mediasz < 1)
+				usage();
+			break;
 		case 'p':
 			if (parts > 0)
 				usage();
@@ -822,6 +771,13 @@ main(int argc, char *argv[])
 			break;
 		case 'r':
 			readonly = 1;
+			break;
+		case 's':
+			if (secsz > 0)
+				usage();
+			secsz = strtoul(optarg, &p, 10);
+			if (*p != 0 || secsz < 1)
+				usage();
 			break;
 		case 'v':
 			verbose++;

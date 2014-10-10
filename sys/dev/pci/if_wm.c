@@ -1,4 +1,4 @@
-/*	$NetBSD: if_wm.c,v 1.298 2014/09/16 07:06:42 msaitoh Exp $	*/
+/*	$NetBSD: if_wm.c,v 1.303 2014/10/07 08:45:02 ozaki-r Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002, 2003, 2004 Wasabi Systems, Inc.
@@ -81,7 +81,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.298 2014/09/16 07:06:42 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.303 2014/10/07 08:45:02 ozaki-r Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -888,13 +888,29 @@ static const struct wm_product {
 	  "Intel PRO/1000 QT (82571EB)",
 	  WM_T_82571,		WMP_F_COPPER },
 
-	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82572EI_COPPER,
-	  "Intel i82572EI 1000baseT Ethernet",
-	  WM_T_82572,		WMP_F_COPPER },
-
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82571GB_QUAD_COPPER,
 	  "Intel PRO/1000 PT Quad Port Server Adapter",
 	  WM_T_82571,		WMP_F_COPPER, },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82571PT_QUAD_COPPER,
+	  "Intel Gigabit PT Quad Port Server ExpressModule",
+	  WM_T_82571,		WMP_F_COPPER, },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82571EB_DUAL_SERDES,
+	  "Intel 82571EB Dual Gigabit Ethernet (SERDES)",
+	  WM_T_82571,		WMP_F_SERDES, },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82571EB_QUAD_SERDES,
+	  "Intel 82571EB Quad Gigabit Ethernet (SERDES)",
+	  WM_T_82571,		WMP_F_SERDES, },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82571EB_QUAD_FIBER,
+	  "Intel 82571EB Quad 1000baseX Ethernet",
+	  WM_T_82571,		WMP_F_FIBER, },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82572EI_COPPER,
+	  "Intel i82572EI 1000baseT Ethernet",
+	  WM_T_82572,		WMP_F_COPPER },
 
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82572EI_FIBER,
 	  "Intel i82572EI 1000baseX Ethernet",
@@ -921,6 +937,10 @@ static const struct wm_product {
 	  WM_T_82573,		WMP_F_COPPER },
 
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82574L,
+	  "Intel i82574L",
+	  WM_T_82574,		WMP_F_COPPER },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82574LA,
 	  "Intel i82574L",
 	  WM_T_82574,		WMP_F_COPPER },
 
@@ -1064,6 +1084,11 @@ static const struct wm_product {
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82576_QUAD_COPPER,
 	  "82576 quad-1000BaseT Ethernet",
 	  WM_T_82576,		WMP_F_COPPER },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82576_QUAD_COPPER_ET2,
+	  "82576 Gigabit ET2 Quad Port Server Adapter",
+	  WM_T_82576,		WMP_F_COPPER },
+
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82576_NS,
 	  "82576 gigabit Ethernet",
 	  WM_T_82576,		WMP_F_COPPER },
@@ -1092,15 +1117,11 @@ static const struct wm_product {
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82580_COPPER_DUAL,
 	  "82580 dual-1000BaseT Ethernet",
 	  WM_T_82580,		WMP_F_COPPER },
-	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82580_ER,
-	  "82580 1000BaseT Ethernet",
-	  WM_T_82580ER,		WMP_F_COPPER },
-	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82580_ER_DUAL,
-	  "82580 dual-1000BaseT Ethernet",
-	  WM_T_82580ER,		WMP_F_COPPER },
+
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82580_QUAD_FIBER,
 	  "82580 quad-1000BaseX Ethernet",
 	  WM_T_82580,		WMP_F_FIBER },
+
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I350_COPPER,
 	  "I350 Gigabit Network Connection",
 	  WM_T_I350,		WMP_F_COPPER },
@@ -1110,6 +1131,10 @@ static const struct wm_product {
 
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I350_SERDES,
 	  "I350 Gigabit Backplane Connection",
+	  WM_T_I350,		WMP_F_SERDES },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I350_DA4,
+	  "I350 Quad Port Gigabit Ethernet",
 	  WM_T_I350,		WMP_F_SERDES },
 
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I350_SGMII,
@@ -1122,18 +1147,29 @@ static const struct wm_product {
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_T1,
 	  "I210-T1 Ethernet Server Adapter",
 	  WM_T_I210,		WMP_F_COPPER },
+
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_COPPER_OEM1,
 	  "I210 Ethernet (Copper OEM)",
 	  WM_T_I210,		WMP_F_COPPER },
+
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_COPPER_IT,
 	  "I210 Ethernet (Copper IT)",
 	  WM_T_I210,		WMP_F_COPPER },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_COPPER_WOF,
+	  "I210 Ethernet (FLASH less)",
+	  WM_T_I210,		WMP_F_COPPER },
+
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_FIBER,
 	  "I210 Gigabit Ethernet (Fiber)",
 	  WM_T_I210,		WMP_F_FIBER },
 
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_SERDES,
 	  "I210 Gigabit Ethernet (SERDES)",
+	  WM_T_I210,		WMP_F_SERDES },
+
+	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_SERDES_WOF,
+	  "I210 Gigabit Ethernet (FLASH less)",
 	  WM_T_I210,		WMP_F_SERDES },
 
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_I210_SGMII,
@@ -1329,7 +1365,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	}
 
 	if ((sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
-	    || (sc->sc_type == WM_T_82580) || (sc->sc_type == WM_T_82580ER)
+	    || (sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I354)
 	    || (sc->sc_type == WM_T_I210) || (sc->sc_type == WM_T_I211))
 		sc->sc_flags |= WM_F_NEWQUEUE;
@@ -1448,7 +1484,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	if ((sc->sc_type == WM_T_82546) || (sc->sc_type == WM_T_82546_3)
 	    || (sc->sc_type ==  WM_T_82571) || (sc->sc_type == WM_T_80003)
 	    || (sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
-	    || (sc->sc_type == WM_T_82580) || (sc->sc_type == WM_T_82580ER)
+	    || (sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I354))
 		sc->sc_funcid = (CSR_READ(sc, WMREG_STATUS)
 		    >> STATUS_FUNCID_SHIFT) & STATUS_FUNCID_MASK;
@@ -1726,7 +1762,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_80003:
@@ -1935,7 +1970,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354: /* XXX ok? */
 	case WM_T_ICH8:
@@ -2064,7 +2098,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 		case WM_T_82575:
 		case WM_T_82576:
 		case WM_T_82580:
-		case WM_T_82580ER:
 		case WM_T_I350:
 		case WM_T_I354:
 		case WM_T_I210:
@@ -2178,7 +2211,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354: /* XXXX ok? */
 	case WM_T_I210:
@@ -2628,11 +2660,10 @@ wm_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 #ifndef WM_MPSAFE
 	s = splnet();
 #endif
-	WM_BOTH_LOCK(sc);
-
 	switch (cmd) {
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:
+		WM_BOTH_LOCK(sc);
 		/* Flow control requires full-duplex mode. */
 		if (IFM_SUBTYPE(ifr->ifr_media) == IFM_AUTO ||
 		    (ifr->ifr_media & IFM_FDX) == 0)
@@ -2645,9 +2676,17 @@ wm_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 			}
 			sc->sc_flowflags = ifr->ifr_media & IFM_ETH_FMASK;
 		}
+		WM_BOTH_UNLOCK(sc);
+#ifdef WM_MPSAFE
+		s = splnet();
+#endif
 		error = ifmedia_ioctl(ifp, ifr, &sc->sc_mii.mii_media, cmd);
+#ifdef WM_MPSAFE
+		splx(s);
+#endif
 		break;
 	case SIOCINITIFADDR:
+		WM_BOTH_LOCK(sc);
 		if (ifa->ifa_addr->sa_family == AF_LINK) {
 			sdl = satosdl(ifp->if_dl->ifa_addr);
 			(void)sockaddr_dl_setaddr(sdl, sdl->sdl_len,
@@ -2655,11 +2694,12 @@ wm_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 			/* unicast address is first multicast entry */
 			wm_set_filter(sc);
 			error = 0;
+			WM_BOTH_UNLOCK(sc);
 			break;
 		}
+		WM_BOTH_UNLOCK(sc);
 		/*FALLTHROUGH*/
 	default:
-		WM_BOTH_UNLOCK(sc);
 #ifdef WM_MPSAFE
 		s = splnet();
 #endif
@@ -2668,17 +2708,13 @@ wm_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 #ifdef WM_MPSAFE
 		splx(s);
 #endif
-		WM_BOTH_LOCK(sc);
-
 		if (error != ENETRESET)
 			break;
 
 		error = 0;
 
 		if (cmd == SIOCSIFCAP) {
-			WM_BOTH_UNLOCK(sc);
 			error = (*ifp->if_init)(ifp);
-			WM_BOTH_LOCK(sc);
 		} else if (cmd != SIOCADDMULTI && cmd != SIOCDELMULTI)
 			;
 		else if (ifp->if_flags & IFF_RUNNING) {
@@ -2686,12 +2722,12 @@ wm_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 			 * Multicast list has changed; set the hardware filter
 			 * accordingly.
 			 */
+			WM_BOTH_LOCK(sc);
 			wm_set_filter(sc);
+			WM_BOTH_UNLOCK(sc);
 		}
 		break;
 	}
-
-	WM_BOTH_UNLOCK(sc);
 
 	/* Try to get more packets going. */
 	ifp->if_start(ifp);
@@ -2742,7 +2778,6 @@ wm_read_mac_addr(struct wm_softc *sc, uint8_t *enaddr)
 
 	switch (sc->sc_type) {
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 		switch (sc->sc_funcid) {
@@ -3063,7 +3098,6 @@ wm_get_auto_rd_done(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -3155,7 +3189,6 @@ wm_get_cfg_done(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -3235,7 +3268,6 @@ wm_reset(struct wm_softc *sc)
 		sc->sc_pba = PBA_32K;
 		break;
 	case WM_T_82580:
-	case WM_T_82580ER:
 		sc->sc_pba = PBA_35K;
 		break;
 	case WM_T_I210:
@@ -3289,7 +3321,7 @@ wm_reset(struct wm_softc *sc)
 
 	/* Set the completion timeout for interface */
 	if ((sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
-	    || (sc->sc_type == WM_T_82580) || (sc->sc_type == WM_T_82580ER)
+	    || (sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I354)
 	    || (sc->sc_type == WM_T_I210) || (sc->sc_type == WM_T_I211))
 		wm_set_pcie_completion_timeout(sc);
@@ -3404,7 +3436,6 @@ wm_reset(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_82583:
 	case WM_T_I350:
 	case WM_T_I354:
@@ -3482,7 +3513,6 @@ wm_reset(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -3508,7 +3538,6 @@ wm_reset(struct wm_softc *sc)
 	case WM_T_82576:
 #if 0 /* XXX */
 	case WM_T_82580:
-	case WM_T_82580ER:
 #endif
 	case WM_T_I350:
 	case WM_T_I354:
@@ -3520,7 +3549,6 @@ wm_reset(struct wm_softc *sc)
 			if ((sc->sc_type == WM_T_82575)
 			    || (sc->sc_type == WM_T_82576)
 			    || (sc->sc_type == WM_T_82580)
-			    || (sc->sc_type == WM_T_82580ER)
 			    || (sc->sc_type == WM_T_I350)
 			    || (sc->sc_type == WM_T_I354))
 				wm_reset_init_script_82575(sc);
@@ -3530,7 +3558,7 @@ wm_reset(struct wm_softc *sc)
 		break;
 	}
 
-	if ((sc->sc_type == WM_T_82580) || (sc->sc_type == WM_T_82580ER)
+	if ((sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I354)) {
 		/* clear global device reset status bit */
 		CSR_WRITE(sc, WMREG_STATUS, STATUS_DEV_RST_SET);
@@ -5867,7 +5895,6 @@ wm_gmii_reset(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -5944,7 +5971,6 @@ wm_gmii_reset(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -6000,7 +6026,6 @@ wm_gmii_reset(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -6045,7 +6070,6 @@ wm_gmii_reset(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -6165,7 +6189,7 @@ wm_gmii_mediainit(struct wm_softc *sc, pci_product_id_t prodid)
 		sc->sc_tipg = TIPG_1000T_DFLT;
 
 	/* XXX Not for I354? FreeBSD's e1000_82575.c doesn't include it */
-	if ((sc->sc_type == WM_T_82580) || (sc->sc_type == WM_T_82580ER)
+	if ((sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I210)
 	    || (sc->sc_type == WM_T_I211)) {
 		reg = CSR_READ(sc, WMREG_PHPM);
@@ -6272,7 +6296,7 @@ wm_gmii_mediainit(struct wm_softc *sc, pci_product_id_t prodid)
 	    wm_gmii_mediastatus);
 
 	if ((sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
-	    || (sc->sc_type == WM_T_82580) || (sc->sc_type == WM_T_82580ER)
+	    || (sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I354)
 	    || (sc->sc_type == WM_T_I210) || (sc->sc_type == WM_T_I211)) {
 		if ((sc->sc_flags & WM_F_SGMII) == 0) {
@@ -7116,7 +7140,6 @@ wm_sgmii_uses_mdio(struct wm_softc *sc)
 		ismdio = ((reg & MDIC_DEST) != 0);
 		break;
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -7848,7 +7871,6 @@ wm_nvm_set_addrbits_size_eecd(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 	case WM_T_I210:
@@ -8474,9 +8496,9 @@ wm_nvm_validate_checksum(struct wm_softc *sc)
 		printf("%s: NVM dump:\n", device_xname(sc->sc_dev));
 		for (i = 0; i < NVM_SIZE; i++) {
 			if (wm_nvm_read(sc, i, 1, &eeprom_data))
-				printf("XX ");
+				printf("XXXX ");
 			else
-				printf("%04x ", eeprom_data);
+				printf("%04hx ", eeprom_data);
 			if (i % 8 == 7)
 				printf("\n");
 		}
@@ -9014,7 +9036,6 @@ wm_get_wakeup(struct wm_softc *sc)
 	case WM_T_82575:
 	case WM_T_82576:
 	case WM_T_82580:
-	case WM_T_82580ER:
 	case WM_T_I350:
 	case WM_T_I354:
 		if ((CSR_READ(sc, WMREG_FWSM) & FWSM_MODE_MASK) != 0)

@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.54 2014/08/09 12:40:14 bad Exp $	*/
+/*	$NetBSD: main.c,v 1.58 2014/10/09 19:20:56 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -92,6 +92,7 @@ int	yyparse(void);
 
 #ifndef MAKE_BOOTSTRAP
 extern int yydebug;
+int	dflag;
 #endif
 
 static struct dlhash *obsopttab;
@@ -160,14 +161,19 @@ main(int argc, char **argv)
 
 	pflag = 0;
 	xflag = 0;
-	while ((ch = getopt(argc, argv, "D:LPU:dgpvb:s:x")) != -1) {
+	while ((ch = getopt(argc, argv, "D:LMPU:dgpvb:s:x")) != -1) {
 		switch (ch) {
 
 #ifndef MAKE_BOOTSTRAP
 		case 'd':
 			yydebug = 1;
+			dflag++;
 			break;
 #endif
+
+		case 'M':
+			usekobjs = 1;
+			break;
 
 		case 'L':
 			Lflag = 1;
@@ -281,8 +287,6 @@ main(int argc, char **argv)
 	minmaxusers = 1;
 	maxmaxusers = 10000;
 	initintern();
-	initfiles();
-	initsem();
 	ident = NULL;
 	devbasetab = ht_new();
 	devroottab = ht_new();
@@ -310,6 +314,8 @@ main(int argc, char **argv)
 	nextappmkopt = &appmkoptions;
 	nextcndmkopt = &condmkoptions;
 	nextfsopt = &fsoptions;
+	initfiles();
+	initsem();
 
 	/*
 	 * Handle profiling (must do this before we try to create any
@@ -954,6 +960,7 @@ addoption(const char *name, const char *value)
 	/* make lowercase, then add to select table */
 	n = strtolower(name);
 	(void)ht_insert(selecttab, n, (void *)__UNCONST(n));
+	CFGDBG(3, "option selected `%s'", n);
 }
 
 void
@@ -993,6 +1000,7 @@ addfsoption(const char *name)
 
 	/* Add to select table. */
 	(void)ht_insert(selecttab, n, __UNCONST(n));
+	CFGDBG(3, "fs selected `%s'", name);
 }
 
 void

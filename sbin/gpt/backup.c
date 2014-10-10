@@ -24,12 +24,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifdef __FBSDID
 __FBSDID("$FreeBSD: src/sbin/gpt/show.c,v 1.14 2006/06/22 22:22:32 marcel Exp $");
 #endif
 #ifdef __RCSID
-__RCSID("$NetBSD: backup.c,v 1.3 2014/09/10 10:49:44 jnemeth Exp $");
+__RCSID("$NetBSD: backup.c,v 1.8 2014/09/30 17:59:59 christos Exp $");
 #endif
 
 #include <sys/bootblock.h>
@@ -66,7 +70,6 @@ usage_backup(void)
 static void
 backup(void)
 {
-	uuid_t u;
 	map_t *m;
 	struct mbr *mbr;
 	struct gpt_ent *ent;
@@ -77,7 +80,7 @@ backup(void)
 	prop_data_t propdata;
 	prop_number_t propnum;
 	prop_string_t propstr;
-	char *propext, *s;
+	char *propext, *s, buf[128];
 	bool rc;
 
 	props = prop_dictionary_create();
@@ -197,10 +200,9 @@ backup(void)
 			rc = prop_dictionary_set(type_dict, "revision",
 			    propnum);
 			PROP_ERR(rc);
-			le_uuid_dec(hdr->hdr_guid, &u);
-			uuid_to_string(&u, &s, NULL);
-			propstr = prop_string_create_cstring(s);
-			free(s);
+			gpt_uuid_snprintf(buf, sizeof(buf), "%d",
+			    hdr->hdr_guid);
+			propstr = prop_string_create_cstring(buf);
 			PROP_ERR(propstr);
 			rc = prop_dictionary_set(type_dict, "guid", propstr);
 			PROP_ERR(rc);
@@ -228,17 +230,15 @@ backup(void)
 				rc = prop_dictionary_set(gpt_dict, "index",
 				    propnum);
 				PROP_ERR(propnum);
-				le_uuid_dec(ent->ent_type, &u);
-				uuid_to_string(&u, &s, NULL);
-				propstr = prop_string_create_cstring(s);
-				free(s);
+				gpt_uuid_snprintf(buf, sizeof(buf), "%d",
+				    ent->ent_type);
+				propstr = prop_string_create_cstring(buf);
 				PROP_ERR(propstr);
 				rc = prop_dictionary_set(gpt_dict, "type",
 				    propstr);
-				le_uuid_dec(ent->ent_guid, &u);
-				uuid_to_string(&u, &s, NULL);
-				propstr = prop_string_create_cstring(s);
-				free(s);
+				gpt_uuid_snprintf(buf, sizeof(buf), "%d",
+				    ent->ent_guid);
+				propstr = prop_string_create_cstring(buf);
 				PROP_ERR(propstr);
 				rc = prop_dictionary_set(gpt_dict, "guid",
 				    propstr);
@@ -301,7 +301,6 @@ cmd_backup(int argc, char *argv[])
 			warn("unable to open device '%s'", device_name);
 			continue;
 		}
-
 		backup();
 
 		gpt_close(fd);

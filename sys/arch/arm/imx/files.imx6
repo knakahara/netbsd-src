@@ -1,4 +1,4 @@
-#	$NetBSD: files.imx6,v 1.2 2014/09/25 05:05:28 ryo Exp $
+#	$NetBSD: files.imx6,v 1.4 2014/10/07 09:36:09 ryo Exp $
 #
 # Configuration info for the Freescale i.MX6
 #
@@ -61,6 +61,12 @@ device	imxiomux
 attach	imxiomux at axi
 file	arch/arm/imx/imx6_iomux.c		imxiomux
 
+# iMX iic Controler
+device	imxi2c: i2cbus
+attach	imxi2c at axi
+file	arch/arm/imx/imxi2c.c			imxi2c
+file	arch/arm/imx/imx6_i2c.c			imxi2c
+
 # iMX UART
 device	imxuart
 attach	imxuart at axi
@@ -88,3 +94,9 @@ file	arch/arm/imx/imx6_usdhc.c		sdhc_axi
 # iMX6 SATA Controllers (AHCI)
 attach	ahcisata at axi with imx6_ahcisata
 file	arch/arm/imx/imx6_ahcisata.c		imx6_ahcisata
+
+# iMX6 Secure Non-Volatile Storage (SNVS)
+device	imxsnvs
+attach	imxsnvs at axi
+file	arch/arm/imx/imx6_snvs.c		imxsnvs
+

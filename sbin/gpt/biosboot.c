@@ -1,4 +1,4 @@
-/*	$NetBSD: biosboot.c,v 1.8 2014/09/26 05:34:15 jnemeth Exp $ */
+/*	$NetBSD: biosboot.c,v 1.14 2014/10/03 20:30:06 christos Exp $ */
 
 /*
  * Copyright (c) 2009 The NetBSD Foundation, Inc.
@@ -31,28 +31,32 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifdef __RCSID
-__RCSID("$NetBSD: biosboot.c,v 1.8 2014/09/26 05:34:15 jnemeth Exp $");
+__RCSID("$NetBSD: biosboot.c,v 1.14 2014/10/03 20:30:06 christos Exp $");
 #endif
 
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#ifdef DIOCGWEDGEINFO
 #include <sys/disk.h>
+#endif
 #include <sys/param.h>
 #include <sys/bootblock.h>
 
 #include <err.h>
 #include <fcntl.h>
-#include <inttypes.h>
 #include <paths.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <util.h>
 
 #include "map.h"
 #include "gpt.h"
@@ -65,8 +69,10 @@ static uint64_t size;
 
 static char *bootpath;
 static unsigned int entry;
+static uint8_t *label;
 
-const char biosbootmsg[] = "biosboot [-c bootcode] [-i index] device ...";
+const char biosbootmsg[] = "biosboot [-c bootcode] [-i index] "
+	"[-L label] device ...";
 
 __dead static void
 usage_biosboot(void)
@@ -196,8 +202,13 @@ biosboot(int fd)
 		if (entry > 0 && m->map_index == entry)
 			break;
 
+		if (label != NULL)
+			if (strcmp((char *)label,
+			    (char *)utf16_to_utf8(ent->ent_name)) == 0)
+				break;
+
 		/* next, partition as could be specified by wedge */
-		if (entry < 1 && size > 0 &&
+		if (entry < 1 && label == NULL && size > 0 &&
 		    m->map_start == start && m->map_size == (off_t)size)
 			break;
 	}
@@ -252,18 +263,22 @@ biosboot(int fd)
 		warnx("error: cannot update Protective MBR");
 		return;
 	}
+
+	printf("partition %d marked as bootable\n", i + 1);
 }
 
 int
 cmd_biosboot(int argc, char *argv[])
 {
+#ifdef DIOCGWEDGEINFO
 	struct dkwedge_info dkw;
+#endif
 	struct stat sb;
 	char devpath[MAXPATHLEN];
 	char *dev, *p;
 	int ch, fd;
 
-	while ((ch = getopt(argc, argv, "c:i:")) != -1) {
+	while ((ch = getopt(argc, argv, "c:i:L:")) != -1) {
 		switch(ch) {
 		case 'c':
 			if (bootpath != NULL)
@@ -277,6 +292,11 @@ cmd_biosboot(int argc, char *argv[])
 			entry = strtoul(optarg, &p, 10);
 			if (*p != 0 || entry < 1)
 				usage_biosboot();
+			break;
+		case 'L':
+			if (label != NULL)
+				usage_biosboot();
+			label = (uint8_t *)strdup(optarg);
 			break;
 		default:
 			usage_biosboot();

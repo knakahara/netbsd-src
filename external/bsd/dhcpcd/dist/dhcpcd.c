@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: dhcpcd.c,v 1.9 2014/09/18 20:46:30 roy Exp $");
+ __RCSID("$NetBSD: dhcpcd.c,v 1.12 2014/10/06 18:22:29 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -457,26 +457,24 @@ configure_interface1(struct interface *ifp)
 	}
 
 #ifdef INET6
-	if (ifo->options & DHCPCD_IPV6) {
-		if (ifo->ia == NULL) {
-			ifo->ia = malloc(sizeof(*ifo->ia));
-			if (ifo->ia == NULL)
-				syslog(LOG_ERR, "%s: %m", __func__);
-			else {
-				ifo->ia_len = 1;
-				ifo->ia->ia_type = D6_OPTION_IA_NA;
-				memcpy(ifo->ia->iaid, ifo->iaid,
-				    sizeof(ifo->iaid));
-				memset(&ifo->ia->addr, 0,
-				    sizeof(ifo->ia->addr));
-				ifo->ia->sla = NULL;
-				ifo->ia->sla_len = 0;
-			}
-		} else {
-			for (i = 0; i < ifo->ia_len; i++) {
-				if (!ifo->ia[i].iaid_set)
-					memcpy(ifo->ia->iaid, ifo->iaid,
-					    sizeof(ifo->iaid));
+	if (ifo->ia_len == 0 && ifo->options & DHCPCD_IPV6) {
+		ifo->ia = malloc(sizeof(*ifo->ia));
+		if (ifo->ia == NULL)
+			syslog(LOG_ERR, "%s: %m", __func__);
+		else {
+			ifo->ia_len = 1;
+			ifo->ia->ia_type = D6_OPTION_IA_NA;
+			memcpy(ifo->ia->iaid, ifo->iaid, sizeof(ifo->iaid));
+			memset(&ifo->ia->addr, 0, sizeof(ifo->ia->addr));
+			ifo->ia->sla = NULL;
+			ifo->ia->sla_len = 0;
+		}
+	} else {
+		for (i = 0; i < ifo->ia_len; i++) {
+			if (!ifo->ia[i].iaid_set) {
+				memcpy(&ifo->ia[i].iaid, ifo->iaid,
+				    sizeof(ifo->ia[i].iaid));
+				ifo->ia[i].iaid_set = 1;
 			}
 		}
 	}
@@ -495,7 +493,9 @@ dhcpcd_selectprofile(struct interface *ifp, const char *profile)
 
 	if (ifp->ssid_len) {
 		ssize_t r;
-		r =print_string(pssid, sizeof(pssid), ifp->ssid, ifp->ssid_len);
+
+		r = print_string(pssid, sizeof(pssid), ESCSTRING,
+		    ifp->ssid, ifp->ssid_len);
 		if (r == -1) {
 			syslog(LOG_ERR, "%s: %s: %m", ifp->name, __func__);
 			pssid[0] = '\0';
@@ -557,10 +557,10 @@ dhcpcd_handlecarrier(struct dhcpcd_ctx *ctx, int carrier, unsigned int flags,
 		ifp->flags = flags;
 	}
 
-	if (carrier == LINK_UNKNOWN)
-		syslog(LOG_ERR, "%s: carrier_status: %m", ifname);
-	/* IFF_RUNNING is checked, if needed, earlier and is OS dependant */
-	else if (carrier == LINK_DOWN || (ifp->flags & IFF_UP) == 0) {
+	if (carrier == LINK_UNKNOWN) {
+		if (errno != ENOTTY) /* For example a PPP link on BSD */
+			syslog(LOG_ERR, "%s: carrier_status: %m", ifname);
+	} else if (carrier == LINK_DOWN || (ifp->flags & IFF_UP) == 0) {
 		if (ifp->carrier != LINK_DOWN) {
 			if (ifp->carrier == LINK_UP)
 				syslog(LOG_INFO, "%s: carrier lost", ifp->name);
@@ -643,14 +643,12 @@ dhcpcd_startinterface(void *arg)
 	struct if_options *ifo = ifp->options;
 	size_t i;
 	char buf[DUID_LEN * 3];
-	struct timeval tv;
 
 	pre_start(ifp);
 	if (if_up(ifp) == -1)
 		syslog(LOG_ERR, "%s: if_up: %m", ifp->name);
 
 	if (ifo->options & DHCPCD_LINK) {
-link_retry:
 		switch (ifp->carrier) {
 		case LINK_UP:
 			break;
@@ -658,16 +656,19 @@ link_retry:
 			syslog(LOG_INFO, "%s: waiting for carrier", ifp->name);
 			return;
 		case LINK_UNKNOWN:
-			/* No media state available, so we loop until
-			 * IFF_UP and IFF_RUNNING are set. */
+			/* No media state available.
+			 * Any change on state such as IFF_UP and IFF_RUNNING
+			 * should be reported to us via the route socket
+			 * as we've done the best we can to bring the interface
+			 * up at this point. */
 			ifp->carrier = if_carrier(ifp);
-			if (ifp->carrier != LINK_UNKNOWN)
-				goto link_retry;
-			syslog(LOG_INFO, "%s: unknown carrier", ifp->name);
-			tv.tv_sec = 0;
-			tv.tv_usec = 100;
-			eloop_timeout_add_tv(ifp->ctx->eloop, &tv,
-			    dhcpcd_startinterface, ifp);
+			if (ifp->carrier == LINK_UNKNOWN) {
+				syslog(LOG_INFO, "%s: unknown carrier",
+				    ifp->name);
+				return;
+			}
+			dhcpcd_handlecarrier(ifp->ctx, ifp->carrier,
+			    ifp->flags, ifp->name);
 			return;
 		}
 	}
@@ -1058,7 +1059,7 @@ handle_signal(int sig, siginfo_t *siginfo, __unused void *context)
 }
 
 static int
-signal_init(void (*func)(int, siginfo_t *, void *), sigset_t *oldset)
+signal_init(sigset_t *oldset)
 {
 	unsigned int i;
 	struct sigaction sa;
@@ -1069,7 +1070,7 @@ signal_init(void (*func)(int, siginfo_t *, void *), sigset_t *oldset)
 		return -1;
 
 	memset(&sa, 0, sizeof(sa));
-	sa.sa_sigaction = func;
+	sa.sa_sigaction = handle_signal;
 	sa.sa_flags = SA_SIGINFO;
 	sigemptyset(&sa.sa_mask);
 
@@ -1606,7 +1607,7 @@ main(int argc, char **argv)
 	ctx.options |= DHCPCD_STARTED;
 #ifdef USE_SIGNALS
 	/* Save signal mask, block and redirect signals to our handler */
-	if (signal_init(handle_signal, &ctx.sigset) == -1) {
+	if (signal_init(&ctx.sigset) == -1) {
 		syslog(LOG_ERR, "signal_setup: %m");
 		goto exit_failure;
 	}
@@ -1623,8 +1624,8 @@ main(int argc, char **argv)
 		ctx.options |= DHCPCD_WAITIP;
 
 	/* RTM_NEWADDR goes through the link socket as well which we
-	 * need for IPv6 DAD, so we check for DHCPCD_LINK in handle_carrier
-	 * instead.
+	 * need for IPv6 DAD, so we check for DHCPCD_LINK in
+	 * dhcpcd_handlecarrier instead.
 	 * We also need to open this before checking for interfaces below
 	 * so that we pickup any new addresses during the discover phase. */
 	ctx.link_fd = if_openlinksocket();
@@ -1730,8 +1731,8 @@ exit1:
 	free_globals(&ctx);
 	ipv4_ctxfree(&ctx);
 	ipv6_ctxfree(&ctx);
-	dev_stop(&ctx, !(ctx.options & DHCPCD_FORKED));
-	if (!(ctx.options & DHCPCD_FORKED) && control_stop(&ctx) == -1)
+	dev_stop(&ctx);
+	if (control_stop(&ctx) == -1)
 		syslog(LOG_ERR, "control_stop: %m:");
 	if (ctx.pid_fd != -1) {
 		close(ctx.pid_fd);

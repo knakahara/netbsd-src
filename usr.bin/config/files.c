@@ -1,4 +1,4 @@
-/*	$NetBSD: files.c,v 1.12 2014/05/21 05:25:34 dholland Exp $	*/
+/*	$NetBSD: files.c,v 1.16 2014/10/09 19:27:04 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -65,6 +65,7 @@ static struct hashtab *pathtab;		/* full path names */
 
 static struct files **unchecked;
 
+static void	addfiletoattr(const char *, struct files *);
 static int	checkaux(const char *, void *);
 static int	fixcount(const char *, void *);
 static int	fixfsel(const char *, void *);
@@ -157,6 +158,7 @@ addfile(const char *path, struct condexpr *optx, int flags, const char *rule)
 	fi->fi_optx = optx;
 	fi->fi_optf = NULL;
 	fi->fi_mkrule = rule;
+	fi->fi_attr = NULL;
 	TAILQ_INSERT_TAIL(&allfiles, fi, fi_next);
 	return;
  bad:
@@ -194,6 +196,20 @@ addobject(const char *path, struct condexpr *optx, int flags)
 	TAILQ_INSERT_TAIL(&allobjects, oi, oi_next);
 	return;
 }     
+
+static void
+addfiletoattr(const char *name, struct files *fi)
+{
+	struct attr *a;
+
+	a = ht_lookup(attrtab, name);
+	if (a == NULL) {
+		CFGDBG(1, "attr `%s' not found", name);
+	} else {
+		fi->fi_attr = a;
+		TAILQ_INSERT_TAIL(&a->a_files, fi, fi_anext);
+	}
+}
 
 /*
  * We have finished reading some "files" file, either ../../conf/files
@@ -254,12 +270,10 @@ fixfiles(void)
 		if (fi->fi_flags & FI_HIDDEN)
 			continue;
 
-		/* Optional: see if it is to be included. */
-		if (fi->fi_flags & FIT_FORCESELECT)
-		{
-			/* include it */ ;
-		}
-		else if (fi->fi_optx != NULL) {
+		if (fi->fi_optx != NULL) {
+			if (fi->fi_optx->cx_type == CX_ATOM) {
+				addfiletoattr(fi->fi_optx->cx_u.atom, fi);
+			}
 			flathead = NULL;
 			flatp = &flathead;
 			sel = expr_eval(fi->fi_optx,
@@ -297,6 +311,14 @@ fixfiles(void)
 			}
 		}
 		fi->fi_flags |= FI_SEL;
+		CFGDBG(3, "file selected `%s'", fi->fi_path);
+
+		/* Add other files to the default "netbsd" attribute. */
+		if (fi->fi_attr == NULL) {
+			addfiletoattr(allattr.a_name, fi);
+		}
+		CFGDBG(3, "file `%s' belongs to attr `%s'", fi->fi_path,
+		    fi->fi_attr->a_name);
 	}
 	return (err);
 }

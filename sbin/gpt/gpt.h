@@ -29,17 +29,14 @@
 #ifndef _GPT_H_
 #define	_GPT_H_
 
-#include <sys/endian.h>
-#include <sys/disklabel_gpt.h>
-#define GPT_SIZE GPT_HDR_SIZE
-#define hdr_uuid hdr_guid
-#define ent_uuid ent_guid
+#ifndef HAVE_NBTOOL_CONFIG_H
+#include <util.h>
+#else
+#include "opendisk.h"
+#include "namespace.h"
+#endif
 
-#include <uuid.h>
-
-#define le_uuid_dec uuid_dec_le
-#define le_uuid_enc uuid_enc_le
-int	parse_uuid(const char *, uuid_t *);
+#include "gpt_uuid.h"
 
 struct mbr_part {
 	uint8_t		part_flag;		/* bootstrap flags */
@@ -94,6 +91,7 @@ int	cmd_resizedisk(int, char *[]);
 int	cmd_restore(int, char *[]);
 int	cmd_set(int, char *[]);
 int	cmd_show(int, char *[]);
+int	cmd_type(int, char *[]);
 int	cmd_unset(int, char *[]);
 
 #endif /* _GPT_H_ */

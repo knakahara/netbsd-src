@@ -1,4 +1,4 @@
-/*	$NetBSD: mkmakefile.c,v 1.17 2014/08/18 08:07:02 joerg Exp $	*/
+/*	$NetBSD: mkmakefile.c,v 1.24 2014/10/09 19:33:43 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -68,6 +68,11 @@ static void emitdefs(FILE *);
 static void emitfiles(FILE *, int, int);
 
 static void emitobjs(FILE *);
+static void emitallkobjs(FILE *);
+static int emitallkobjscb(const char *, void *, void *);
+static void emitattrkobjs(FILE *);
+static int emitattrkobjscb(const char *, void *, void *);
+static void emitkobjs(FILE *);
 static void emitcfiles(FILE *);
 static void emitsfiles(FILE *);
 static void emitrules(FILE *);
@@ -76,6 +81,9 @@ static void emitincludes(FILE *);
 static void emitappmkoptions(FILE *);
 static void emitsubs(FILE *, const char *, const char *, int);
 static int  selectopt(const char *, void *);
+
+/* Generate Makefile to build things per-attribute *.ko (a.k.a modular build). */
+int usekobjs = 0;
 
 int
 mkmakefile(void)
@@ -92,7 +100,8 @@ mkmakefile(void)
 	    machine, machine);
 	ifname = sourcepath(buf);
 	if ((ifp = fopen(ifname, "r")) == NULL) {
-		/* Try a makefile for the architecture second.
+		/*
+		 * Try a makefile for the architecture second.
 		 */
 		(void)snprintf(buf, sizeof(buf), "arch/%s/conf/Makefile.%s",
 		    machinearch, machinearch);
@@ -120,7 +129,7 @@ mkmakefile(void)
 			continue;
 		}
 		if (strcmp(line, "%OBJS\n") == 0)
-			fn = emitobjs;
+			fn = usekobjs ? emitkobjs : emitobjs;
 		else if (strcmp(line, "%CFILES\n") == 0)
 			fn = emitcfiles;
 		else if (strcmp(line, "%SFILES\n") == 0)
@@ -224,11 +233,13 @@ emitsubs(FILE *fp, const char *line, const char *file, int lineno)
 			if (option != NULL)
 				fputs(option->nv_str ? option->nv_str : "1",
 				    fp);
-			/* Otherwise it's not a selected option and we don't
-			 * output anything. */
+			/*
+			 * Otherwise it's not a selected option and we don't
+			 * output anything.
+			 */
 		}
 
-		line = nextpct+1;
+		line = nextpct + 1;
 	}
 }
 
@@ -261,7 +272,7 @@ srcpath(struct files *fi)
 static const char *
 filetype_prologue(struct filetype *fit)
 {
-	if (fit->fit_flags & FIT_NOPROLOGUE || *fit->fit_path == '/')
+	if (*fit->fit_path == '/')
 		return ("");
 	else
 		return ("$S/");
@@ -287,12 +298,12 @@ emitdefs(FILE *fp)
 	sp = "";
 	for (nv = options; nv != NULL; nv = nv->nv_next) {
 
-		/* skip any options output to a header file */
+		/* Skip any options output to a header file */
 		if (DEFINED_OPTION(nv->nv_name))
 			continue;
 		fprintf(fp, "%s-D%s", sp, nv->nv_name);
 		if (nv->nv_str)
-		    fprintf(fp, "=\"%s\"", nv->nv_str);
+			fprintf(fp, "=\"%s\"", nv->nv_str);
 		sp = " ";
 	}
 	putc('\n', fp);
@@ -316,59 +327,91 @@ emitobjs(FILE *fp)
 {
 	struct files *fi;
 	struct objects *oi;
-	int lpos, len, sp;
 
-	fputs("OBJS=", fp);
-	sp = '\t';
-	lpos = 7;
+	fputs("OBJS= \\\n", fp);
 	TAILQ_FOREACH(fi, &allfiles, fi_next) {
 		if ((fi->fi_flags & FI_SEL) == 0)
 			continue;
-		len = strlen(fi->fi_base) + 2;
-		if (lpos + len > 72) {
-			fputs(" \\\n", fp);
-			sp = '\t';
-			lpos = 7;
-		}
-		fprintf(fp, "%c%s.o", sp, fi->fi_base);
-		lpos += len + 1;
-		sp = ' ';
+		fprintf(fp, "\t%s.o \\\n", fi->fi_base);
 	}
 	TAILQ_FOREACH(oi, &allobjects, oi_next) {
 		if ((oi->oi_flags & OI_SEL) == 0)
 			continue;
-		len = strlen(oi->oi_path);
-		if (*oi->oi_path != '/')
-		{
-			/* e.g. "$S/" */
- 			if (oi->oi_prefix != NULL)
-				len += strlen(prefix_prologue(oi->oi_path)) +
-				       strlen(oi->oi_prefix) + 1;
-			else
-				len += strlen(filetype_prologue(&oi->oi_fit));
-		}
-		if (lpos + len > 72) {
-			fputs(" \\\n", fp);
-			sp = '\t';
-			lpos = 7;
-		}
 		if (*oi->oi_path == '/') {
-			fprintf(fp, "%c%s", sp, oi->oi_path);
+			fprintf(fp, "\t%s \\\n", oi->oi_path);
 		} else {
 			if (oi->oi_prefix != NULL) {
-				fprintf(fp, "%c%s%s/%s", sp,
-					    prefix_prologue(oi->oi_path),
-					    oi->oi_prefix, oi->oi_path);
+				fprintf(fp, "\t%s%s/%s \\\n",
+				    prefix_prologue(oi->oi_path),
+				    oi->oi_prefix, oi->oi_path);
 			} else {
-				fprintf(fp, "%c%s%s", sp,
-				            filetype_prologue(&oi->oi_fit),
-				            oi->oi_path);
+				fprintf(fp, "\t%s%s \\\n",
+				    filetype_prologue(&oi->oi_fit),
+				    oi->oi_path);
 			}
 		}
-		lpos += len + 1;
-		sp = ' ';
 	}
 	putc('\n', fp);
+}
+
+static void
+emitkobjs(FILE *fp)
+{
+	emitallkobjs(fp);
+	emitattrkobjs(fp);
+}
+
+static void
+emitallkobjs(FILE *fp)
+{
+
+	fputs("OBJS=", fp);
+	ht_enumerate(attrtab, emitallkobjscb, fp);
+	putc('\n', fp);
+}
+
+static int
+emitallkobjscb(const char *name, void *v, void *arg)
+{
+	struct attr *a = v;
+	FILE *fp = arg;
+
+	if (ht_lookup(selecttab, name) == NULL)
+		return 0;
+	if (TAILQ_EMPTY(&a->a_files))
+		return 0;
+	fprintf(fp, " %s.ko", name);
+	return 0;
+}
+
+static void
+emitattrkobjs(FILE *fp)
+{
+	extern struct	hashtab *attrtab;
+
+	ht_enumerate(attrtab, emitattrkobjscb, fp);
+}
+
+static int
+emitattrkobjscb(const char *name, void *v, void *arg)
+{
+	struct attr *a = v;
+	struct files *fi;
+	FILE *fp = arg;
+
+	if (ht_lookup(selecttab, name) == NULL)
+		return 0;
+	if (TAILQ_EMPTY(&a->a_files))
+		return 0;
+	fputc('\n', fp);
+	fprintf(fp, "OBJS.%s=", name);
+	TAILQ_FOREACH(fi, &a->a_files, fi_anext) {
+		fprintf(fp, " %s.o", fi->fi_base);
+	}
+	fputc('\n', fp);
+	fprintf(fp, "%s.ko: ${OBJS.%s}\n", name, name);
+	fprintf(fp, "\t${LINK_O}\n");
+	return 0;
 }
 
 static void
@@ -389,14 +432,12 @@ static void
 emitfiles(FILE *fp, int suffix, int upper_suffix)
 {
 	struct files *fi;
-	int lpos, len, sp;
+	int len;
 	const char *fpath;
  	struct config *cf;
  	char swapname[100];
 
-	fprintf(fp, "%cFILES=", toupper(suffix));
-	sp = '\t';
-	lpos = 7;
+	fprintf(fp, "%cFILES= \\\n", toupper(suffix));
 	TAILQ_FOREACH(fi, &allfiles, fi_next) {
 		if ((fi->fi_flags & FI_SEL) == 0)
 			continue;
@@ -404,34 +445,19 @@ emitfiles(FILE *fp, int suffix, int upper_suffix)
 		len = strlen(fpath);
 		if (fpath[len - 1] != suffix && fpath[len - 1] != upper_suffix)
 			continue;
-		if (*fpath != '/') {
-			/* "$S/" */
- 			if (fi->fi_prefix != NULL)
-				len += strlen(prefix_prologue(fi->fi_prefix)) +
-				       strlen(fi->fi_prefix) + 1;
-			else
-				len += strlen(filetype_prologue(&fi->fi_fit));
-		}
-		if (lpos + len > 72) {
-			fputs(" \\\n", fp);
-			sp = '\t';
-			lpos = 7;
-		}
 		if (*fi->fi_path == '/') {
-			fprintf(fp, "%c%s", sp, fpath);
+			fprintf(fp, "\t%s \\\n", fpath);
 		} else {
 			if (fi->fi_prefix != NULL) {
-				fprintf(fp, "%c%s%s/%s", sp,
-					    prefix_prologue(fi->fi_prefix),
-					    fi->fi_prefix, fpath);
+				fprintf(fp, "\t%s%s/%s \\\n",
+				    prefix_prologue(fi->fi_prefix),
+				    fi->fi_prefix, fpath);
 			} else {
-				fprintf(fp, "%c%s%s", sp,
-				            filetype_prologue(&fi->fi_fit),
-				            fpath);
+				fprintf(fp, "\t%s%s \\\n",
+				    filetype_prologue(&fi->fi_fit),
+				    fpath);
 			}
 		}
-		lpos += len + 1;
-		sp = ' ';
 	}
  	/*
  	 * The allfiles list does not include the configuration-specific
@@ -442,15 +468,7 @@ emitfiles(FILE *fp, int suffix, int upper_suffix)
  		TAILQ_FOREACH(cf, &allcf, cf_next) {
  			(void)snprintf(swapname, sizeof(swapname), "swap%s.c",
  			    cf->cf_name);
- 			len = strlen(swapname);
- 			if (lpos + len > 72) {
- 				fputs(" \\\n", fp);
- 				sp = '\t';
- 				lpos = 7;
- 			}
- 			fprintf(fp, "%c%s", sp, swapname);
- 			lpos += len + 1;
- 			sp = ' ';
+ 			fprintf(fp, "\t%s \\\n", swapname);
  		}
  	}
 	putc('\n', fp);
@@ -475,13 +493,13 @@ emitrules(FILE *fp)
 		} else {
 			if (fi->fi_prefix != NULL) {
 				fprintf(fp, "%s.o: %s%s/%s\n", fi->fi_base,
-					    prefix_prologue(fi->fi_prefix),
-					    fi->fi_prefix, fpath);
+				    prefix_prologue(fi->fi_prefix),
+				    fi->fi_prefix, fpath);
 			} else {
 				fprintf(fp, "%s.o: %s%s\n",
-				            fi->fi_base,
-				            filetype_prologue(&fi->fi_fit),
-				            fpath);
+				    fi->fi_base,
+				    filetype_prologue(&fi->fi_fit),
+				    fpath);
  			}
 		}
 		if (fi->fi_mkrule != NULL) {
@@ -523,9 +541,9 @@ emitload(FILE *fp)
 	TAILQ_FOREACH(cf, &allcf, cf_next) {
 		fprintf(fp, "KERNELS+=%s\n", cf->cf_name);
 		fprintf(fp, "%s: ${SYSTEM_DEP} swap%s.o vers.o build_kernel\n",
-			cf->cf_name, cf->cf_name);
+		    cf->cf_name, cf->cf_name);
 		fprintf(fp, "swap%s.o: swap%s.c\n"
-			"\t${NORMAL_C}\n\n", cf->cf_name, cf->cf_name);
+		    "\t${NORMAL_C}\n\n", cf->cf_name, cf->cf_name);
 	}
 	fputs("\n", fp);
 }

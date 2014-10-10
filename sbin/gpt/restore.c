@@ -24,12 +24,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifdef __FBSDID
 __FBSDID("$FreeBSD: src/sbin/gpt/create.c,v 1.11 2005/08/31 01:47:19 marcel Exp $");
 #endif
 #ifdef __RCSID
-__RCSID("$NetBSD: restore.c,v 1.2 2014/09/20 22:11:27 jnemeth Exp $");
+__RCSID("$NetBSD: restore.c,v 1.7 2014/10/01 01:08:25 jnemeth Exp $");
 #endif
 
 #include <sys/types.h>
@@ -68,7 +72,7 @@ usage_restore(void)
 static void
 restore(int fd)
 {
-	uuid_t gpt_guid, uuid;
+	gpt_uuid_t gpt_guid, uuid;
 	off_t firstdata, last, lastdata, gpe_start, gpe_end;
 	map_t *map;
 	struct mbr *mbr;
@@ -81,10 +85,9 @@ restore(int fd)
 	prop_array_t mbr_array, gpt_array;
 	prop_number_t propnum;
 	prop_string_t propstr;
-	int entries, gpt_size, rc;
+	int entries, gpt_size;
 	const char *s;
 	void *secbuf;
-	uint32_t status;
 
 	last = mediasz / secsz - 1LL;
 
@@ -101,13 +104,15 @@ restore(int fd)
 			warnx("%s: error: device contains a MBR", device_name);
 			return;
 		}
-
 		/* Nuke the MBR in our internal map. */
 		map->map_type = MAP_TYPE_UNUSED;
 	}
 
 	props = prop_dictionary_internalize_from_file("/dev/stdin");
-	PROP_ERR(props);
+	if (props == NULL) {
+		warnx("error: unable to read/parse backup file");
+		return;
+	}
 
 	propnum = prop_dictionary_get(props, "sector_size");
 	PROP_ERR(propnum);
@@ -133,17 +138,17 @@ restore(int fd)
 	propnum = prop_dictionary_get(gpt_dict, "entries");
 	PROP_ERR(propnum);
 	entries = prop_number_integer_value(propnum);
+	gpt_size = entries * sizeof(struct gpt_ent) / secsz;
+	if (gpt_size * sizeof(struct gpt_ent) % secsz)
+		gpt_size++;
+
 	propstr = prop_dictionary_get(gpt_dict, "guid");
 	PROP_ERR(propstr);
 	s = prop_string_cstring_nocopy(propstr);
-	uuid_from_string(s, &uuid, &status);
-	if (status != uuid_s_ok) {
+	if (gpt_uuid_parse(s, gpt_guid) != 0) {
 		warnx("%s: not able to convert to an UUID\n", s);
 		return;
 	}
-	le_uuid_enc(&gpt_guid, &uuid);
-
-	gpt_size = entries * sizeof(struct gpt_ent) / secsz;
 	firstdata = gpt_size + 2;		/* PMBR and GPT header */
 	lastdata = last - gpt_size - 1;		/* alt. GPT table and header */
 
@@ -157,17 +162,11 @@ restore(int fd)
 		propstr = prop_dictionary_get(gpt_dict, "type");
 		PROP_ERR(propstr);
 		s = prop_string_cstring_nocopy(propstr);
-		uuid_from_string(s, &uuid, &status);
-		if (status != uuid_s_ok) {
+		if (gpt_uuid_parse(s, uuid) != 0) {
 			warnx("%s: not able to convert to an UUID\n", s);
 			return;
 		}
-		rc = uuid_is_nil(&uuid, &status);
-		if (status != uuid_s_ok) {
-			warnx("%s: not able to convert to an UUID\n", s);
-			return;
-		}
-		if (rc == 1)
+		if (gpt_uuid_is_nil(uuid))
 			continue;
 		propnum = prop_dictionary_get(gpt_dict, "start");
 		PROP_ERR(propnum);
@@ -187,12 +186,27 @@ restore(int fd)
 		warnx("not enough memory to create a sector buffer");
 		return;
 	}
-	lseek(fd, 0LL, SEEK_SET);
-	for (i = 0; i < firstdata; i++)
-		write(fd, secbuf, secsz);
-	lseek(fd, (lastdata + 1) * secsz, SEEK_SET);
-	for (i = lastdata + 1; i <= last; i++)
-		write(fd, secbuf, secsz);
+
+	if (lseek(fd, 0LL, SEEK_SET) == -1) {
+		warnx("%s: error: can't seek to beginning", device_name);
+		return;
+	}
+	for (i = 0; i < firstdata; i++) {
+		if (write(fd, secbuf, secsz) == -1) {
+			warnx("%s: error: can't write", device_name);
+			return;
+		}
+	}
+	if (lseek(fd, (lastdata + 1) * secsz, SEEK_SET) == -1) {
+		warnx("%s: error: can't seek to end", device_name);
+		return;
+	}
+	for (i = lastdata + 1; i <= last; i++) {
+		if (write(fd, secbuf, secsz) == -1) {
+			warnx("%s: error: can't write", device_name);
+			return;
+		}
+	}
 
 	mbr = (struct mbr *)secbuf;
 	type_dict = prop_dictionary_get(props, "MBR");
@@ -249,19 +263,35 @@ restore(int fd)
 		PROP_ERR(propnum);
 		mbr->mbr_part[i].part_start_hi =
 		    htole16(prop_number_unsigned_integer_value(propnum));
-		propnum = prop_dictionary_get(mbr_dict, "lba_size_low");
-		PROP_ERR(propnum);
-		mbr->mbr_part[i].part_size_lo =
-		    htole16(prop_number_unsigned_integer_value(propnum));
-		propnum = prop_dictionary_get(mbr_dict, "lba_size_high");
-		PROP_ERR(propnum);
-		mbr->mbr_part[i].part_size_hi =
-		    htole16(prop_number_unsigned_integer_value(propnum));
+		/* adjust PMBR size to size of device */
+                if (mbr->mbr_part[i].part_typ == MBR_PTYPE_PMBR) {
+			if (last > 0xffffffff) {
+				mbr->mbr_part[0].part_size_lo = htole16(0xffff);
+				mbr->mbr_part[0].part_size_hi = htole16(0xffff);
+			} else {
+				mbr->mbr_part[0].part_size_lo = htole16(last);
+				mbr->mbr_part[0].part_size_hi =
+				    htole16(last >> 16);
+			}
+		} else {
+			propnum = prop_dictionary_get(mbr_dict, "lba_size_low");
+			PROP_ERR(propnum);
+			mbr->mbr_part[i].part_size_lo =
+			    htole16(prop_number_unsigned_integer_value(propnum));
+			propnum =
+			    prop_dictionary_get(mbr_dict, "lba_size_high");
+			PROP_ERR(propnum);
+			mbr->mbr_part[i].part_size_hi =
+			    htole16(prop_number_unsigned_integer_value(propnum));
+		}
 	}
 	prop_object_iterator_release(propiter);
 	mbr->mbr_sig = htole16(MBR_SIG);
-	lseek(fd, 0LL, SEEK_SET);
-	write(fd, mbr, secsz);
+	if (lseek(fd, 0LL, SEEK_SET) == -1 ||
+	    write(fd, mbr, secsz) == -1) {
+		warnx("%s: error: unable to write MBR", device_name);
+		return;
+	}
 	
 	propiter = prop_array_iterator(gpt_array);
 	PROP_ERR(propiter);
@@ -270,21 +300,17 @@ restore(int fd)
 		propstr = prop_dictionary_get(gpt_dict, "type");
 		PROP_ERR(propstr);
 		s = prop_string_cstring_nocopy(propstr);
-		uuid_from_string(s, &uuid, &status);
-		if (status != uuid_s_ok) {
+		if (gpt_uuid_parse(s, ent.ent_type) != 0) {
 			warnx("%s: not able to convert to an UUID\n", s);
 			return;
 		}
-		le_uuid_enc(&ent.ent_type, &uuid);
 		propstr = prop_dictionary_get(gpt_dict, "guid");
 		PROP_ERR(propstr);
 		s = prop_string_cstring_nocopy(propstr);
-		uuid_from_string(s, &uuid, &status);
-		if (status != uuid_s_ok) {
+		if (gpt_uuid_parse(s, ent.ent_guid) != 0) {
 			warnx("%s: not able to convert to an UUID\n", s);
 			return;
 		}
-		le_uuid_enc(&ent.ent_guid, &uuid);
 		propnum = prop_dictionary_get(gpt_dict, "start");
 		PROP_ERR(propnum);
 		ent.ent_lba_start =
@@ -309,10 +335,16 @@ restore(int fd)
 		    sizeof(ent));
 	}
 	prop_object_iterator_release(propiter);
-	lseek(fd, 2 * secsz, SEEK_SET);
-	write(fd, (char *)secbuf + 1 * secsz, gpt_size * secsz);
-	lseek(fd, (lastdata + 1) * secsz, SEEK_SET);
-	write(fd, (char *)secbuf + 1 * secsz, gpt_size * secsz);
+	if (lseek(fd, 2 * secsz, SEEK_SET) == -1 ||
+	    write(fd, (char *)secbuf + 1 * secsz, gpt_size * secsz) == -1) {
+		warnx("%s: error: unable to write primary GPT", device_name);
+		return;
+	}
+	if (lseek(fd, (lastdata + 1) * secsz, SEEK_SET) == -1 ||
+	    write(fd, (char *)secbuf + 1 * secsz, gpt_size * secsz) == -1) {
+		warnx("%s: error: unable to write secondary GPT", device_name);
+		return;
+	}
 
 	memset(secbuf, 0, secsz);
 	hdr = (struct gpt_hdr *)secbuf;
@@ -323,23 +355,32 @@ restore(int fd)
 	hdr->hdr_lba_alt = htole64(last);
 	hdr->hdr_lba_start = htole64(firstdata);
 	hdr->hdr_lba_end = htole64(lastdata);
-	memcpy(hdr->hdr_guid, &gpt_guid, sizeof(hdr->hdr_guid));
+	gpt_uuid_copy(hdr->hdr_guid, gpt_guid);
 	hdr->hdr_lba_table = htole64(2);
 	hdr->hdr_entries = htole32(entries);
 	hdr->hdr_entsz = htole32(sizeof(struct gpt_ent));
 	hdr->hdr_crc_table =
 	    htole32(crc32((char *)secbuf + 1 * secsz, gpt_size * secsz));
 	hdr->hdr_crc_self = htole32(crc32(hdr, GPT_HDR_SIZE));
-	lseek(fd, 1 * secsz, SEEK_SET);
-	write(fd, hdr, secsz);
+	if (lseek(fd, 1 * secsz, SEEK_SET) == -1 ||
+	    write(fd, hdr, secsz) == -1) {
+		warnx("%s: error: unable to write primary header", device_name);
+		return;
+	}
+
 	hdr->hdr_lba_self = htole64(last);
 	hdr->hdr_lba_alt = htole64(GPT_HDR_BLKNO);
 	hdr->hdr_lba_table = htole64(lastdata + 1);
 	hdr->hdr_crc_self = 0;
 	hdr->hdr_crc_self = htole32(crc32(hdr, GPT_HDR_SIZE));
-	lseek(fd, last * secsz, SEEK_SET);
-	write(fd, hdr, secsz);
+	if (lseek(fd, last * secsz, SEEK_SET) == -1 ||
+	    write(fd, hdr, secsz) == -1) {
+		warnx("%s: error: unable to write secondary header",
+		    device_name);
+		return;
+	}
 
+	prop_object_release(props);
 	return;
 }
 

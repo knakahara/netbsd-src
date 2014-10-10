@@ -24,12 +24,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifdef __FBSDID
 __FBSDID("$FreeBSD: src/sbin/gpt/add.c,v 1.14 2006/06/22 22:05:28 marcel Exp $");
 #endif
 #ifdef __RCSID
-__RCSID("$NetBSD: resizedisk.c,v 1.2 2014/09/23 13:48:04 msaitoh Exp $");
+__RCSID("$NetBSD: resizedisk.c,v 1.6 2014/10/01 03:52:42 jnemeth Exp $");
 #endif
 
 #include <sys/bootblock.h>
@@ -41,7 +45,6 @@ __RCSID("$NetBSD: resizedisk.c,v 1.2 2014/09/23 13:48:04 msaitoh Exp $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <inttypes.h>
 
 #include "map.h"
 #include "gpt.h"
@@ -73,7 +76,6 @@ usage_resizedisk(void)
 static void
 resizedisk(int fd)
 {
-	uuid_t uuid;
 	map_t *gpt, *tpg;
 	map_t *tbl, *lbt;
 	map_t *mbrmap;
@@ -135,8 +137,7 @@ resizedisk(int fd)
 	for (ent = tbl->map_data; ent <
 	    (struct gpt_ent *)((char *)tbl->map_data +
 	    le32toh(hdr->hdr_entries) * le32toh(hdr->hdr_entsz)); ent++) {
-		le_uuid_dec(ent->ent_type, &uuid);
-		if (!uuid_is_nil(&uuid, NULL) &&
+		if (!gpt_uuid_is_nil(ent->ent_type) &&
 		    (le64toh(ent->ent_lba_end) > lastdata)) {
 			lastdata = le64toh(ent->ent_lba_end);
 		}
@@ -186,6 +187,7 @@ resizedisk(int fd)
 	hdr = gpt->map_data;
 	hdr->hdr_lba_alt = tpg->map_start;
 	hdr->hdr_crc_self = 0;
+	hdr->hdr_lba_end = htole64(lbt->map_start - 1);
 	hdr->hdr_crc_self =
 	    htole32(crc32(gpt->map_data, GPT_HDR_SIZE));
 	gpt_write(fd, gpt);
@@ -193,6 +195,7 @@ resizedisk(int fd)
 	hdr = tpg->map_data;
 	hdr->hdr_lba_self = htole64(tpg->map_start);
 	hdr->hdr_lba_alt = htole64(gpt->map_start);
+	hdr->hdr_lba_end = htole64(lbt->map_start - 1);
 	hdr->hdr_lba_table = htole64(lbt->map_start);
 	hdr->hdr_crc_self = 0;
 	hdr->hdr_crc_self =
