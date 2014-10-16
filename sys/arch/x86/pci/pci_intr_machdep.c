@@ -225,7 +225,7 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 	pci_chipset_tag_t ipc;
 
 	if (INT_VIA_MSI(ih))
-		return msi_string(ih, buf, len);
+		return pci_msi_string(ih, buf, len);
 
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)

@@ -181,6 +181,8 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <dev/pci/ppbreg.h>
 #endif
 
+#include <x86/pci/msipic.h>
+
 #ifdef DDB
 #include <ddb/db_output.h>
 #endif
@@ -439,7 +441,7 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 		else if (pic->pic_type == PIC_MSIX)
 			MSI_INT_MAKE_MSIX(pih);
 
-		return msi_string(pih, buf, len);
+		return pci_msi_string(pih, buf, len);
 	}
 
 	ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
