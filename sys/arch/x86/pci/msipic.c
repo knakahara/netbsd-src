@@ -133,7 +133,7 @@ allocate_devid(struct pci_attach_args *pa)
 static void
 release_devid(int devid)
 {
-	if (devid <= 0 || NUM_MSI_DEVS <= devid) {
+	if (devid < 0 || NUM_MSI_DEVS <= devid) {
 		aprint_normal("%s: invalid device.\n", __func__);
 		return;
 	}
