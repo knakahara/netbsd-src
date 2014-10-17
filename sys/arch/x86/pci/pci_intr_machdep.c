@@ -262,7 +262,7 @@ pci_intr_release(pci_intr_handle_t *pih)
 	if (pih == NULL)
 		return;
 
-	/* XXXX */
+	/* XXXX ov_intr_disestablish() care? */
 	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
 	mutex_enter(&cpu_lock);
 	intr_free_io_intrsource(intrstr);
