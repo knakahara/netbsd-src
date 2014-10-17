@@ -741,7 +741,7 @@ int
 vmxnet3_alloc_legacy_interrupts(struct vmxnet3_softc *sc)
 {
 
-	if (pci_intr_map(sc->vmx_pa, &sc->vmx_intr) == 0) {
+	if (pci_intr_alloc(sc->vmx_pa, &sc->vmx_intrs) == 0) {
 		sc->vmx_nintrs = 1;
 		return (0);
 	}
@@ -796,23 +796,10 @@ vmxnet3_free_interrupts(struct vmxnet3_softc *sc)
 	pci_chipset_tag_t pc = sc->vmx_pa->pa_pc;
 	int i;
 
-	switch (sc->vmx_intr_type) {
-	case VMXNET3_IT_MSIX:
-		for (i = 0; i < sc->vmx_nintrs; i++) {
-			pci_msix_disestablish(pc, sc->vmx_ihs[i]);
-		}
-		pci_msix_release(&sc->vmx_intrs, sc->vmx_nintrs);
-		break;
-	case VMXNET3_IT_MSI:
-		for (i = 0; i < sc->vmx_nintrs; i++) {
-			pci_msi_disestablish(pc, sc->vmx_ihs[i]);
-		}
-		pci_msi_release(&sc->vmx_intrs, sc->vmx_nintrs);
-		break;
-	case VMXNET3_IT_LEGACY:
-		pci_intr_disestablish(pc, sc->vmx_ihs[0]);
-		break;
+	for (i = 0; i < sc->vmx_nintrs; i++) {
+		pci_any_intr_disestablish(pc, sc->vmx_ihs[i]);
 	}
+	pci_any_intr_release(&sc->vmx_intrs, sc->vmx_nintrs);
 }
 
 int
