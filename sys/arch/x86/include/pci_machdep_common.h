@@ -127,7 +127,7 @@ void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 const char *pci_msi_string(pci_intr_handle_t, char *, size_t);
 int pci_msi_count(struct pci_attach_args *);
 int pci_msi_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
-void pci_msi_release(void **, int);
+void pci_msi_release(pci_intr_handle_t **, int);
 void *pci_msi_establish(pci_chipset_tag_t, pci_intr_handle_t,
     int, int (*)(void *), void *);
 void pci_msi_disestablish(pci_chipset_tag_t, void *);
@@ -135,10 +135,13 @@ void pci_msi_disestablish(pci_chipset_tag_t, void *);
 /* experimental MSI-X support */
 int pci_msix_count(struct pci_attach_args *);
 int pci_msix_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
-void pci_msix_release(void **, int);
+void pci_msix_release(pci_intr_handle_t **, int);
 void *pci_msix_establish(pci_chipset_tag_t, pci_intr_handle_t,
     int, int (*)(void *), void *);
 void pci_msix_disestablish(pci_chipset_tag_t, void *);
+
+void pci_any_intr_release(pci_intr_handle_t **, int);
+
 #if 0
 void *pci_msi_establish(struct pci_attach_args *, int, int (*)(void *), void *);
 void pci_msi_disestablish(void *);
