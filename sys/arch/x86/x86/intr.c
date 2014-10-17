@@ -531,67 +531,6 @@ intr_free_io_intrsource(const char *intrid)
 	intr_free_io_intrsource_direct(isp);
 }
 
-uint64_t *
-intr_allocate_msi_vectors(struct pic *msi_pic, int *count)
-{
-	struct intrsource *isp;
-	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
-	uint64_t *vectors;
-	int i;
-
-	vectors = kmem_zalloc(sizeof(vectors[0]) * (*count), KM_SLEEP);
-	if (vectors == NULL) {
-		printf("cannot allocate vectors\n");
-		return NULL;
-	}
-
-	mutex_enter(&cpu_lock);
-	for (i = 0; i < *count; i++) {
-		intrstr = create_intrid(i, msi_pic, intrstr_buf, sizeof(intrstr_buf));
-		KASSERT(intrstr != NULL);
-
-		isp = intr_allocate_io_intrsource(intrstr);
-		if (isp == NULL) {
-			printf("%s: can't allocate io_intersource\n", __func__);
-			return NULL;
-		}
-
-		vectors[i] = __SHIFTIN((uint64_t)msi_get_devid(msi_pic), MSI_INT_DEV_MASK) |
-			__SHIFTIN((uint64_t)i, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
-	}
-	mutex_exit(&cpu_lock);
-
-	return vectors;
-}
-
-uint64_t *
-intr_allocate_msix_vectors(struct pic *msi_pic, int *count)
-{
-	return intr_allocate_msi_vectors(msi_pic, count);
-}
-
-void
-intr_free_msi_vectors(struct pic *msi_pic, int count)
-{
-	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
-	int i;
-
-	mutex_enter(&cpu_lock);
-	for (i = 0; i < count; i++) {
-		intrstr = create_intrid(i, msi_pic, intrstr_buf, sizeof(intrstr_buf));
-		intr_free_io_intrsource(intrstr);
-	}
-	mutex_exit(&cpu_lock);
-}
-
-void
-intr_free_msix_vectors(struct pic *msi_pic, int count)
-{
-	return intr_free_msi_vectors(msi_pic, count);
-}
-
 static int
 intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		       int *index, struct intrsource *chained)
