@@ -706,7 +706,7 @@ vmxnet3_alloc_msix_interrupts(struct vmxnet3_softc *sc)
 			sc->vmx_nintrs = required;
 			return (0);
 		} else {
-			/* XXX pcix_msi_release(&sc->vmx_intrs, cnt); */
+			pci_msix_release(&sc->vmx_intrs, cnt);
 		}
 	}
 
@@ -730,7 +730,7 @@ vmxnet3_alloc_msi_interrupts(struct vmxnet3_softc *sc)
 			sc->vmx_nintrs = required;
 			return (0);
 		} else {
-			/* XXX pci_msi_release(&sc->vmx_intrs, cnt); */
+			pci_msi_release(&sc->vmx_intrs, cnt);
 		}
 	}
 
@@ -801,13 +801,13 @@ vmxnet3_free_interrupts(struct vmxnet3_softc *sc)
 		for (i = 0; i < sc->vmx_nintrs; i++) {
 			pci_msix_disestablish(pc, sc->vmx_ihs[i]);
 		}
-		/* XXX pci_msix_release(sc->vmx_intrs, sc->vmx_nintrs); */
+		pci_msix_release(&sc->vmx_intrs, sc->vmx_nintrs);
 		break;
 	case VMXNET3_IT_MSI:
 		for (i = 0; i < sc->vmx_nintrs; i++) {
 			pci_msi_disestablish(pc, sc->vmx_ihs[i]);
 		}
-		/* XXX pci_msi_release(sc->vmx_intrs, sc->vmx_nintrs) */
+		pci_msi_release(&sc->vmx_intrs, sc->vmx_nintrs);
 		break;
 	case VMXNET3_IT_LEGACY:
 		pci_intr_disestablish(pc, sc->vmx_ihs[0]);
