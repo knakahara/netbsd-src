@@ -140,6 +140,7 @@ void *pci_msix_establish(pci_chipset_tag_t, pci_intr_handle_t,
     int, int (*)(void *), void *);
 void pci_msix_disestablish(pci_chipset_tag_t, void *);
 
+void pci_any_intr_disestablish(pci_chipset_tag_t, void *);
 void pci_any_intr_release(pci_intr_handle_t **, int);
 
 #if 0
