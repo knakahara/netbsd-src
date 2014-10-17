@@ -157,7 +157,7 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 }
 
 static void
-pci_msi_release_md(void **cookies, int count)
+pci_msi_release_md(pci_intr_handle_t **cookies, int count)
 {
 	struct pic *pic;
 	pci_intr_handle_t *vectors;
@@ -230,7 +230,7 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 }
 
 static void
-pci_msix_release_md(void **cookies, int count)
+pci_msix_release_md(pci_intr_handle_t **cookies, int count)
 {
 	struct pic *pic;
 	pci_intr_handle_t *vectors;
@@ -314,7 +314,7 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 }
 
 void
-pci_msi_release(void **cookie, int count)
+pci_msi_release(pci_intr_handle_t **cookie, int count)
 {
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
@@ -395,7 +395,7 @@ pci_msix_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 }
 
 void
-pci_msix_release(void **cookie, int count)
+pci_msix_release(pci_intr_handle_t **cookie, int count)
 {
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
@@ -427,3 +427,14 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 }
 
 /* XXXX not yet implement MSI-X remap */
+
+void
+pci_any_intr_release(pci_intr_handle_t **cookie, int count)
+{
+	if (!INT_VIA_MSI(*cookie[0]))
+		pci_intr_release(cookie[0]);
+	else if (!MSI_INT_IS_MSIX(*cookie[0]))
+		pci_msi_release(cookie, count);
+	else
+		pci_msix_release(cookie, count);
+}
