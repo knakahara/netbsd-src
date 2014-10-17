@@ -157,12 +157,12 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 }
 
 static void
-pci_msi_release_md(pci_intr_handle_t **cookies, int count)
+pci_msi_release_md(pci_intr_handle_t **pihs, int count)
 {
 	struct pic *pic;
 	pci_intr_handle_t *vectors;
 
-	vectors = *cookies;
+	vectors = *pihs;
 	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
 	if (pic == NULL)
 		return;
@@ -230,12 +230,12 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 }
 
 static void
-pci_msix_release_md(pci_intr_handle_t **cookies, int count)
+pci_msix_release_md(pci_intr_handle_t **pihs, int count)
 {
 	struct pic *pic;
 	pci_intr_handle_t *vectors;
 
-	vectors = *cookies;
+	vectors = *pihs;
 	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
 	if (pic == NULL)
 		return;
@@ -314,14 +314,14 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 }
 
 void
-pci_msi_release(pci_intr_handle_t **cookie, int count)
+pci_msi_release(pci_intr_handle_t **pihs, int count)
 {
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
 		return;
 	}
 
-	return pci_msi_release_md(cookie, count);
+	return pci_msi_release_md(pihs, count);
 }
 
 void *
@@ -395,14 +395,14 @@ pci_msix_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 }
 
 void
-pci_msix_release(pci_intr_handle_t **cookie, int count)
+pci_msix_release(pci_intr_handle_t **pihs, int count)
 {
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
 		return;
 	}
 
-	return pci_msix_release_md(cookie, count);
+	return pci_msix_release_md(pihs, count);
 }
 
 void *
@@ -431,24 +431,17 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 void
 pci_any_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 {
-	/* XXXX should call pci_intr_disestablish() directly? */
-	pci_intr_handle_t *handle = cookie;
-
-	if (!INT_VIA_MSI(*handle))
-		pci_intr_disestablish(pc, cookie);
-	else if (!MSI_INT_IS_MSIX(*handle))
-		pci_msi_disestablish(pc, cookie);
-	else
-		pci_msix_disestablish(pc, cookie);
+	/* XXXX ov_intr_disestablish() care? */
+	intr_disestablish(cookie);
 }
 
 void
-pci_any_intr_release(pci_intr_handle_t **cookie, int count)
+pci_any_intr_release(pci_intr_handle_t **pihs, int count)
 {
-	if (!INT_VIA_MSI(*cookie[0]))
-		pci_intr_release(cookie[0]);
-	else if (!MSI_INT_IS_MSIX(*cookie[0]))
-		pci_msi_release(cookie, count);
+	if (!INT_VIA_MSI(*pihs[0]))
+		pci_intr_release(pihs[0]);
+	else if (!MSI_INT_IS_MSIX(*pihs[0]))
+		pci_msi_release(pihs, count);
 	else
-		pci_msix_release(cookie, count);
+		pci_msix_release(pihs, count);
 }
