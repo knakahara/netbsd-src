@@ -79,9 +79,11 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/systm.h>
+#include <sys/cpu.h>
 #include <sys/errno.h>
 #include <sys/device.h>
 #include <sys/intr.h>
+#include <sys/kmem.h>
 #include <sys/malloc.h>
 
 #include <dev/pci/pcivar.h>
@@ -216,6 +218,57 @@ pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *pihp)
 bad:
 	*ihp = -1;
 	return 1;
+}
+
+int
+pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
+{
+	struct intrsource *isp;
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+	pci_intr_handle_t *handle;
+
+	handle = kmem_zalloc(sizeof(handle), KM_SLEEP);
+	if (handle == NULL) {
+		aprint_normal("cannot allocate pci_intr_handle_t\n");
+		return 1;
+	}
+
+	if (pci_intr_map(pa, handle) != 0) {
+		aprint_normal("cannot set up pci_intr_handle_t\n");
+		return 1;
+	}
+
+	intrstr = pci_intr_string(pa->pa_pc, *handle,
+	    intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	isp = intr_allocate_io_intrsource(intrstr);
+	if (isp == NULL) {
+		aprint_normal("can't allocate io_intersource\n");
+		return 1;
+	}
+	mutex_exit(&cpu_lock);
+
+	*pih = handle;
+	return 0;
+}
+
+void
+pci_intr_release(pci_intr_handle_t *pih)
+{
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+
+	if (pih == NULL)
+		return;
+
+	/* XXXX */
+	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	intr_free_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+
+	kmem_free(pih, sizeof(*pih));
 }
 
 const char *
