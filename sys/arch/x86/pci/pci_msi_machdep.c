@@ -73,8 +73,10 @@ pci_msi_calculate_handle(struct pic *msi_pic, int vector)
 
 	handle = __SHIFTIN((uint64_t)msi_get_devid(msi_pic), MSI_INT_DEV_MASK) |
 		__SHIFTIN((uint64_t)vector, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
-	if (msi_pic->pic_type == PIC_MSIX)
-			MSI_INT_MAKE_MSIX(handle);
+	if (msi_pic->pic_type == PIC_MSI)
+		MSI_INT_MAKE_MSI(handle);
+	else if (msi_pic->pic_type == PIC_MSIX)
+		MSI_INT_MAKE_MSIX(handle);
 
 	return handle;
 }
