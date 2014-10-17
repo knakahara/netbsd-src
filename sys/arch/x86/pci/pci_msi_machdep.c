@@ -429,6 +429,20 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 /* XXXX not yet implement MSI-X remap */
 
 void
+pci_any_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
+{
+	/* XXXX should call pci_intr_disestablish() directly? */
+	pci_intr_handle_t *handle = cookie;
+
+	if (!INT_VIA_MSI(*handle))
+		pci_intr_disestablish(pc, cookie);
+	else if (!MSI_INT_IS_MSIX(*handle))
+		pci_msi_disestablish(pc, cookie);
+	else
+		pci_msix_disestablish(pc, cookie);
+}
+
+void
 pci_any_intr_release(pci_intr_handle_t **cookie, int count)
 {
 	if (!INT_VIA_MSI(*cookie[0]))
