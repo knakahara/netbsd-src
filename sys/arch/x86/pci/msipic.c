@@ -46,14 +46,12 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <x86/pci/msipic.h>
 
-#define MSI_FIRST_DEVID 0
-
 #define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
 
 struct msipic {
-	u_int mp_bus;
-	u_int mp_device;
-	u_int mp_function;
+	int mp_bus;
+	int mp_dev;
+	int mp_fun;
 
 	int mp_devid;
 	int mp_veccnt;
@@ -75,6 +73,7 @@ struct msipic {
 	struct pci_attach_args mp_pa;
 	bus_space_tag_t mp_bstag;
 	bus_space_handle_t mp_bshandle;
+	bus_size_t mp_bssize;
 	struct pic *mp_pic;
 	LIST_ENTRY(msipic) mp_list;
 };
@@ -82,6 +81,66 @@ struct msipic {
 static __cpu_simple_lock_t msipic_list_lock = __SIMPLELOCK_UNLOCKED;
 static LIST_HEAD(, msipic) msipic_list =
 	LIST_HEAD_INITIALIZER(msipic_list);
+
+struct dev_seq {
+	bool using;
+	int last_used_bus;
+	int last_used_dev;
+	int last_used_fun;
+};
+#define NUM_MSI_DEVS 256
+static struct dev_seq dev_seq[NUM_MSI_DEVS];
+
+static int
+allocate_devid(struct pci_attach_args *pa)
+{
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+	int bus, dev, fun, i;
+
+	pci_decompose_tag(pc, tag, &bus, &dev, &fun);
+
+	/* if the device was once attached, use same devid */
+	for (i = 0; i < NUM_MSI_DEVS; i++) {
+		/* skip never used dev_seq[i] */
+		if (dev_seq[i].last_used_bus == 0 &&
+		    dev_seq[i].last_used_dev == 0 &&
+		    dev_seq[i].last_used_fun == 0)
+			break;
+
+		if (dev_seq[i].last_used_bus == bus &&
+		    dev_seq[i].last_used_dev == dev &&
+		    dev_seq[i].last_used_fun == fun) {
+			dev_seq[i].using = true;
+			return i;
+		}
+	}
+
+	for (i = 0; i < NUM_MSI_DEVS; i++) {
+		if (dev_seq[i].using == 0) {
+			dev_seq[i].using = true;
+			dev_seq[i].last_used_bus = bus;
+			dev_seq[i].last_used_dev = dev;
+			dev_seq[i].last_used_fun = fun;
+			return i;
+		}
+	}
+
+	aprint_normal("too many MSI devices.\n");
+	return -1;
+}
+
+static void
+release_devid(int devid)
+{
+	if (devid <= 0 || NUM_MSI_DEVS <= devid) {
+		aprint_normal("%s: invalid device.\n", __func__);
+		return;
+	}
+
+	dev_seq[devid].using = false;
+	/* keep last_used_* */
+}
 
 struct pic *
 find_msi_pic(int devid)
@@ -104,8 +163,13 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 {
 	struct pic *pic;
 	struct msipic *msipic;
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+	int devid;
 
-	static int dev_seq = MSI_FIRST_DEVID;
+	devid = allocate_devid(pa);
+	if (devid == -1)
+		return NULL;
 
 	pic = kmem_zalloc(sizeof(*pic), KM_SLEEP);
 	if (pic == NULL) {
@@ -121,8 +185,10 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 
 	pic->pic_msipic = msipic;
 	msipic->mp_pic = pic;
+	pci_decompose_tag(pc, tag,
+	    &msipic->mp_bus, &msipic->mp_dev, &msipic->mp_fun);
 	memcpy(&msipic->mp_pa, pa, sizeof(msipic->mp_pa));
-	msipic->mp_devid = dev_seq;
+	msipic->mp_devid = devid;
 	/*
 	 * pci_msi_alloc() must be called only ont time in the device driver.
 	 */
@@ -132,32 +198,25 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
 	__cpu_simple_unlock(&msipic_list_lock);
 
-	KASSERT(dev_seq != INT_MAX);
-	dev_seq++;
-
 	return pic;
 }
 
-void
-delete_common_msi_pic(struct pic *pic)
+static void
+destruct_common_msi_pic(struct pic *msi_pic)
 {
 	struct msipic *msipic;
 
-	if (pic == NULL)
+	if (msi_pic == NULL)
 		return;
 
-	msipic = pic->pic_msipic;
-
+	msipic = msi_pic->pic_msipic;
 	__cpu_simple_lock(&msipic_list_lock);
 	LIST_REMOVE(msipic, mp_list);
 	__cpu_simple_unlock(&msipic_list_lock);
 
-	if (msipic->mp_msixtable != NULL)
-		kmem_free(msipic->mp_msixtable,
-		    sizeof(msipic->mp_msixtable[0]) * msipic->mp_veccnt);
-
+	release_devid(msipic->mp_devid);
 	kmem_free(msipic, sizeof(*msipic));
-	kmem_free(pic, sizeof(*pic));
+	kmem_free(msi_pic, sizeof(*msi_pic));
 }
 
 bool
@@ -179,7 +238,13 @@ msi_get_vecid(struct pic *pic, int seq)
 {
 	KASSERT(pic->pic_msipic != NULL);
 
-	return pic->pic_msipic->mp_msixtable[seq];
+	if (pic->pic_type == PIC_MSI)
+		return seq;
+	else if (pic->pic_type == PIC_MSIX)
+		return pic->pic_msipic->mp_msixtable[seq];
+	else {
+		panic("%s: invalid pic type:%d", __func__, pic->pic_type);
+	}
 }
 
 static struct pci_attach_args *
@@ -288,6 +353,12 @@ struct pic *
 construct_msi_pic(struct pci_attach_args *pa)
 {
 	return construct_common_msi_pic(pa, &msi_pic_tmpl);
+}
+
+void
+destruct_msi_pic(struct pic *msi_pic)
+{
+	destruct_common_msi_pic(msi_pic);
 }
 
 #define MSIX_VECCTL_HWMASK 1
@@ -419,6 +490,7 @@ construct_msix_pic(struct pci_attach_args *pa)
 	pcireg_t tbl;
 	bus_space_tag_t bstag;
 	bus_space_handle_t bshandle;
+	bus_size_t bssize;
 	u_int memtype;
 	int off, bir, bar, err;
 	struct pic *msix_pic;
@@ -460,15 +532,36 @@ construct_msix_pic(struct pci_attach_args *pa)
 	}
 	memtype = pci_mapreg_type(pc, tag, bar);
 	err = pci_mapreg_map(pa, bar, memtype, BUS_SPACE_MAP_LINEAR,
-	    &bstag, &bshandle, NULL, NULL);
+	    &bstag, &bshandle, NULL, &bssize);
 	if (err) {
 		aprint_normal("cannot map msix table.\n");
 		return NULL;
 	}
 	msix_pic->pic_msipic->mp_bstag = bstag;
 	msix_pic->pic_msipic->mp_bshandle = bshandle;
+	msix_pic->pic_msipic->mp_bssize = bssize;
 
 	return msix_pic;
+}
+
+void
+destruct_msix_pic(struct pic *msix_pic)
+{
+	struct msipic *msipic;
+
+	KASSERT(is_msi_pic(msix_pic));
+	KASSERT(msix_pic->pic_type == PIC_MSIX);
+
+	msipic = msix_pic->pic_msipic;
+	bus_space_unmap(msipic->mp_bstag, msipic->mp_bshandle,
+	    msipic->mp_bssize);
+
+	if (msipic->mp_msixtable != NULL)
+		kmem_free(msipic->mp_msixtable,
+		    sizeof(msipic->mp_msixtable[0]) * msipic->mp_veccnt);
+	msipic->mp_msixtable = NULL;
+
+	destruct_common_msi_pic(msix_pic);
 }
 
 void

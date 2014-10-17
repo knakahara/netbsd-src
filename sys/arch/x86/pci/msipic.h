@@ -30,7 +30,9 @@
 #define _X86_PCI_MSIPIC_H_
 
 struct pic *construct_msi_pic(struct pci_attach_args *);
+void destruct_msi_pic(struct pic *);
 struct pic *construct_msix_pic(struct pci_attach_args *);
+void destruct_msix_pic(struct pic *);
 struct pic *find_msi_pic(int);
 void set_msi_vectors(struct pic *, int, int *);
 void delete_common_msi_pic(struct pic *);
