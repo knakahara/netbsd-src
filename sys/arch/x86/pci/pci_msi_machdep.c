@@ -158,7 +158,7 @@ static void
 pci_msi_release_md(void **cookies, int count)
 {
 	struct pic *pic;
-	uint64_t *vectors;
+	pci_intr_handle_t *vectors;
 
 	vectors = *cookies;
 	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
@@ -231,7 +231,7 @@ static void
 pci_msix_release_md(void **cookies, int count)
 {
 	struct pic *pic;
-	uint64_t *vectors;
+	pci_intr_handle_t *vectors;
 
 	vectors = *cookies;
 	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
