@@ -33,6 +33,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/systm.h>
+#include <sys/cpu.h>
 #include <sys/errno.h>
 #include <sys/device.h>
 #include <sys/intr.h>
@@ -47,7 +48,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <x86/pci/msipic.h>
 
 const char *
-pci_msi_string(uint64_t ih, char *buf, size_t len)
+pci_msi_string(pci_intr_handle_t ih, char *buf, size_t len)
 {
 	int dev, vec;
 
@@ -63,12 +64,77 @@ pci_msi_string(uint64_t ih, char *buf, size_t len)
 	return buf;
 }
 
-/* XXXX tentative function name */
+static pci_intr_handle_t
+pci_msi_calculate_handle(struct pic *msi_pic, int vector)
+{
+	pci_intr_handle_t handle;
+
+	KASSERT(is_msi_pic(msi_pic));
+
+	handle = __SHIFTIN((uint64_t)msi_get_devid(msi_pic), MSI_INT_DEV_MASK) |
+		__SHIFTIN((uint64_t)vector, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
+	if (msi_pic->pic_type == PIC_MSIX)
+			MSI_INT_MAKE_MSIX(handle);
+
+	return handle;
+}
+
+static pci_intr_handle_t *
+pci_msi_alloc_vectors(struct pic *msi_pic, int *count)
+{
+	struct intrsource *isp;
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+	pci_intr_handle_t *vectors;
+	pci_intr_handle_t pih;
+	int i;
+
+	vectors = kmem_zalloc(sizeof(vectors[0]) * (*count), KM_SLEEP);
+	if (vectors == NULL) {
+		aprint_normal("cannot allocate vectors\n");
+		return NULL;
+	}
+
+	mutex_enter(&cpu_lock);
+	for (i = 0; i < *count; i++) {
+		pih = pci_msi_calculate_handle(msi_pic, i);
+
+		intrstr = pci_msi_string(pih, intrstr_buf, sizeof(intrstr_buf));
+		isp = intr_allocate_io_intrsource(intrstr);
+		if (isp == NULL) {
+			aprint_normal("can't allocate io_intersource\n");
+			return NULL;
+		}
+
+		vectors[i] = pih;
+	}
+	mutex_exit(&cpu_lock);
+
+	return vectors;
+}
+
+static void
+intr_free_msi_vectors(struct pic *msi_pic, int count)
+{
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+	pci_intr_handle_t pih;
+	int i;
+
+	mutex_enter(&cpu_lock);
+	for (i = 0; i < count; i++) {
+		pih = pci_msi_calculate_handle(msi_pic, i);
+		intrstr = pci_msi_string(pih, intrstr_buf, sizeof(intrstr_buf));
+		intr_free_io_intrsource(intrstr);
+	}
+	mutex_exit(&cpu_lock);
+}
+
 static int
 pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
 	struct pic *msi_pic;
-	uint64_t *vectors;
+	pci_intr_handle_t *vectors;
 
 	msi_pic = construct_msi_pic(pa);
 	if (msi_pic == NULL) {
@@ -76,7 +142,7 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 		return 1;
 	}
 
-	vectors = intr_allocate_msi_vectors(msi_pic, count);
+	vectors = pci_msi_alloc_vectors(msi_pic, count);
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI vectors.\n");
 		return 1;
@@ -126,20 +192,19 @@ pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
 	intr_disestablish(cookie);
 }
 
-/* XXXX tentative function name */
 static int
 pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
 	int i;
 	struct pic *msix_pic;
-	uint64_t *vectors;
+	pci_intr_handle_t *vectors;
 	int *vecs;
 
 	msix_pic = construct_msix_pic(pa);
 	if (msix_pic == NULL)
 		return 1;
 
-	vectors = intr_allocate_msix_vectors(msix_pic, count);
+	vectors = pci_msi_alloc_vectors(msix_pic, count);
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI-X vectors.\n");
 		return 1;
