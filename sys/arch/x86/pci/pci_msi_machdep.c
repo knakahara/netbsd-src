@@ -166,7 +166,7 @@ pci_msi_release_md(void **cookies, int count)
 		return;
 
 	intr_free_msi_vectors(pic, count);
-	delete_common_msi_pic(pic);
+	destruct_msi_pic(pic);
 }
 
 static void *
@@ -225,6 +225,21 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 
 	*ihps = vectors;
 	return 0;
+}
+
+static void
+pci_msix_release_md(void **cookies, int count)
+{
+	struct pic *pic;
+	uint64_t *vectors;
+
+	vectors = *cookies;
+	pic = find_msi_pic(MSI_INT_DEV(vectors[0]));
+	if (pic == NULL)
+		return;
+
+	intr_free_msi_vectors(pic, count);
+	destruct_msix_pic(pic);
 }
 
 /*****************************************************************************/
@@ -377,11 +392,15 @@ pci_msix_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 	return pci_msix_alloc_md(ihps, count, pa);
 }
 
-/* XXXX currently same as MSI. should be support sparse vectors. */
 void
 pci_msix_release(void **cookie, int count)
 {
-	return pci_msi_release(cookie, count);
+	if (count < 1) {
+		aprint_normal("invalid count: %d\n", count);
+		return;
+	}
+
+	return pci_msix_release_md(cookie, count);
 }
 
 void *
