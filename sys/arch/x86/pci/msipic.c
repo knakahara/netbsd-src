@@ -564,16 +564,35 @@ destruct_msix_pic(struct pic *msix_pic)
 	destruct_common_msi_pic(msix_pic);
 }
 
-void
-set_msi_vectors(struct pic *msi_pic, int count, int *vecs)
+int
+set_msi_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 {
+	int i;
+	int *vecs;
+
 	KASSERT(is_msi_pic(msi_pic));
 
-	if(msi_pic->pic_type == PIC_MSI) {
+	if (msi_pic->pic_type == PIC_MSI) {
 		aprint_normal("MSI ignore vecs parameter.\n");
 		vecs = NULL;
+	}
+	else if (msi_pic->pic_type == PIC_MSIX) {
+		vecs = kmem_zalloc(sizeof(int) * (count), KM_SLEEP);
+		if (vecs == NULL) {
+			aprint_normal("cannot allocate MSI-X vector table.\n");
+			return 1;
+		}
+
+		for (i = 0; i < count; i++) {
+			vecs[i] = MSI_INT_VEC(pihs[i]);
+		}
+	}
+	else {
+		aprint_normal("invalid MSI type.\n");
+		return 1;
 	}
 
 	msi_pic->pic_msipic->mp_veccnt = count;
 	msi_pic->pic_msipic->mp_msixtable = vecs;
+	return 0;
 }
