@@ -116,7 +116,7 @@ pci_msi_alloc_vectors(struct pic *msi_pic, int *count)
 }
 
 static void
-intr_free_msi_vectors(struct pic *msi_pic, int count)
+pci_msi_free_vectors(struct pic *msi_pic, int count)
 {
 	const char *intrstr;
 	char intrstr_buf[INTRID_LEN + 1];
@@ -135,6 +135,7 @@ intr_free_msi_vectors(struct pic *msi_pic, int count)
 static int
 pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
+	int i, error;
 	struct pic *msi_pic;
 	pci_intr_handle_t *vectors;
 
@@ -150,7 +151,16 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 		return 1;
 	}
 
-	set_msi_vectors(msi_pic, *count, NULL);
+	for (i = 0; i < *count; i++) {
+		MSI_INT_MAKE_MSI(vectors[i]);
+	}
+
+	error = set_msi_vectors(msi_pic, NULL, *count);
+	if (error) {
+		pci_msi_free_vectors(msi_pic, *count);
+		destruct_msi_pic(msi_pic);
+		return 1;
+	}
 
 	*ihps = vectors;
 	return 0;
@@ -167,7 +177,7 @@ pci_msi_release_md(pci_intr_handle_t **pihs, int count)
 	if (pic == NULL)
 		return;
 
-	intr_free_msi_vectors(pic, count);
+	pci_msi_free_vectors(pic, count);
 	destruct_msi_pic(pic);
 }
 
@@ -197,10 +207,9 @@ pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
 static int
 pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
-	int i;
+	int i, error;
 	struct pic *msix_pic;
 	pci_intr_handle_t *vectors;
-	int *vecs;
 
 	msix_pic = construct_msix_pic(pa);
 	if (msix_pic == NULL)
@@ -212,18 +221,16 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 		return 1;
 	}
 
-	vecs = kmem_zalloc(sizeof(int) * (*count), KM_SLEEP);
-	if (vecs == NULL) {
-		aprint_normal("cannot allocate MSI-X vector table.\n");
-		return 1;
-	}
-
 	for (i = 0; i < *count; i++) {
 		MSI_INT_MAKE_MSIX(vectors[i]);
-		vecs[i] = i;
 	}
 
-	set_msi_vectors(msix_pic, *count, vecs);
+	error = set_msi_vectors(msix_pic, vectors, *count);
+	if (error) {
+		pci_msi_free_vectors(msix_pic, *count);
+		destruct_msix_pic(msix_pic);
+		return 1;
+	}
 
 	*ihps = vectors;
 	return 0;
@@ -240,7 +247,7 @@ pci_msix_release_md(pci_intr_handle_t **pihs, int count)
 	if (pic == NULL)
 		return;
 
-	intr_free_msi_vectors(pic, count);
+	pci_msi_free_vectors(pic, count);
 	destruct_msix_pic(pic);
 }
 
