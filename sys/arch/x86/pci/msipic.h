@@ -34,8 +34,9 @@ void destruct_msi_pic(struct pic *);
 struct pic *construct_msix_pic(struct pci_attach_args *);
 void destruct_msix_pic(struct pic *);
 struct pic *find_msi_pic(int);
-int set_msi_vectors(struct pic *, pci_intr_handle_t *, int);
 void delete_common_msi_pic(struct pic *);
+int set_msi_vectors(struct pic *, pci_intr_handle_t *, int);
+int remap_msix_vectors(struct pic *, pci_intr_handle_t *, int);
 
 bool is_msi_pic(struct pic *);
 int msi_get_devid(struct pic *);
