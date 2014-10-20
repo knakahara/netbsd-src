@@ -378,7 +378,12 @@ msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
 
 	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
 	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
-	int table_idx = msi_get_vecid(pic, pin);
+	int table_idx;
+
+	table_idx = msi_get_vecid(pic, pin);
+	if (table_idx < 0)
+		panic("%s: invalid MSI-X table index, devid=%d vecid=%d",
+		    __func__, msi_get_devid(pic), pin);
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, &reg) == 0)
 		panic("%s: no msix capability", __func__);
@@ -426,7 +431,12 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 
 	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
 	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
-	int table_idx = msi_get_vecid(pic, pin);
+	int table_idx;
+
+	table_idx = msi_get_vecid(pic, pin);
+	if (table_idx < 0)
+		panic("%s: invalid MSI-X table index, devid=%d vecid=%d",
+		    __func__, msi_get_devid(pic), pin);
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
 		panic("%s: no msix capability", __func__);
@@ -592,6 +602,38 @@ set_msi_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 		return 1;
 	}
 
+	msi_pic->pic_msipic->mp_veccnt = count;
+	msi_pic->pic_msipic->mp_msixtable = vecs;
+	return 0;
+}
+
+int
+remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
+{
+	int i;
+	int *vecs;
+
+	KASSERT(is_msi_pic(msi_pic));
+	KASSERT(msi_pic->pic_type == PIC_MSI);
+
+	if (pihs == NULL)
+		return 1;
+
+	vecs = kmem_zalloc(sizeof(int) * (count), KM_SLEEP);
+	if (vecs == NULL) {
+		aprint_normal("cannot allocate MSI-X vector table.\n");
+		return 1;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (pihs[i] == MSI_INT_MSIX_INVALID)
+			vecs[i] = -1;
+		else
+			vecs[i] = MSI_INT_VEC(pihs[i]);
+	}
+
+	kmem_free(msi_pic->pic_msipic->mp_msixtable,
+	    sizeof(int) * msi_pic->pic_msipic->mp_veccnt);
 	msi_pic->pic_msipic->mp_veccnt = count;
 	msi_pic->pic_msipic->mp_msixtable = vecs;
 	return 0;

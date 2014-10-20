@@ -251,6 +251,34 @@ pci_msix_release_md(pci_intr_handle_t **pihs, int count)
 	destruct_msix_pic(pic);
 }
 
+static int
+pci_msix_remap_md(pci_intr_handle_t *pihs, int count)
+{
+	int i, devid;
+	struct pic *msi_pic;
+
+	/* pihs must be the same devid */
+	devid = MSI_INT_DEV(pihs[0]);
+	for (i = 1; i < count; i++) {
+		if (pihs[i] == MSI_INT_MSIX_INVALID)
+			continue;
+
+		if (MSI_INT_DEV(pihs[i]) != devid) {
+			aprint_normal("first devid(%d),but pihs[%d]'s devid(%d).\n",
+			    devid, i, (int)MSI_INT_DEV(pihs[i]));
+			return EINVAL;
+		}
+	}
+
+	msi_pic = find_msi_pic(devid);
+	if (msi_pic == NULL) {
+		aprint_normal("invalid devid: %d\n", devid);
+		return ENOENT;
+	}
+
+	return remap_msix_vectors(msi_pic, pihs, count);
+}
+
 /*****************************************************************************/
 /*
  * XXXX below APIs are tentative.
@@ -433,7 +461,20 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 	pci_msi_common_disestablish(pc, cookie);
 }
 
-/* XXXX not yet implement MSI-X remap */
+#define MAX_MSIX_COUNT 2048
+int
+pci_msix_remap(pci_intr_handle_t *pihs, int count)
+{
+	if (pihs == NULL)
+		return EINVAL;
+
+	if (count < 0 || MAX_MSIX_COUNT < count) {
+		aprint_normal("invalid count: %d", count);
+		return EINVAL;
+	}
+
+	return pci_msix_remap_md(pihs, count);
+}
 
 void
 pci_any_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
