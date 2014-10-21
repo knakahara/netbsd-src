@@ -70,7 +70,6 @@ struct msipic {
 	 * if the device driver "remap" to sparse index.
 	 */
 	int *mp_msixtablei;
-	int mp_vecmax; /* highest valid entry number of MSI-X table */
 
 	struct pci_attach_args mp_pa;
 	bus_space_tag_t mp_bstag;
