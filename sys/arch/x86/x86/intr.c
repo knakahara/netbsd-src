@@ -195,8 +195,8 @@ struct pic softintr_pic = {
 	.pic_lock = __SIMPLELOCK_UNLOCKED,
 };
 
-static LIST_HEAD(, intrsource) io_interrupt_sources =
-	LIST_HEAD_INITIALIZER(io_interrupt_sources);
+static SIMPLEQ_HEAD(, intrsource) io_interrupt_sources =
+	SIMPLEQ_HEAD_INITIALIZER(io_interrupt_sources);
 
 #if NIOAPIC > 0 || NACPICA > 0
 static int intr_scan_bus(int, int, int *);
@@ -459,7 +459,7 @@ intr_get_io_intrsource(const char *intrid)
 {
 	struct intrsource *isp;
 
-	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
+	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		KASSERT(isp->is_intrid != NULL);
 		if (strncmp(intrid, isp->is_intrid, INTRID_LEN) == 0) {
 			return isp;
@@ -497,7 +497,7 @@ intr_allocate_io_intrsource(const char *intrid)
 	isp->is_xname = NULL;
 	strncpy(isp->is_intrid, intrid, sizeof(isp->is_intrid));
 
-	LIST_INSERT_HEAD(&io_interrupt_sources, isp, is_list);
+	SIMPLEQ_INSERT_TAIL(&io_interrupt_sources, isp, is_list);
 
 	return isp;
 }
@@ -507,7 +507,7 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 {
 	KASSERT(mutex_owned(&cpu_lock));
 
-	LIST_REMOVE(isp, is_list);
+	SIMPLEQ_REMOVE(&io_interrupt_sources, isp, intrsource, is_list);
 
 	evcnt_detach(&isp->is_evcnt);
 	kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
@@ -1938,7 +1938,7 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		return 0;
 
 	*count = 0;
-	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
+	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		if (intr_is_affinity_intrsource(isp, cpuset))
 			(*count)++;
 	}
@@ -1950,7 +1950,7 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		return ENOMEM;
 
 	i = 0;
-	LIST_FOREACH(isp, &io_interrupt_sources, is_list) {
+	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		if (!intr_is_affinity_intrsource(isp, cpuset))
 			continue;
 
