@@ -182,8 +182,9 @@ pci_msi_release_md(pci_intr_handle_t **pihs, int count)
 }
 
 static void *
-pci_msi_common_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
-    int level, int (*func)(void *), void *arg, struct pic *pic)
+pci_msi_common_establish_xname(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg, struct pic *pic,
+    const char *xname)
 {
 	int pin, irq;
 	bool mpsafe;
@@ -194,8 +195,8 @@ pci_msi_common_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	pin = MSI_INT_VEC(ih);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
-	return intr_establish(irq, pic, pin, IST_EDGE, level, func, arg,
-	    mpsafe);
+	return intr_establish_xname(irq, pic, pin, IST_EDGE, level, func, arg,
+	    mpsafe, xname);
 }
 
 static void
@@ -360,8 +361,8 @@ pci_msi_release(pci_intr_handle_t **pihs, int count)
 }
 
 void *
-pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
-    int level, int (*func)(void *), void *arg)
+pci_msi_establish_xname(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg, const char *xname)
 {
 	struct pic *pic;
 
@@ -371,7 +372,15 @@ pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 		return NULL;
 	}
 
-	return pci_msi_common_establish(pc, ih, level, func, arg, pic);
+	return pci_msi_common_establish_xname(pc, ih, level, func, arg, pic,
+	    xname);
+}
+
+void *
+pci_msi_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg)
+{
+	return pci_msi_establish_xname(pc, ih, level, func, arg, "unknown");
 }
 
 void
@@ -441,8 +450,8 @@ pci_msix_release(pci_intr_handle_t **pihs, int count)
 }
 
 void *
-pci_msix_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
-    int level, int (*func)(void *), void *arg)
+pci_msix_establish_xname(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg, const char *xname)
 {
 	struct pic *pic;
 
@@ -452,7 +461,15 @@ pci_msix_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 		return NULL;
 	}
 
-	return pci_msi_common_establish(pc, ih, level, func, arg, pic);
+	return pci_msi_common_establish_xname(pc, ih, level, func, arg, pic,
+	    xname);
+}
+
+void *
+pci_msix_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
+    int level, int (*func)(void *), void *arg)
+{
+	return pci_msix_establish_xname(pc, ih, level, func, arg, "unknown");
 }
 
 void
