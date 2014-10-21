@@ -97,7 +97,7 @@ struct intrsource {
 	char *is_xname;			/* device name */
 	cpuid_t is_active_cpu;		/* active cpuid */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
-	LIST_ENTRY(intrsource) is_list;	/* link of intrsources */
+	SIMPLEQ_ENTRY(intrsource) is_list;	/* link of intrsources */
 };
 
 #define IS_LEGACY	0x0001		/* legacy ISA irq source */
