@@ -251,8 +251,7 @@ struct vmxnet3_softc {
 	int vmx_intr_mask_mode;
 	int vmx_event_intr_idx;
 	int vmx_nintrs;
-	pci_intr_handle_t *vmx_intrs;	/* for MSI, MSIx */
-	pci_intr_handle_t vmx_intr;	/* XXX for legacy */
+	pci_intr_handle_t *vmx_intrs;	/* legacy use vmx_intrs[0] */
 	void *vmx_ihs[VMXNET3_MAX_INTRS];
 
 	kmutex_t *vmx_mtx;
@@ -911,7 +910,7 @@ vmxnet3_setup_legacy_interrupt(struct vmxnet3_softc *sc)
 	const char *intrstr;
 	char intrbuf[PCI_INTRSTR_LEN];
 
-	intr = &sc->vmx_intr;
+	intr = &sc->vmx_intrs[0];
 	ihs = sc->vmx_ihs;
 
 	intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
