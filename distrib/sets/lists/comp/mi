@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1914 2014/09/26 19:25:56 christos Exp $
+#	$NetBSD: mi,v 1.1918 2014/10/22 16:51:31 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -3405,7 +3405,7 @@
 ./usr/include/ulimit.h				comp-c-include
 ./usr/include/unctrl.h				comp-c-include
 ./usr/include/unistd.h				comp-c-include
-./usr/include/unwind.h				comp-c-include		!libgcc_eh
+./usr/include/unwind.h				comp-c-include
 ./usr/include/usb.h				comp-obsolete		obsolete
 ./usr/include/usbhid.h				comp-c-include
 ./usr/include/util.h				comp-c-include
@@ -3496,6 +3496,8 @@
 ./usr/lib/libamu_p.a				comp-obsolete		obsolete
 ./usr/lib/libarchive.a				comp-c-lib
 ./usr/lib/libarchive_p.a			comp-c-proflib		profile
+./usr/lib/libasan.a				comp-c-lib		
+./usr/lib/libasan_p.a				comp-c-proflib		profile
 ./usr/lib/libasn1.a				comp-krb5-lib		kerberos
 ./usr/lib/libasn1_p.a				comp-krb5-proflib	profile,kerberos
 ./usr/lib/libatf-c++.a				comp-atf-lib		atf
@@ -8099,6 +8101,8 @@
 ./usr/share/man/cat3/offsetof.0			comp-c-catman		.cat
 ./usr/share/man/cat3/offtime.0			comp-c-catman		.cat
 ./usr/share/man/cat3/offtime_r.0		comp-c-catman		.cat
+./usr/share/man/cat3/open_memstream.0		comp-c-catman		.cat
+./usr/share/man/cat3/open_wmemstream.0		comp-c-catman		.cat
 ./usr/share/man/cat3/opendir.0			comp-c-catman		.cat
 ./usr/share/man/cat3/opendisk.0			comp-c-catman		.cat
 ./usr/share/man/cat3/openlog.0			comp-c-catman		.cat
@@ -12577,23 +12581,31 @@
 ./usr/share/man/html3/bzero.html		comp-c-htmlman		html
 ./usr/share/man/html3/cabs.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/cabsf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/cabsl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cacos.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cacosf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/cacosl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cacosh.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cacoshf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/cacoshl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/calloc.html		comp-c-htmlman		html
 ./usr/share/man/html3/callrpc.html		comp-c-htmlman		html
 ./usr/share/man/html3/can_change_color.html	comp-c-htmlman		html
 ./usr/share/man/html3/carg.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/cargf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/cargl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/casin.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/casinf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/casinl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/casinh.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/casinhf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/casinhl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/catan.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/catanf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/catanl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/catanh.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/catanhf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/catanhl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/catclose.html		comp-c-htmlman		html
 ./usr/share/man/html3/catgets.html		comp-c-htmlman		html
 ./usr/share/man/html3/catopen.html		comp-c-htmlman		html
@@ -12603,8 +12615,10 @@
 ./usr/share/man/html3/cbrtl.html		comp-c-htmlman		html
 ./usr/share/man/html3/ccos.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/ccosf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/ccosl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/ccosh.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/ccoshf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/ccoshl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cdbr.html			comp-c-htmlman		html
 ./usr/share/man/html3/cdbr_close.html		comp-c-htmlman		html
 ./usr/share/man/html3/cdbr_entries.html		comp-c-htmlman		html
@@ -12624,6 +12638,7 @@
 ./usr/share/man/html3/ceill.html		comp-c-htmlman		html
 ./usr/share/man/html3/cexp.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/cexpf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/cexpl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cfgetispeed.html		comp-c-htmlman		html
 ./usr/share/man/html3/cfgetospeed.html		comp-c-htmlman		html
 ./usr/share/man/html3/cfmakeraw.html		comp-c-htmlman		html
@@ -12673,6 +12688,7 @@
 ./usr/share/man/html3/clock.html		comp-c-htmlman		html
 ./usr/share/man/html3/clog.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/clogf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/clogl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/closedir.html		comp-c-htmlman		html
 ./usr/share/man/html3/closefrom.html		comp-c-htmlman		html
 ./usr/share/man/html3/closelog.html		comp-c-htmlman		html
@@ -12700,6 +12716,7 @@
 ./usr/share/man/html3/coshf.html		comp-c-htmlman		html
 ./usr/share/man/html3/cpow.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/cpowf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/cpowl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cproj.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cprojf.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/cprojl.html		comp-c-htmlman		complex,html
@@ -12720,14 +12737,19 @@
 ./usr/share/man/html3/crypto.html		comp-c-htmlman		crypto,html
 ./usr/share/man/html3/csin.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/csinf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/csinl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/csinh.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/csinhf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/csinhl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/csqrt.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/csqrtf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/csqrtl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/ctan.html			comp-c-htmlman		complex,html
 ./usr/share/man/html3/ctanf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/ctanl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/ctanh.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/ctanhf.html		comp-c-htmlman		complex,html
+./usr/share/man/html3/ctanhl.html		comp-c-htmlman		complex,html
 ./usr/share/man/html3/ctermid.html		comp-c-htmlman		html
 ./usr/share/man/html3/ctime.html		comp-c-htmlman		html
 ./usr/share/man/html3/ctime_r.html		comp-c-htmlman		html
@@ -14895,6 +14917,8 @@
 ./usr/share/man/html3/offsetof.html		comp-c-htmlman		html
 ./usr/share/man/html3/offtime.html		comp-c-htmlman		html
 ./usr/share/man/html3/offtime_r.html		comp-c-htmlman		html
+./usr/share/man/html3/open_memstream.html	comp-c-htmlman		html
+./usr/share/man/html3/open_wmemstream.html	comp-c-htmlman		html
 ./usr/share/man/html3/opendir.html		comp-c-htmlman		html
 ./usr/share/man/html3/opendisk.html		comp-c-htmlman		html
 ./usr/share/man/html3/openlog.html		comp-c-htmlman		html
@@ -19280,24 +19304,32 @@
 ./usr/share/man/man3/bzero.3			comp-c-man		.man
 ./usr/share/man/man3/cabs.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cabsf.3			comp-c-man		complex,.man
+./usr/share/man/man3/cabsl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cacos.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cacosf.3			comp-c-man		complex,.man
+./usr/share/man/man3/cacosl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cacosh.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cacoshf.3			comp-c-man		complex,.man
+./usr/share/man/man3/cacoshl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/calloc.3			comp-c-man		.man
 ./usr/share/man/man3/callrpc.3			comp-c-man		.man
 ./usr/share/man/man3/can_change_color.3		comp-c-man		.man
 ./usr/share/man/man3/can_change_colors.3	comp-obsolete		obsolete
 ./usr/share/man/man3/carg.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cargf.3			comp-c-man		complex,.man
+./usr/share/man/man3/cargl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/casin.3			comp-c-man		complex,.man
 ./usr/share/man/man3/casinf.3			comp-c-man		complex,.man
+./usr/share/man/man3/casinl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/casinh.3			comp-c-man		complex,.man
 ./usr/share/man/man3/casinhf.3			comp-c-man		complex,.man
+./usr/share/man/man3/casinhl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/catan.3			comp-c-man		complex,.man
 ./usr/share/man/man3/catanf.3			comp-c-man		complex,.man
+./usr/share/man/man3/catanl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/catanh.3			comp-c-man		complex,.man
 ./usr/share/man/man3/catanhf.3			comp-c-man		complex,.man
+./usr/share/man/man3/catanhl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/catclose.3			comp-c-man		.man
 ./usr/share/man/man3/catgets.3			comp-c-man		.man
 ./usr/share/man/man3/catopen.3			comp-c-man		.man
@@ -19307,8 +19339,10 @@
 ./usr/share/man/man3/cbrtl.3			comp-c-man		.man
 ./usr/share/man/man3/ccos.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ccosf.3			comp-c-man		complex,.man
+./usr/share/man/man3/ccosl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ccosh.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ccoshf.3			comp-c-man		complex,.man
+./usr/share/man/man3/ccoshl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cdbr.3			comp-c-man		.man
 ./usr/share/man/man3/cdbr_close.3		comp-c-man		.man
 ./usr/share/man/man3/cdbr_entries.3		comp-c-man		.man
@@ -19356,6 +19390,7 @@
 ./usr/share/man/man3/ceill.3			comp-c-man		.man
 ./usr/share/man/man3/cexp.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cexpf.3			comp-c-man		complex,.man
+./usr/share/man/man3/cexpl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cfgetispeed.3		comp-c-man		.man
 ./usr/share/man/man3/cfgetospeed.3		comp-c-man		.man
 ./usr/share/man/man3/cfmakeraw.3		comp-c-man		.man
@@ -19419,6 +19454,7 @@
 ./usr/share/man/man3/clock.3			comp-c-man		.man
 ./usr/share/man/man3/clog.3			comp-c-man		complex,.man
 ./usr/share/man/man3/clogf.3			comp-c-man		complex,.man
+./usr/share/man/man3/clogl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/closedir.3			comp-c-man		.man
 ./usr/share/man/man3/closefrom.3		comp-c-man		.man
 ./usr/share/man/man3/closelog.3			comp-c-man		.man
@@ -19446,6 +19482,7 @@
 ./usr/share/man/man3/coshf.3			comp-c-man		.man
 ./usr/share/man/man3/cpow.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cpowf.3			comp-c-man		complex,.man
+./usr/share/man/man3/cpowl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cproj.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cprojf.3			comp-c-man		complex,.man
 ./usr/share/man/man3/cprojl.3			comp-c-man		complex,.man
@@ -19466,14 +19503,19 @@
 ./usr/share/man/man3/crypto.3			comp-c-man		crypto,.man
 ./usr/share/man/man3/csin.3			comp-c-man		complex,.man
 ./usr/share/man/man3/csinf.3			comp-c-man		complex,.man
+./usr/share/man/man3/csinl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/csinh.3			comp-c-man		complex,.man
 ./usr/share/man/man3/csinhf.3			comp-c-man		complex,.man
+./usr/share/man/man3/csinhl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/csqrt.3			comp-c-man		complex,.man
 ./usr/share/man/man3/csqrtf.3			comp-c-man		complex,.man
+./usr/share/man/man3/csqrtl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ctan.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ctanf.3			comp-c-man		complex,.man
+./usr/share/man/man3/ctanl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ctanh.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ctanhf.3			comp-c-man		complex,.man
+./usr/share/man/man3/ctanhl.3			comp-c-man		complex,.man
 ./usr/share/man/man3/ctermid.3			comp-c-man		.man
 ./usr/share/man/man3/ctime.3			comp-c-man		.man
 ./usr/share/man/man3/ctime_r.3			comp-c-man		.man
@@ -21683,6 +21725,8 @@
 ./usr/share/man/man3/offsetof.3			comp-c-man		.man
 ./usr/share/man/man3/offtime.3			comp-c-man		.man
 ./usr/share/man/man3/offtime_r.3		comp-c-man		.man
+./usr/share/man/man3/open_memstream.3		comp-c-man		.man
+./usr/share/man/man3/open_wmemstream.3		comp-c-man		.man
 ./usr/share/man/man3/opendir.3			comp-c-man		.man
 ./usr/share/man/man3/opendisk.3			comp-c-man		.man
 ./usr/share/man/man3/openlog.3			comp-c-man		.man

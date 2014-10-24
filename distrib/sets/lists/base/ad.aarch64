@@ -1,4 +1,4 @@
-# $NetBSD: ad.aarch64,v 1.7 2014/09/26 19:25:56 christos Exp $
+# $NetBSD: ad.aarch64,v 1.12 2014/10/22 16:51:31 christos Exp $
 ./lib/eabi					base-compat-shlib	compat
 ./lib/eabi/npf					base-npf-shlib		compat
 ./lib/eabi/npf/ext_log.so			base-npf-shlib		compat,pic
@@ -89,6 +89,8 @@
 ./usr/lib/eabi/libarchive.so.3.1		base-compat-shlib	compat,pic
 ./usr/lib/eabi/libarm.so.0			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libarm.so.0.0			base-compat-shlib	compat,pic
+./usr/lib/eabi/libasan.so.0			base-compat-shlib	compat,pic
+./usr/lib/eabi/libasan.so.0.0			base-compat-shlib	compat,pic,
 ./usr/lib/eabi/libasn1.so.9			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libasn1.so.9.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libatf-c++.so.1			base-compat-shlib	compat,pic,atf
@@ -108,7 +110,7 @@
 ./usr/lib/eabi/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabi/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabi/libc.so.12				base-compat-shlib	compat,pic
-./usr/lib/eabi/libc.so.12.195			base-compat-shlib	compat,pic
+./usr/lib/eabi/libc.so.12.196			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libcrypt.so.1			base-compat-shlib	compat,pic
@@ -212,7 +214,7 @@
 ./usr/lib/eabi/liblzma.so.1			base-compat-shlib	compat,pic
 ./usr/lib/eabi/liblzma.so.1.1			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libm.so.0				base-compat-shlib	compat,pic
-./usr/lib/eabi/libm.so.0.10			base-compat-shlib	compat,pic
+./usr/lib/eabi/libm.so.0.11			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libmagic.so.5			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libmagic.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libmenu.so.6			base-compat-shlib	compat,pic
@@ -293,14 +295,14 @@
 ./usr/lib/eabi/libsl.so.5.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libsqlite3.so.1			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libsqlite3.so.1.2			base-compat-shlib	compat,pic
-./usr/lib/eabi/libssh.so.22			base-compat-shlib	compat,pic,crypto
-./usr/lib/eabi/libssh.so.22.0			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabi/libssh.so.23			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabi/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libssl.so.10			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx
 ./usr/lib/eabi/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx
 ./usr/lib/eabi/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx
-./usr/lib/eabi/libstdc++.so.7.2			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx
+./usr/lib/eabi/libstdc++.so.7.3			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx
 ./usr/lib/eabi/libtermcap.so.0			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libtermcap.so.0.6			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libterminfo.so.1			base-compat-shlib	compat,pic
@@ -403,6 +405,8 @@
 ./usr/lib/eabihf/libarchive.so.3.1			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libarm.so.0			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libarm.so.0.0			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libasan.so.0			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libasan.so.0.0			base-compat-shlib	compat,pic,
 ./usr/lib/eabihf/libasn1.so.9			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libasn1.so.9.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libatf-c++.so.1			base-compat-shlib	compat,pic,atf
@@ -422,7 +426,7 @@
 ./usr/lib/eabihf/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabihf/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabihf/libc.so.12				base-compat-shlib	compat,pic
-./usr/lib/eabihf/libc.so.12.195			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libc.so.12.196			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libcrypt.so.1			base-compat-shlib	compat,pic
@@ -526,7 +530,7 @@
 ./usr/lib/eabihf/liblzma.so.1			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/liblzma.so.1.1			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libm.so.0				base-compat-shlib	compat,pic
-./usr/lib/eabihf/libm.so.0.10			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libm.so.0.11			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libmagic.so.5			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libmagic.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libmenu.so.6			base-compat-shlib	compat,pic
@@ -607,14 +611,14 @@
 ./usr/lib/eabihf/libsl.so.5.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libsqlite3.so.1			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libsqlite3.so.1.2			base-compat-shlib	compat,pic
-./usr/lib/eabihf/libssh.so.22			base-compat-shlib	compat,pic,crypto
-./usr/lib/eabihf/libssh.so.22.0			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabihf/libssh.so.23			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabihf/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libssl.so.10			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx
 ./usr/lib/eabihf/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx
 ./usr/lib/eabihf/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx
-./usr/lib/eabihf/libstdc++.so.7.2			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx
+./usr/lib/eabihf/libstdc++.so.7.3			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx
 ./usr/lib/eabihf/libtermcap.so.0			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libtermcap.so.0.6			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libterminfo.so.1			base-compat-shlib	compat,pic
@@ -717,6 +721,8 @@
 ./usr/lib/oabi/libarchive.so.3.1		base-compat-shlib	compat,pic
 ./usr/lib/oabi/libarm.so.0			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libarm.so.0.0			base-compat-shlib	compat,pic
+./usr/lib/oabi/libasan.so.0			base-compat-shlib	compat,pic
+./usr/lib/oabi/libasan.so.0.0			base-compat-shlib	compat,pic,
 ./usr/lib/oabi/libasn1.so.9			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libasn1.so.9.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libatf-c++.so.1			base-compat-shlib	compat,pic,atf
@@ -736,7 +742,7 @@
 ./usr/lib/oabi/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/oabi/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/oabi/libc.so.12			base-compat-shlib	compat,pic
-./usr/lib/oabi/libc.so.12.195			base-compat-shlib	compat,pic
+./usr/lib/oabi/libc.so.12.196			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libcom_err.so.7.0		base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libcrypt.so.1			base-compat-shlib	compat,pic
@@ -838,7 +844,7 @@
 ./usr/lib/oabi/liblzma.so.1			base-compat-shlib	compat,pic
 ./usr/lib/oabi/liblzma.so.1.1			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libm.so.0			base-compat-shlib	compat,pic
-./usr/lib/oabi/libm.so.0.10			base-compat-shlib	compat,pic
+./usr/lib/oabi/libm.so.0.11			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libmagic.so.5			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libmagic.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libmenu.so.6			base-compat-shlib	compat,pic
@@ -919,14 +925,14 @@
 ./usr/lib/oabi/libsl.so.5.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libsqlite3.so.1			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libsqlite3.so.1.2		base-compat-shlib	compat,pic
-./usr/lib/oabi/libssh.so.22			base-compat-shlib	compat,pic,crypto
-./usr/lib/oabi/libssh.so.22.0			base-compat-shlib	compat,pic,crypto
+./usr/lib/oabi/libssh.so.23			base-compat-shlib	compat,pic,crypto
+./usr/lib/oabi/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libssl.so.10			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx
 ./usr/lib/oabi/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx
 ./usr/lib/oabi/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx
-./usr/lib/oabi/libstdc++.so.7.2			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx
+./usr/lib/oabi/libstdc++.so.7.3			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx
 ./usr/lib/oabi/libtermcap.so.0			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libtermcap.so.0.6		base-compat-shlib	compat,pic
 ./usr/lib/oabi/libterminfo.so.1			base-compat-shlib	compat,pic

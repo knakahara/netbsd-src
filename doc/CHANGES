@@ -1,4 +1,4 @@
-# LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.1990 $>
+# LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.2000 $>
 #
 #
 # [Note: This file does not mention every change made to the NetBSD source tree.
@@ -38,13 +38,14 @@ Changes from NetBSD 7.0 to NetBSD 8.0:
 	wm(4): Add internal SERDES support for 82575 and newer controllers.
 		[msaitoh 20140903]
 	or1k: Add new port.  [matt 20140903]
-	awindma(4): Add support for AllWinner A10/A20 DMA controller.
+	awindma(4): Add support for Allwinner A10/A20 DMA controller.
 		[jmcneill 20140906]
-	awinac(4): Add support for AllWinner A10/A20 audio codec.
+	awinac(4): Add support for Allwinner A10/A20 audio codec.
 		[jmcneill 20140906]
-	awinrtc(4): Add support for AllWinner A10/A20 real-time clock.
+	awinrtc(4): Add support for Allwinner A10/A20 real-time clock.
 		[jmcneill 20140907]
 	awinmmc(4): Use DMA for MMC transfers. [jmcneill 20140908]
+	axp20x(4): Add AXP20x PMU driver. [jmcneill 20140909]
 	rtsol(8): Removed in favour of dhcpcd. [roy 20140911]
 	rtsold(8): Removed in favour of dhcpcd. [roy 20140911]
 	dhcpcd(8): Import dhcpcd-6.4.5. [roy 20140918]
@@ -59,4 +60,23 @@ Changes from NetBSD 7.0 to NetBSD 8.0:
 	zoneinfo: Import tzdata2014h. [apb 20141004]
 	dhcpcd(8): Import dhcpcd-6.5.0. [roy 20141006]
 	libc: Update to tzcode2014h. [christos 20141007]
-
+	file(1): Upgraded to 5.20. [christos 20141010]
+	arm: Add support for Allwinner A31 SoC. [jmcneill 20141010]
+	awiniic(4): Add support for Allwinner A31 SoC. [jmcneill 20141012]
+	awinp2wi(4): Add support for Allwinner A31 Push-Pull Two Wire
+		Interface. [jmcneill 20141012]
+	axp22x(4): Add AXP22x PMU driver. [jmcneill 20141012]
+	awinrtc(4): Add support for Allwinner A31 real-time clock.
+		[jmcneill 20141012]
+	awindma(4): Add support for Allwinner A31 DMA controller.
+		[jmcneill 20141013]
+	awinac(4): Add support for Allwinner A31 audio codec.
+		[jmcneill 20141013]
+	motg(4): Add support for Allwinner A10/A20 SoC. [jmcneill 20141015]
+	wpa: Import wpa_supplicant and hostapd 2.3. [christos 20141016]
+	dhcpcd(8): Import dhcpcd-6.5.1. [roy 20141018]
+	OpenSSH: Imported 6.7. [christos 20141018]
+	resolvconf(8): Import openresolv-3.6.0 [roy 20141020]
+	gcc: Support -fsanitize=address
+	zoneinfo: Import tzdata2014i. [apb 20141023]
+	libc: Update to tzcode2014i. [christos 201401023]

@@ -1,4 +1,4 @@
-/*	$NetBSD: radeonfb.c,v 1.84 2014/07/22 15:42:59 riastradh Exp $ */
+/*	$NetBSD: radeonfb.c,v 1.87 2014/10/21 09:07:07 macallan Exp $ */
 
 /*-
  * Copyright (c) 2006 Itronix Inc.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: radeonfb.c,v 1.84 2014/07/22 15:42:59 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: radeonfb.c,v 1.87 2014/10/21 09:07:07 macallan Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1254,8 +1254,6 @@ radeonfb_mmap(void *v, void *vs, off_t offset, int prot)
 	dp = (struct radeonfb_display *)vd->cookie;
 	sc = dp->rd_softc;
 
-	/* XXX: note that we don't allow mapping of registers right now */
-	/* XXX: this means that the XFree86 radeon driver won't work */
 	if ((offset >= 0) && (offset < (dp->rd_virty * dp->rd_stride))) {
 		pa = bus_space_mmap(sc->sc_memt,
 		    sc->sc_memaddr + dp->rd_offset + offset, 0,
@@ -1263,7 +1261,6 @@ radeonfb_mmap(void *v, void *vs, off_t offset, int prot)
 		return pa;
 	}
 
-#ifdef RADEONFB_MMAP_BARS
 	/*
 	 * restrict all other mappings to processes with superuser privileges
 	 * or the kernel itself
@@ -1302,8 +1299,6 @@ radeonfb_mmap(void *v, void *vs, off_t offset, int prot)
 	}	
 #endif /* PCI_MAGIC_IO_RANGE */
 
-#endif /* RADEONFB_MMAP_BARS */
-
 	return -1;
 }
 
@@ -1321,7 +1316,7 @@ radeonfb_loadbios(struct radeonfb_softc *sc, const struct pci_attach_args *pa)
 		return;
 	}
 
-	pci_find_rom(pa, romt, romh, PCI_ROM_CODE_TYPE_X86, &biosh,
+	pci_find_rom(pa, romt, romh, romsz, PCI_ROM_CODE_TYPE_X86, &biosh,
 	    &sc->sc_biossz);
 	if (sc->sc_biossz == 0) {
 		aprint_verbose("%s: Video BIOS not present\n", XNAME(sc));

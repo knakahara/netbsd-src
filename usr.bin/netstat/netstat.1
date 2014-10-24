@@ -1,4 +1,4 @@
-.\"	$NetBSD: netstat.1,v 1.67 2013/10/18 22:18:14 bad Exp $
+.\"	$NetBSD: netstat.1,v 1.70 2014/10/11 09:23:32 wiz Exp $
 .\"
 .\" Copyright (c) 1983, 1990, 1992, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -222,16 +222,37 @@ option, display wider fields for the IPv6 multicast routing table
 and
 .Qq Group
 columns.
-.It Fl M
-Extract values associated with the name list from the specified core
-instead of the default
-.Pa /dev/kmem .
+.It Fl M Ar core
+Use
+.Xr kvm 3
+instead of
+.Xr sysctl 3
+to retrieve information and
+extract values associated with the name list from the specified core.
+If the
+.Fl M
+option is not given but the
+.Fl N
+option is given, the default
+.Pa /dev/mem
+is used.
 .It Fl m
 Show statistics recorded by the mbuf memory management routines
 (the network manages a private pool of memory buffers).
-.It Fl N
-Extract the name list from the specified system instead of the default
-.Pa /netbsd .
+.It Fl N Ar system
+Use
+.Xr kvm 3
+instead of
+.Xr sysctl 3
+to retrieve information and extract the name list from the specified system.
+For the default behavior when only
+.Fl M
+option is given, see the description about when
+.Fa execfile
+is
+.Dv NULL
+in
+.Xr kvm_openfiles 3 .
 .It Fl n
 Show network addresses and ports as numbers (normally
 .Nm
@@ -443,10 +464,10 @@ command appeared in
 .Bx 4.2 .
 IPv6 support was added by WIDE/KAME project.
 .\" .Sh FILES
-.\" .Bl -tag -width /dev/kmem -compact
+.\" .Bl -tag -width /dev/mem -compact
 .\" .It Pa /netbsd
 .\" default kernel namelist
-.\" .It Pa /dev/kmem
+.\" .It Pa /dev/mem
 .\" default memory file
 .\" .El
 .Sh BUGS

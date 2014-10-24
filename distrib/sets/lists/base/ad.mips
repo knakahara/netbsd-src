@@ -1,4 +1,4 @@
-# $NetBSD: ad.mips,v 1.51 2014/09/26 19:25:56 christos Exp $
+# $NetBSD: ad.mips,v 1.56 2014/10/22 16:51:31 christos Exp $
 ./lib/64					base-compat-shlib	compat,arch64
 ./lib/64/npf					base-npf-shlib		compat,arch64
 ./lib/64/npf/ext_log.so				base-npf-shlib		compat,pic,arch64
@@ -75,6 +75,8 @@
 ./usr/lib/64/libamu.so.4.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libarchive.so.3			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libarchive.so.3.1			base-compat-shlib	compat,pic,arch64
+./usr/lib/64/libasan.so.0			base-compat-shlib	compat,pic
+./usr/lib/64/libasan.so.0.0			base-compat-shlib	compat,pic
 ./usr/lib/64/libasn1.so.9			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/64/libasn1.so.9.0			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/64/libatf-c++.so.1			base-compat-shlib	compat,pic,atf,arch64
@@ -94,7 +96,7 @@
 ./usr/lib/64/libc++.so.1			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/64/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/64/libc.so.12				base-compat-shlib	compat,pic,arch64
-./usr/lib/64/libc.so.12.195			base-compat-shlib	compat,pic,arch64
+./usr/lib/64/libc.so.12.196			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/64/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/64/libcrypt.so.1			base-compat-shlib	compat,pic,arch64
@@ -207,7 +209,7 @@
 ./usr/lib/64/liblzma.so.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/liblzma.so.1.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libm.so.0				base-compat-shlib	compat,pic,arch64
-./usr/lib/64/libm.so.0.10			base-compat-shlib	compat,pic,arch64
+./usr/lib/64/libm.so.0.11			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libmagic.so.5			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libmagic.so.5.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libmenu.so.6			base-compat-shlib	compat,pic,arch64
@@ -298,14 +300,14 @@
 ./usr/lib/64/libsqlite3.so.1.2			base-compat-shlib	compat,pic,arch64
 ./usr/lib/64/libss.so.6				base-compat-shlib	obsolete,arch64
 ./usr/lib/64/libss.so.6.0			base-compat-shlib	obsolete,arch64
-./usr/lib/64/libssh.so.22			base-compat-shlib	compat,pic,crypto,arch64
-./usr/lib/64/libssh.so.22.0			base-compat-shlib	compat,pic,crypto,arch64
+./usr/lib/64/libssh.so.23			base-compat-shlib	compat,pic,crypto,arch64
+./usr/lib/64/libssh.so.23.0			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/64/libssl.so.10			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/64/libssl.so.10.4			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/64/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx,arch64
 ./usr/lib/64/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx,arch64
 ./usr/lib/64/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx,arch64
-./usr/lib/64/libstdc++.so.7.2			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx,arch64
+./usr/lib/64/libstdc++.so.7.3			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx,arch64
 ./usr/lib/64/libsupc++.so.0			base-compat-shlib	obsolete,arch64
 ./usr/lib/64/libsupc++.so.0.0			base-compat-shlib	obsolete,arch64
 ./usr/lib/64/libtermcap.so.0			base-compat-shlib	compat,pic,arch64
@@ -422,6 +424,8 @@
 ./usr/lib/o32/libamu.so.4.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libarchive.so.3			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libarchive.so.3.1			base-compat-shlib	compat,pic,arch64
+./usr/lib/o32/libasan.so.0			base-compat-shlib	compat,pic
+./usr/lib/o32/libasan.so.0.0			base-compat-shlib	compat,pic
 ./usr/lib/o32/libasn1.so.9			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/o32/libasn1.so.9.0			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/o32/libatf-c++.so.1			base-compat-shlib	compat,pic,atf,arch64
@@ -441,7 +445,7 @@
 ./usr/lib/o32/libc++.so.1			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/o32/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/o32/libc.so.12			base-compat-shlib	compat,pic,arch64
-./usr/lib/o32/libc.so.12.195			base-compat-shlib	compat,pic,arch64
+./usr/lib/o32/libc.so.12.196			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/o32/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/o32/libcrypt.so.1			base-compat-shlib	compat,pic,arch64
@@ -546,7 +550,7 @@
 ./usr/lib/o32/liblzma.so.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/liblzma.so.1.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libm.so.0				base-compat-shlib	compat,pic,arch64
-./usr/lib/o32/libm.so.0.10			base-compat-shlib	compat,pic,arch64
+./usr/lib/o32/libm.so.0.11			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libmagic.so.5			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libmagic.so.5.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libmenu.so.6			base-compat-shlib	compat,pic,arch64
@@ -637,14 +641,14 @@
 ./usr/lib/o32/libsqlite3.so.1.2			base-compat-shlib	compat,pic,arch64
 ./usr/lib/o32/libss.so.6			base-compat-shlib	obsolete,arch64
 ./usr/lib/o32/libss.so.6.0			base-compat-shlib	obsolete,arch64
-./usr/lib/o32/libssh.so.22			base-compat-shlib	compat,pic,crypto,arch64
-./usr/lib/o32/libssh.so.22.0			base-compat-shlib	compat,pic,crypto,arch64
+./usr/lib/o32/libssh.so.23			base-compat-shlib	compat,pic,crypto,arch64
+./usr/lib/o32/libssh.so.23.0			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/o32/libssl.so.10			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/o32/libssl.so.10.4			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/o32/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx,arch64
 ./usr/lib/o32/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx,arch64
 ./usr/lib/o32/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx,arch64
-./usr/lib/o32/libstdc++.so.7.2			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx,arch64
+./usr/lib/o32/libstdc++.so.7.3			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx,arch64
 ./usr/lib/o32/libsupc++.so.0			base-compat-shlib	obsolete,arch64
 ./usr/lib/o32/libsupc++.so.0.0			base-compat-shlib	obsolete,arch64
 ./usr/lib/o32/libtermcap.so.0			base-compat-shlib	compat,pic,arch64

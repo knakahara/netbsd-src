@@ -1,0 +1,80 @@
+o Emit everything (ioconf.*, Makefile, ...) per-attribute.
+
+o Generate modular(9) related information.  Especially module dependency.
+
+o Rename "interface attribute" to "bus".
+
+  Instead of
+
+	define	audiobus {}
+	attach	audio at audiobus
+
+  Do like this
+
+	defbus	audiobus {}
+	attach	audio at audiobus
+
+o Sort objects in more reasonable order.
+
+  Put machdep.ko in the lowest address.  uvm.ko and kern.ko follow.
+
+  Kill alphabetical sort (${OBJS:O} in sys/conf/Makefile.inc.kern.
+
+  Use ldscript.  Do like this
+
+	.text :
+	AT (ADDR(.text) & 0x0fffffff)
+	{
+	  *(.text.machdep.locore.entry)
+	  *(.text.machdep.locore)
+	  *(.text.machdep)
+	  *(.text)
+	  *(.text.*)
+	  :
+
+  Kill linker definitions in sys/conf/Makefile.inc.kern.
+
+o Differentiate "options" and "flags"/"params".
+
+  "options" enables features by adding *.c files (via attributes).
+
+  "flags" and "params" are to change contents of *.c files.  These don't add
+  *.c files to the result kernel, or don't build attributes (modules).
+
+o Make flags/params per attributes (modules).
+
+  Basically flags and params are cpp(1) #define's generated in opt_*.h.  Make
+  them local to one attributes (modules).  Flags/params which affects files
+  across attributes (modules) are possible, but should be discouraged.
+
+o Generate things only by definitions.
+
+  In the ideal dynamically modular world, "selection" will be done not at
+  compile time but at runtime.  Users select their wanted modules, by
+  dynamically loading them.
+
+  This means that the system provides all choices; that is, build all modules
+  in the source tree.  Necessary information is defined in the "definition"
+  part.
+
+o Split cfdata.
+
+  cfdata is pattern matching rules to enable devices at runtime device
+  auto-configuration.  It is pure data and can (should) be generated separately
+  from the code.
+
+o Allow easier adding and removing of options.
+
+  It should be possible to add or remove options, flags, etc.,
+  without regard to whether or not they are already defined.
+  For example, a configuration like this:
+
+	include GENERIC
+	options FOO
+	no options BAR
+
+  should work regardless of whether or not options FOO and/or
+  options BAR were defined in GENERIC.  It should not give
+  errors like "options BAR was already defined" or "options FOO
+  was not defined".
+

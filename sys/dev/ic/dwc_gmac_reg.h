@@ -1,3 +1,5 @@
+/* $NetBSD: dwc_gmac_reg.h,v 1.11 2014/10/21 00:01:01 jmcneill Exp $ */
+
 /*-
  * Copyright (c) 2013, 2014 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -42,6 +44,28 @@
 #define	AWIN_GMAC_MAC_ADDR0LO		0x0044
 #define	AWIN_GMAC_MII_STATUS		0x00D8
 
+#define	AWIN_GMAC_MAC_CONF_FRAMEBURST	__BIT(21) /* allow TX frameburst when
+						     in half duplex mode */
+#define	AWIN_GMAC_MAC_CONF_MIISEL	__BIT(15) /* select MII phy */
+#define	AWIN_GMAC_MAC_CONF_FES100	__BIT(14) /* 100 mbit mode */
+#define	AWIN_GMAC_MAC_CONF_DISABLERXOWN	__BIT(13) /* do not receive our own
+						     TX frames in half duplex
+						     mode */
+#define	AWIN_GMAC_MAC_CONF_FULLDPLX	__BIT(11) /* select full duplex */
+#define	AWIN_GMAC_MAC_CONF_TXENABLE	__BIT(3)  /* enable TX dma engine */
+#define	AWIN_GMAC_MAC_CONF_RXENABLE	__BIT(2)  /* enable RX dma engine */
+
+#define	AWIN_GMAC_MAC_FFILT_RA		__BIT(31) /* receive all mode */
+#define	AWIN_GMAC_MAC_FFILT_HPF		__BIT(10) /* hash or perfect filter */
+#define	AWIN_GMAC_MAC_FFILT_SAF		__BIT(9)  /* source address filter */
+#define	AWIN_GMAC_MAC_FFILT_SAIF	__BIT(8)  /* inverse filtering */
+#define	AWIN_GMAC_MAC_FFILT_DBF		__BIT(5)  /* disable broadcast frames */
+#define	AWIN_GMAC_MAC_FFILT_PM		__BIT(4)  /* promiscious multicast */
+#define	AWIN_GMAC_MAC_FFILT_DAIF	__BIT(3)  /* DA inverse filtering */
+#define	AWIN_GMAC_MAC_FFILT_HMC		__BIT(2)  /* multicast hash compare */
+#define	AWIN_GMAC_MAC_FFILT_HUC		__BIT(1)  /* unicast hash compare */
+#define	AWIN_GMAC_MAC_FFILT_PR		__BIT(0)  /* promiscious mode */
+
 #define	AWIN_GMAC_MAC_INT_LPI		__BIT(10)
 #define	AWIN_GMAC_MAC_INT_TSI		__BIT(9)
 #define	AWIN_GMAC_MAC_INT_ANEG		__BIT(2)
@@ -62,42 +86,65 @@
 #define	AWIN_GMAC_DMA_CUR_RX_BUFADDR	0x1054
 #define	AWIN_GMAC_DMA_HWFEATURES	0x1058	/* not always implemented? */
 
-#define GMAC_MII_PHY_SHIFT		11
+#define	GMAC_MII_PHY_SHIFT		11
 #define	GMAC_MII_PHY_MASK		__BITS(15,11)
 #define	GMAC_MII_REG_SHIFT		6
 #define	GMAC_MII_REG_MASK		__BITS(10,6)
 
 #define	GMAC_MII_BUSY			__BIT(0)
 #define	GMAC_MII_WRITE			__BIT(1)
-#define	GMAC_MII_CLKMASK		__BITS(4,2)
+#define	GMAC_MII_CLK_60_100M_DIV42	0x0
+#define	GMAC_MII_CLK_100_150M_DIV62	0x1
+#define	GMAC_MII_CLK_25_35M_DIV16	0x2
+#define	GMAC_MII_CLK_35_60M_DIV26	0x3
+#define	GMAC_MII_CLK_150_250M_DIV102	0x4
+#define	GMAC_MII_CLK_250_300M_DIV124	0x5
+#define	GMAC_MII_CLK_DIV4		0x8
+#define	GMAC_MII_CLK_DIV6		0x9
+#define	GMAC_MII_CLK_DIV8		0xa
+#define	GMAC_MII_CLK_DIV10		0xb
+#define	GMAC_MII_CLK_DIV12		0xc
+#define	GMAC_MII_CLK_DIV14		0xd
+#define	GMAC_MII_CLK_DIV16		0xe
+#define	GMAC_MII_CLK_DIV18		0xf
+#define	GMAC_MII_CLKMASK		__BITS(5,2)
 
+#define	GMAC_BUSMODE_FIXEDBURST		__BIT(16)
+#define	GMAC_BUSMODE_PRIORXTX		__BITS(15,14)
+#define	GMAC_BUSMODE_PRIORXTX_41	3
+#define	GMAC_BUSMODE_PRIORXTX_31	2
+#define	GMAC_BUSMODE_PRIORXTX_21	1
+#define	GMAC_BUSMODE_PRIORXTX_11	0
+#define	GMCA_BUSMODE_PBL		__BITS(13,8) /* possible DMA
+						        burst len */
 #define	GMAC_BUSMODE_RESET		__BIT(0)
 
 #define	AWIN_GMAC_MII_IRQ		__BIT(0)
 
-#define	GMAC_DMA_OP_STOREFORWARD	__BIT(21)
-#define	GMAC_DMA_OP_FLUSHTX		__BIT(20)
-#define	GMAC_DMA_OP_TXSTART		__BIT(13)
-#define	GMAC_DMA_OP_TXSECONDFRAME	__BIT(2)
-#define	GMAC_DMA_OP_RXSTART		__BIT(1)
 
-#define GMAC_DMA_INT_NIE		__BIT(16) /* Normal/Summary */
-#define GMAC_DMA_INT_AIE		__BIT(15) /* Abnormal/Summary */
+#define	GMAC_DMA_OP_STOREFORWARD	__BIT(21) /* start TX with when a
+ 						    full frame is available */
+#define	GMAC_DMA_OP_FLUSHTX		__BIT(20) /* flush TX fifo */
+#define	GMAC_DMA_OP_TXSTART		__BIT(13) /* start TX DMA engine */
+#define	GMAC_DMA_OP_RXSTART		__BIT(1)  /* start RX DMA engine */
+
+#define	GMAC_DMA_INT_NIE		__BIT(16) /* Normal/Summary */
+#define	GMAC_DMA_INT_AIE		__BIT(15) /* Abnormal/Summary */
 #define	GMAC_DMA_INT_ERE		__BIT(14) /* Early receive */
 #define	GMAC_DMA_INT_FBE		__BIT(13) /* Fatal bus error */
 #define	GMAC_DMA_INT_ETE		__BIT(10) /* Early transmit */
-#define	GMAC_DMA_INT_RWE		__BIT(9) /* Receive watchdog */
-#define	GMAC_DMA_INT_RSE		__BIT(8) /* Receive stopped */
-#define	GMAC_DMA_INT_RUE		__BIT(7) /* Receive buffer unavailable */
-#define	GMAC_DMA_INT_RIE		__BIT(6) /* Receive interrupt */
-#define	GMAC_DMA_INT_UNE		__BIT(5) /* Tx underflow */
-#define	GMAC_DMA_INT_OVE		__BIT(4) /* Receive overflow */
-#define	GMAC_DMA_INT_TJE		__BIT(3) /* Transmit jabber */
-#define	GMAC_DMA_INT_TUE		__BIT(2) /* Transmit buffer unavailable */
-#define	GMAC_DMA_INT_TSE		__BIT(1) /* Transmit stopped */
-#define	GMAC_DMA_INT_TIE		__BIT(0) /* Transmit interrupt */
+#define	GMAC_DMA_INT_RWE		__BIT(9)  /* Receive watchdog */
+#define	GMAC_DMA_INT_RSE		__BIT(8)  /* Receive stopped */
+#define	GMAC_DMA_INT_RUE		__BIT(7)  /* Receive buffer unavail. */
+#define	GMAC_DMA_INT_RIE		__BIT(6)  /* Receive interrupt */
+#define	GMAC_DMA_INT_UNE		__BIT(5)  /* Tx underflow */
+#define	GMAC_DMA_INT_OVE		__BIT(4)  /* Receive overflow */
+#define	GMAC_DMA_INT_TJE		__BIT(3)  /* Transmit jabber */
+#define	GMAC_DMA_INT_TUE		__BIT(2)  /* Transmit buffer unavail. */
+#define	GMAC_DMA_INT_TSE		__BIT(1)  /* Transmit stopped */
+#define	GMAC_DMA_INT_TIE		__BIT(0)  /* Transmit interrupt */
 
-#define	GMAC_DMA_INT_MASK	__BITS(0,16)	/* all possible intr bits */
+#define	GMAC_DMA_INT_MASK	__BITS(0,16)	  /* all possible intr bits */
 
 struct dwc_gmac_dev_dmadesc {
 	uint32_t ddesc_status;
@@ -128,7 +175,7 @@ struct dwc_gmac_dev_dmadesc {
 
 /* for TX descriptors */
 #define	DDESC_CNTL_TXINT		__BIT(31)
-#define DDESC_CNTL_TXLAST		__BIT(30)
+#define	DDESC_CNTL_TXLAST		__BIT(30)
 #define	DDESC_CNTL_TXFIRST		__BIT(29)
 #define	DDESC_CNTL_TXCHECKINSCTRL	__BIT(27)
 #define	DDESC_CNTL_TXCRCDIS		__BIT(26)

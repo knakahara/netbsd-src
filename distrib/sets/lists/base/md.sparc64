@@ -1,4 +1,4 @@
-# $NetBSD: md.sparc64,v 1.235 2014/09/26 19:25:56 christos Exp $
+# $NetBSD: md.sparc64,v 1.240 2014/10/22 16:51:31 christos Exp $
 ./lib/sparc					base-npf-shlib		compat
 ./lib/sparc/npf					base-npf-shlib		compat
 ./lib/sparc/npf/ext_log.so			base-npf-shlib		compat,pic
@@ -65,6 +65,8 @@
 ./usr/lib/sparc/libamu.so.4.0			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libarchive.so.3			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libarchive.so.3.1		base-compat-shlib	compat,pic
+./usr/lib/sparc/libasan.so.0			base-compat-shlib	compat,pic
+./usr/lib/sparc/libasan.so.0.0			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libasn1.so.9			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/sparc/libasn1.so.9.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/sparc/libatf-c++.so.1			base-compat-shlib	compat,pic,atf
@@ -84,7 +86,7 @@
 ./usr/lib/sparc/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/sparc/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/sparc/libc.so.12			base-compat-shlib	compat,pic
-./usr/lib/sparc/libc.so.12.195			base-compat-shlib	compat,pic
+./usr/lib/sparc/libc.so.12.196			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/sparc/libcom_err.so.7.0		base-compat-shlib	compat,pic,kerberos
 ./usr/lib/sparc/libcrypt.so.1			base-compat-shlib	compat,pic
@@ -199,7 +201,7 @@
 ./usr/lib/sparc/liblzma.so.1			base-compat-shlib	compat,pic
 ./usr/lib/sparc/liblzma.so.1.1			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libm.so.0			base-compat-shlib	compat,pic
-./usr/lib/sparc/libm.so.0.10			base-compat-shlib	compat,pic
+./usr/lib/sparc/libm.so.0.11			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libmagic.so.5			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libmagic.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/sparc/libmenu.so.6			base-compat-shlib	compat,pic
@@ -289,14 +291,14 @@
 ./usr/lib/sparc/libsqlite3.so.1.2		base-compat-shlib	compat,pic
 ./usr/lib/sparc/libss.so.6			base-compat-shlib	obsolete
 ./usr/lib/sparc/libss.so.6.0			base-compat-shlib	obsolete
-./usr/lib/sparc/libssh.so.22			base-compat-shlib	compat,pic,crypto
-./usr/lib/sparc/libssh.so.22.0			base-compat-shlib	compat,pic,crypto
+./usr/lib/sparc/libssh.so.23			base-compat-shlib	compat,pic,crypto
+./usr/lib/sparc/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/sparc/libssl.so.10			base-compat-shlib	compat,pic,crypto
 ./usr/lib/sparc/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/sparc/libstdc++.so.7			base-compat-shlib	compat,pic,gcccmds,libstdcxx
 ./usr/lib/sparc/libstdc++.so.7.0		base-compat-shlib	gcc=4,compat,pic,libstdcxx
 ./usr/lib/sparc/libstdc++.so.7.1		base-compat-shlib	gcc=45,compat,pic,libstdcxx
-./usr/lib/sparc/libstdc++.so.7.2		base-compat-shlib	gcc=48,compat,pic,libstdcxx
+./usr/lib/sparc/libstdc++.so.7.3		base-compat-shlib	gcc=48,compat,pic,libstdcxx
 ./usr/lib/sparc/libsupc++.so.1			base-obsolete		obsolete
 ./usr/lib/sparc/libsupc++.so.1.0		base-obsolete		obsolete
 ./usr/lib/sparc/libtermcap.so.0			base-compat-shlib	compat,pic

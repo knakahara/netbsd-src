@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.5 2014/03/09 21:37:37 christos Exp $
+# $NetBSD: Makefile,v 1.7 2014/10/22 19:29:31 christos Exp $
 
 .include <bsd.own.mk>
 
@@ -6,7 +6,7 @@ LIBEXECINFO_MACHINE_ARCH?= ${MACHINE_ARCH}
 USE_UNWIND=yes
 WARNS?=4
 INCSDIR=/usr/include
-INCS=execinfo.h
+INCS=execinfo.h unwind.h
 
 #CPPFLAGS+='-D__RCSID(a)=' -D_GNU_SOURCE '-D__printflike(a,b)='
 #CPPFLAGS+=-I/usr/include/libelf

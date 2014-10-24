@@ -1,4 +1,4 @@
-# $NetBSD: shl.mi,v 1.716 2014/09/26 19:25:56 christos Exp $
+# $NetBSD: shl.mi,v 1.721 2014/10/22 16:51:31 christos Exp $
 #
 # Note:	Don't delete entries from here - mark them as "obsolete" instead,
 #	unless otherwise stated below.
@@ -15,7 +15,7 @@
 #
 ./lib/libc.so					base-sys-shlib		dynamicroot
 ./lib/libc.so.12				base-sys-shlib		dynamicroot
-./lib/libc.so.12.195				base-sys-shlib		dynamicroot
+./lib/libc.so.12.196				base-sys-shlib		dynamicroot
 ./lib/libcrypt.so				base-sys-shlib		dynamicroot
 ./lib/libcrypt.so.1				base-sys-shlib		dynamicroot
 ./lib/libcrypt.so.1.0				base-sys-shlib		dynamicroot
@@ -48,7 +48,7 @@
 ./lib/liblzma.so.1.1				base-sys-shlib		dynamicroot
 ./lib/libm.so					base-sys-shlib		dynamicroot
 ./lib/libm.so.0					base-sys-shlib		dynamicroot
-./lib/libm.so.0.10				base-sys-shlib		dynamicroot
+./lib/libm.so.0.11				base-sys-shlib		dynamicroot
 ./lib/libnpf.so					base-npf-shlib		npf,dynamicroot
 ./lib/libnpf.so.0				base-npf-shlib		npf,dynamicroot
 ./lib/libnpf.so.0.0				base-npf-shlib		npf,dynamicroot
@@ -166,6 +166,9 @@
 ./usr/lib/libarchive.so				base-sys-shlib
 ./usr/lib/libarchive.so.3			base-sys-shlib
 ./usr/lib/libarchive.so.3.1			base-sys-shlib
+./usr/lib/libasan.so				base-sys-shlib
+./usr/lib/libasan.so.0				base-sys-shlib
+./usr/lib/libasan.so.0.0			base-sys-shlib
 ./usr/lib/libasn1.so				base-krb5-shlib		kerberos
 ./usr/lib/libasn1.so.9				base-krb5-shlib		kerberos
 ./usr/lib/libasn1.so.9.0			base-krb5-shlib		kerberos
@@ -197,7 +200,7 @@
 ./usr/lib/libc++.so.1.0				base-sys-shlib		libcxx
 ./usr/lib/libc.so				base-sys-shlib
 ./usr/lib/libc.so.12				base-sys-shlib
-./usr/lib/libc.so.12.195			base-sys-shlib
+./usr/lib/libc.so.12.196			base-sys-shlib
 ./usr/lib/libcdk.so				base-obsolete		obsolete
 ./usr/lib/libcom_err.so				base-krb5-shlib		kerberos
 ./usr/lib/libcom_err.so.7			base-krb5-shlib		kerberos
@@ -375,7 +378,7 @@
 ./usr/lib/liblzma.so.1.1			base-sys-shlib
 ./usr/lib/libm.so				base-sys-shlib
 ./usr/lib/libm.so.0				base-sys-shlib
-./usr/lib/libm.so.0.10				base-sys-shlib
+./usr/lib/libm.so.0.11				base-sys-shlib
 ./usr/lib/libmagic.so				base-sys-shlib
 ./usr/lib/libmagic.so.5				base-sys-shlib
 ./usr/lib/libmagic.so.5.0			base-sys-shlib
@@ -737,8 +740,8 @@
 ./usr/lib/libsqlite3.so.1.2			base-sys-shlib
 ./usr/lib/libss.so				base-obsolete		obsolete
 ./usr/lib/libssh.so				base-secsh-shlib	crypto
-./usr/lib/libssh.so.22				base-secsh-shlib	crypto
-./usr/lib/libssh.so.22.0			base-secsh-shlib	crypto
+./usr/lib/libssh.so.23				base-secsh-shlib	crypto
+./usr/lib/libssh.so.23.0			base-secsh-shlib	crypto
 ./usr/lib/libssl.so				base-crypto-shlib	crypto
 ./usr/lib/libssl.so.10				base-crypto-shlib	crypto
 ./usr/lib/libssl.so.10.4				base-crypto-shlib	crypto
@@ -750,7 +753,7 @@
 ./usr/lib/libstdc++.so.7			base-sys-shlib		gcc=48,cxx,libstdcxx
 ./usr/lib/libstdc++.so.7.0			base-sys-shlib		gcc=4,cxx,libstdcxx
 ./usr/lib/libstdc++.so.7.1			base-sys-shlib		gcc=45,cxx,libstdcxx
-./usr/lib/libstdc++.so.7.2			base-sys-shlib		gcc=48,cxx,libstdcxx
+./usr/lib/libstdc++.so.7.3			base-sys-shlib		gcc=48,cxx,libstdcxx
 ./usr/lib/libtelnet.so				base-obsolete		obsolete
 ./usr/lib/libtermcap.so				base-sys-shlib
 ./usr/lib/libtermcap.so.0			base-sys-shlib

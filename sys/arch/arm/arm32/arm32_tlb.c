@@ -27,7 +27,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: arm32_tlb.c,v 1.2 2014/04/11 02:39:03 matt Exp $");
+__KERNEL_RCSID(1, "$NetBSD: arm32_tlb.c,v 1.4 2014/10/14 20:35:03 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -60,7 +60,11 @@ tlb_invalidate_all(void)
 {
 	const bool vivt_icache_p = arm_pcache.icache_type == CACHE_TYPE_VIVT;
 	arm_dsb();
+#ifdef MULTIPROCESSOR
+	armreg_tlbiallis_write(0);
+#else
 	armreg_tlbiall_write(0);
+#endif
 	arm_isb();
 	if (__predict_false(vivt_icache_p)) {
 		if (arm_has_tlbiasid_p) {
@@ -85,7 +89,7 @@ tlb_invalidate_asids(tlb_asid_t lo, tlb_asid_t hi)
 	arm_dsb();
 	if (arm_has_tlbiasid_p) {
 		for (; lo <= hi; lo++) {
-			armreg_tlbiasid_write(lo);
+			armreg_tlbiasidis_write(lo);
 		}
 		arm_isb();
 		if (__predict_false(vivt_icache_p)) {
@@ -107,7 +111,11 @@ tlb_invalidate_addr(vaddr_t va, tlb_asid_t asid)
 	arm_dsb();
 	va = trunc_page(va) | asid;
 	for (vaddr_t eva = va + PAGE_SIZE; va < eva; va += L2_S_SIZE) {
+#ifdef MULTIPROCESSOR
+		armreg_tlbimvais_write(va);
+#else
 		armreg_tlbimva_write(va);
+#endif
 		//armreg_tlbiall_write(asid);
 	}
 	arm_isb();

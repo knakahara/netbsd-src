@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1156 2014/10/07 21:52:41 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1163 2014/10/23 18:46:49 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.5.0
-Current Vers:	6.5.0
+Version:	6.5.1
+Current Vers:	6.5.1
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -369,8 +369,8 @@ Notes:
 Please use "expat" as the vendor tag for CVS imports.
 
 Package:	file
-Version:	5.19
-Current Vers:	5.19
+Version:	5.20
+Current Vers:	5.20
 Maintainer:	Christos Zoulas <christos@zoulas.com>
 Archive Site:	ftp://ftp.astron.com/pub/file/
 Home Page:	http://www.darwinsys.com/file/
@@ -946,8 +946,8 @@ Notes:
 Next import will need moving lib sources to lib/libpam
 
 Package:	openresolv
-Version:	3.5.6
-Current Vers:	3.5.6
+Version:	3.6.0
+Current Vers:	3.6.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/openresolv/
 Home Page:	http://roy.marples.name/projects/openresolv/
@@ -971,8 +971,8 @@ Notes:
 Patch applied after OpenSSH import.
 
 Package:	OpenSSH
-Version:	6.4
-Current Vers:	6.4 / portable 6.4p1
+Version:	6.7
+Current Vers:	6.7 / portable 6.7p1
 Maintainer:	OpenSSH
 Archive Site:	http://www.openssh.com/ftp.html
 Home Page:	http://www.openssh.com/portable.html
@@ -1312,8 +1312,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2014h / tzdata2014h
-Current Vers:	tzcode2014h / tzdata2014h
+Version:	tzcode2014i / tzdata2014i
+Current Vers:	tzcode2014i / tzdata2014i
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/
@@ -1331,8 +1331,8 @@ is too much inertia to apply them. Check for .gitignore files.
 For the data files, do use external/public-domain/tz/tzdata2netbsd.
 
 Package:	wpa_supplicant/hostapd
-Version:	2.0
-Current Vers:	2.2
+Version:	2.3
+Current Vers:	2.3
 Maintainer:	Jouni Malinen <jkmaline@cc.hut.fi>
 Archive Site:	http://hostap.epitest.fi/releases/
 Home Page:	http://hostap.epitest.fi/wpa_supplicant/

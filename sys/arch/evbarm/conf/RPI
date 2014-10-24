@@ -1,5 +1,5 @@
 #
-#	$NetBSD: RPI,v 1.56 2014/10/03 11:40:54 skrll Exp $
+#	$NetBSD: RPI,v 1.58 2014/10/12 12:01:50 macallan Exp $
 #
 #	RPi -- Raspberry Pi
 #
@@ -225,6 +225,8 @@ usb* 		at dwctwo?
 # USB device drivers
 include "dev/usb/usbdevices.config"
 
+midi*		at midibus?
+
 # MII/PHY support
 exphy* 		at mii? phy ?		# 3Com internal PHYs
 gentbi* 	at mii? phy ?		# Generic Ten-Bit 1000BASE-[CLS]X PHYs
@@ -254,6 +256,10 @@ ukphy*		at mii? phy ?		# generic unknown PHYs
 # Broadcom Serial Control (I2C)
 bsciic* at obio?
 iic* at i2cbus?
+
+# 'DS3231 Raspberry Pi RTC Board Real Time Clock Module for Arduino'
+# sold by linksprite.com
+#dsrtc* at iic1 addr 0x68 flags 3231
 
 # SPI controller
 bcmspi* at obio?

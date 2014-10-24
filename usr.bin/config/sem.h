@@ -1,4 +1,4 @@
-/*	$NetBSD: sem.h,v 1.10 2012/03/11 21:16:08 dholland Exp $	*/
+/*	$NetBSD: sem.h,v 1.15 2014/10/18 06:36:40 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -46,15 +46,22 @@ void		setversion(int);
 void		setdefmaxusers(int, int, int);
 void		setmaxusers(int);
 void		setident(const char *);
+int		defattr0(const char *, struct loclist *, struct attrlist *, int);
 int		defattr(const char *, struct loclist *, struct attrlist *, int);
+int		defiattr(const char *, struct loclist *, struct attrlist *, int);
+int		defdevclass(const char *, struct loclist *, struct attrlist *, int);
 void		defdev(struct devbase *, struct loclist *, struct attrlist *, int);
 void		defdevattach(struct deva *, struct devbase *, struct nvlist *,
 			     struct attrlist *);
 struct devbase *getdevbase(const char *);
 struct deva    *getdevattach(const char *);
+struct attr	*mkattr(const char *);
 struct attr    *getattr(const char *);
+struct attr    *refattr(const char *);
+int		getrefattr(const char *, struct attr **);
 void		expandattr(struct attr *, void (*)(struct attr *));
 void		selectattr(struct attr *);
+void		dependattrs(void);
 void		setmajor(struct devbase *, int);
 void		addconf(struct config *);
 void		setconf(struct nvlist **, const char *, struct nvlist *);

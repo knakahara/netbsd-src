@@ -1,4 +1,4 @@
-/*	$NetBSD: if_vlan.c,v 1.75 2014/10/09 04:48:12 ozaki-r Exp $	*/
+/*	$NetBSD: if_vlan.c,v 1.78 2014/10/11 10:27:31 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 2000, 2001 The NetBSD Foundation, Inc.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_vlan.c,v 1.75 2014/10/09 04:48:12 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_vlan.c,v 1.78 2014/10/11 10:27:31 ozaki-r Exp $");
 
 #include "opt_inet.h"
 
@@ -91,6 +91,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_vlan.c,v 1.75 2014/10/09 04:48:12 ozaki-r Exp $")
 #include <sys/systm.h>
 #include <sys/proc.h>
 #include <sys/kauth.h>
+#include <sys/mutex.h>
 
 #include <net/bpf.h>
 #include <net/if.h>
@@ -180,6 +181,8 @@ void		vlanattach(int);
 /* XXX This should be a hash table with the tag as the basis of the key. */
 static LIST_HEAD(, ifvlan) ifv_list;
 
+static kmutex_t ifv_mtx __cacheline_aligned;
+
 struct if_clone vlan_cloner =
     IF_CLONE_INITIALIZER("vlan", vlan_clone_create, vlan_clone_destroy);
 
@@ -191,6 +194,7 @@ vlanattach(int n)
 {
 
 	LIST_INIT(&ifv_list);
+	mutex_init(&ifv_mtx, MUTEX_DEFAULT, IPL_NONE);
 	if_clone_attach(&vlan_cloner);
 }
 
@@ -248,9 +252,9 @@ vlan_clone_destroy(struct ifnet *ifp)
 	s = splnet();
 	LIST_REMOVE(ifv, ifv_list);
 	vlan_unconfig(ifp);
+	if_detach(ifp);
 	splx(s);
 
-	if_detach(ifp);
 	free(ifv, M_DEVBUF);
 
 	return (0);
@@ -358,9 +362,15 @@ static void
 vlan_unconfig(struct ifnet *ifp)
 {
 	struct ifvlan *ifv = ifp->if_softc;
+	struct ifnet *p;
 
-	if (ifv->ifv_p == NULL)
+	mutex_enter(&ifv_mtx);
+	p = ifv->ifv_p;
+
+	if (p == NULL) {
+		mutex_exit(&ifv_mtx);
 		return;
+	}
 
 	/*
  	 * Since the interface is being unconfigured, we need to empty the
@@ -370,20 +380,18 @@ vlan_unconfig(struct ifnet *ifp)
 	(*ifv->ifv_msw->vmsw_purgemulti)(ifv);
 
 	/* Disconnect from parent. */
-	switch (ifv->ifv_p->if_type) {
+	switch (p->if_type) {
 	case IFT_ETHER:
 	    {
-		struct ethercom *ec = (void *) ifv->ifv_p;
+		struct ethercom *ec = (void *) p;
 
 		if (ec->ec_nvlans-- == 1) {
 			/*
 			 * Disable Tx/Rx of VLAN-sized frames.
 			 */
 			ec->ec_capenable &= ~ETHERCAP_VLAN_MTU;
-			if (ifv->ifv_p->if_flags & IFF_UP) {
-				(void)if_flags_set(ifv->ifv_p,
-				    ifv->ifv_p->if_flags);
-			}
+			if (p->if_flags & IFF_UP)
+				(void)if_flags_set(p, p->if_flags);
 		}
 
 		ether_ifdetach(ifp);
@@ -412,6 +420,8 @@ vlan_unconfig(struct ifnet *ifp)
 	if_down(ifp);
 	ifp->if_flags &= ~(IFF_UP|IFF_RUNNING);
 	ifp->if_capabilities = 0;
+
+	mutex_exit(&ifv_mtx);
 }
 
 /*

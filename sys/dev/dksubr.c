@@ -1,4 +1,4 @@
-/* $NetBSD: dksubr.c,v 1.51 2014/06/14 07:39:00 hannken Exp $ */
+/* $NetBSD: dksubr.c,v 1.53 2014/10/11 12:36:25 mlelstv Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997, 1998, 1999, 2002, 2008 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dksubr.c,v 1.51 2014/06/14 07:39:00 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dksubr.c,v 1.53 2014/10/11 12:36:25 mlelstv Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -530,7 +530,10 @@ dk_getdefaultlabel(struct dk_intf *di, struct dk_softc *dksc,
 
 	memset(lp, 0, sizeof(*lp));
 
-	lp->d_secperunit = dg->dg_secperunit;
+	if (dg->dg_secperunit > UINT32_MAX)
+		lp->d_secperunit = UINT32_MAX;
+	else
+		lp->d_secperunit = dg->dg_secperunit;
 	lp->d_secsize = dg->dg_secsize;
 	lp->d_nsectors = dg->dg_nsectors;
 	lp->d_ntracks = dg->dg_ntracks;
@@ -545,7 +548,7 @@ dk_getdefaultlabel(struct dk_intf *di, struct dk_softc *dksc,
 	lp->d_flags = 0;
 
 	lp->d_partitions[RAW_PART].p_offset = 0;
-	lp->d_partitions[RAW_PART].p_size = dg->dg_secperunit;
+	lp->d_partitions[RAW_PART].p_size = lp->d_secperunit;
 	lp->d_partitions[RAW_PART].p_fstype = FS_UNUSED;
 	lp->d_npartitions = RAW_PART + 1;
 
@@ -580,17 +583,21 @@ dk_getdisklabel(struct dk_intf *di, struct dk_softc *dksc, dev_t dev)
 		return;
 
 	/* Sanity check */
-	if (lp->d_secperunit != dg->dg_secperunit)
-		printf("WARNING: %s: total sector size in disklabel (%d) "
-		    "!= the size of %s (%" PRId64 ")\n", dksc->sc_xname,
-		    lp->d_secperunit, di->di_dkname, dg->dg_secperunit);
+	if (lp->d_secperunit < UINT32_MAX ?
+		lp->d_secperunit != dg->dg_secperunit :
+		lp->d_secperunit > dg->dg_secperunit)
+		printf("WARNING: %s: total sector size in disklabel (%ju) "
+		    "!= the size of %s (%ju)\n", dksc->sc_xname,
+		    (uintmax_t)lp->d_secperunit, di->di_dkname,
+		    (uintmax_t)dg->dg_secperunit);
 
 	for (i=0; i < lp->d_npartitions; i++) {
 		pp = &lp->d_partitions[i];
 		if (pp->p_offset + pp->p_size > dg->dg_secperunit)
 			printf("WARNING: %s: end of partition `%c' exceeds "
-			    "the size of %s (%" PRId64 ")\n", dksc->sc_xname,
-			    'a' + i, di->di_dkname, dg->dg_secperunit);
+			    "the size of %s (%ju)\n", dksc->sc_xname,
+			    'a' + i, di->di_dkname,
+			    (uintmax_t)dg->dg_secperunit);
 	}
 }
 
