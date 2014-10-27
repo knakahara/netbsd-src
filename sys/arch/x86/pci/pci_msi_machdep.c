@@ -139,6 +139,11 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 	struct pic *msi_pic;
 	pci_intr_handle_t *vectors;
 
+	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
+		aprint_normal("MSI is disabled by bus");
+		return 1;
+	}
+
 	msi_pic = construct_msi_pic(pa);
 	if (msi_pic == NULL) {
 		aprint_normal("cannot allocate MSI pic.\n");
@@ -148,11 +153,6 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 	vectors = pci_msi_alloc_vectors(msi_pic, count);
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI vectors.\n");
-		return 1;
-	}
-
-	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
-		aprint_normal("MSI is disabled by bus");
 		return 1;
 	}
 
@@ -217,6 +217,11 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 	struct pic *msix_pic;
 	pci_intr_handle_t *vectors;
 
+	if ((pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
+		aprint_normal("MSI-X is disabled by bus");
+		return 1;
+	}
+
 	msix_pic = construct_msix_pic(pa);
 	if (msix_pic == NULL)
 		return 1;
@@ -224,11 +229,6 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 	vectors = pci_msi_alloc_vectors(msix_pic, count);
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI-X vectors.\n");
-		return 1;
-	}
-
-	if ((pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
-		aprint_normal("MSI-X is disabled by bus");
 		return 1;
 	}
 
