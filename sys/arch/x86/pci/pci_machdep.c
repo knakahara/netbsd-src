@@ -215,8 +215,9 @@ struct pci_quirk {
 	int type;
 #define	PCI_QUIRK_DISABLE_MSI	1	/* Neither MSI nor MSI-X work */
 #define	PCI_QUIRK_ENABLE_MSI_VM	2	/* Older chipset in VM where MSI works */
-#define	PCI_QUIRK_DISABLE_MSIX	3	/* MSI-X doesn't work */
-#define	PCI_QUIRK_MSI_INTX_BUG	4	/* PCIM_CMD_INTxDIS disables MSI */
+#define	PCI_QUIRK_ENABLE_MSI	3	/* chipset without PCI Ex capability works MSI */
+#define	PCI_QUIRK_DISABLE_MSIX	4	/* MSI-X doesn't work */
+#define	PCI_QUIRK_MSI_INTX_BUG	5	/* PCIM_CMD_INTxDIS disables MSI */
 };
 
 static const struct pci_quirk pci_quirks[] = {
@@ -264,6 +265,27 @@ static const struct pci_quirk pci_quirks[] = {
 	 * but support MSI just fine.  QEMU uses the Intel 82440.
 	 */
 	{ 0x12378086, PCI_QUIRK_ENABLE_MSI_VM },
+
+	/*
+	 * Atom C2000 series SoC's transaction router has neither
+	 *  PCI-X capability nor PCI Express capability, but support MSIs.
+	 */
+	{ 0x1f008086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f018086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f028086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f038086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f048086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f058086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f068086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f078086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f088086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f098086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f0a8086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f0b8086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f0c8086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f0d8086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f0e8086, PCI_QUIRK_ENABLE_MSI },
+	{ 0x1f0f8086, PCI_QUIRK_ENABLE_MSI },
 
 	/*
 	 * Atheros AR8161/AR8162/E2200 ethernet controller has a bug that
@@ -512,8 +534,10 @@ void
 pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 {
 	pci_chipset_tag_t pc = pba->pba_pc;
-	pcitag_t tag = pba->pba_intrtag;
+	pcitag_t tag;
 	pcireg_t class;
+	pcireg_t id;
+
 
 	if (pba->pba_bus == 0)
 		aprint_normal(": configuration mode %d", pci_mode);
@@ -524,7 +548,18 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	mpacpi_pci_attach_hook(parent, self, pba);
 #endif
 
+	/* Workaround for Atom C2000 series SoC */
+	tag = pci_make_tag(pc, 0, 0, 0);
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
+	if (pci_has_quirk(id, PCI_QUIRK_ENABLE_MSI)) {
+		pba->pba_flags |= PCI_FLAGS_MSI_OKAY;
+		pba->pba_flags |= PCI_FLAGS_MSIX_OKAY;
+		return;
+	}
+
 	/* Should the device check whether it can enable MSI/MSI-X? */
+	tag = pba->pba_intrtag;
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	class = pci_conf_read(pc, tag, PCI_CLASS_REG);
 	if (PCI_CLASS(class) != PCI_CLASS_BRIDGE &&
 	    PCI_SUBCLASS(class) != PCI_SUBCLASS_BRIDGE_HOST)
