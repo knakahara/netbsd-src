@@ -210,6 +210,85 @@ const struct {
 #undef _tag
 #undef _qe
 
+struct pci_quirk {
+	pcireg_t id;
+	int type;
+#define	PCI_QUIRK_DISABLE_MSI	1	/* Neither MSI nor MSI-X work */
+#define	PCI_QUIRK_ENABLE_MSI_VM	2	/* Older chipset in VM where MSI works */
+#define	PCI_QUIRK_DISABLE_MSIX	3	/* MSI-X doesn't work */
+#define	PCI_QUIRK_MSI_INTX_BUG	4	/* PCIM_CMD_INTxDIS disables MSI */
+};
+
+static const struct pci_quirk pci_quirks[] = {
+	/*
+	 * MSI doesn't work with the ServerWorks CNB20-HE Host Bridge
+	 * or the CMIC-SL (AKA ServerWorks GC_LE).
+	 */
+	{ 0x00141166, PCI_QUIRK_DISABLE_MSI },
+	{ 0x00171166, PCI_QUIRK_DISABLE_MSI },
+
+	/*
+	 * MSI doesn't work on earlier Intel chipsets including
+	 * E7500, E7501, E7505, 845, 865, 875/E7210, and 855.
+	 */
+	{ 0x25408086, PCI_QUIRK_DISABLE_MSI },
+	{ 0x254c8086, PCI_QUIRK_DISABLE_MSI },
+	{ 0x25508086, PCI_QUIRK_DISABLE_MSI },
+	{ 0x25608086, PCI_QUIRK_DISABLE_MSI },
+	{ 0x25708086, PCI_QUIRK_DISABLE_MSI },
+	{ 0x25788086, PCI_QUIRK_DISABLE_MSI },
+	{ 0x35808086, PCI_QUIRK_DISABLE_MSI },
+
+	/*
+	 * MSI doesn't work with devices behind the AMD 8131 HT-PCIX
+	 * bridge.
+	 */
+	{ 0x74501022, PCI_QUIRK_DISABLE_MSI },
+
+	/*
+	 * Only pass through devices should be disabled MSI-X, it is overdoing
+	 * to disable MSI-X for all device on VMware bridge.
+	 * see http://svnweb.freebsd.org/base?view=revision&revision=253120
+	 */
+#ifdef __FreeBSD__
+	/*
+	 * MSI-X allocation doesn't work properly for devices passed through
+	 * by VMware up to at least ESXi 5.1.
+	 */
+	{ 0x079015ad, PCI_QUIRK_DISABLE_MSIX }, /* PCI/PCI-X */
+	{ 0x07a015ad, PCI_QUIRK_DISABLE_MSIX }, /* PCIe */
+#endif
+
+	/*
+	 * Some virtualization environments emulate an older chipset
+	 * but support MSI just fine.  QEMU uses the Intel 82440.
+	 */
+	{ 0x12378086, PCI_QUIRK_ENABLE_MSI_VM },
+
+	/*
+	 * Atheros AR8161/AR8162/E2200 ethernet controller has a bug that
+	 * MSI interrupt does not assert if PCIM_CMD_INTxDIS bit of the
+	 * command register is set.
+	 */
+	{ 0x10911969, PCI_QUIRK_MSI_INTX_BUG },
+	{ 0xE0911969, PCI_QUIRK_MSI_INTX_BUG },
+	{ 0x10901969, PCI_QUIRK_MSI_INTX_BUG },
+
+	{ 0 }
+};
+
+static int
+pci_has_quirk(pcireg_t id, int quirk)
+{
+	const struct pci_quirk *q;
+
+	for (q = &pci_quirks[0]; q->id; q++) {
+		if (q->id == id && q->type == quirk)
+			return 1;
+	}
+	return 0;
+}
+
 /*
  * PCI doesn't have any special needs; just use the generic versions
  * of these functions.
@@ -370,9 +449,71 @@ pci_conf_select(uint32_t sel)
 	}
 }
 
+static int pcix_chipset = 1;
+static int pcie_chipset = 1;
+
+static int
+pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag)
+{
+	if (pcix_chipset == 0 && pcie_chipset == 0)
+		return 0;
+
+	if (pci_get_capability(pc, tag, PCI_CAP_PCIX, NULL, NULL)) {
+		pcireg_t bhlcr = pci_conf_read(pc, tag, PCI_BHLC_REG);
+		if (PCI_HDRTYPE_TYPE(bhlcr) == PCI_HDRTYPE_PPB)
+			pcix_chipset = 1;
+	}
+
+	pcie_chipset = pci_get_capability(pc, tag, PCI_CAP_PCIEXPRESS,
+	    NULL, NULL);
+
+	if (pcix_chipset || pcie_chipset)
+		return 1;
+	else {
+		pcireg_t id = pci_conf_read(pc, tag, PCI_ID_REG);
+		if (pci_has_quirk(id, PCI_QUIRK_ENABLE_MSI_VM))
+			return 1;
+
+		return 0;
+	}
+}
+
+static int
+pci_can_enable_msi(pci_chipset_tag_t pc, pcitag_t tag)
+{
+	pcireg_t id;
+
+	if (!pci_can_msi_ancestor(pc, tag))
+		return 0;
+
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
+	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSI))
+		return 0;
+
+	return 1;
+}
+
+static int
+pci_can_enable_msix(pci_chipset_tag_t pc, pcitag_t tag)
+{
+	pcireg_t id;
+
+	if (!pci_can_msi_ancestor(pc, tag))
+		return 0;
+
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
+	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSIX))
+		return 0;
+
+	return 1;
+}
+
 void
 pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 {
+	pci_chipset_tag_t pc = pba->pba_pc;
+	pcitag_t tag = pba->pba_intrtag;
+	pcireg_t class;
 
 	if (pba->pba_bus == 0)
 		aprint_normal(": configuration mode %d", pci_mode);
@@ -382,7 +523,51 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 #if NACPICA > 0
 	mpacpi_pci_attach_hook(parent, self, pba);
 #endif
+
+	/* Should the device check whether it can enable MSI/MSI-X? */
+	class = pci_conf_read(pc, tag, PCI_CLASS_REG);
+	if (PCI_CLASS(class) != PCI_CLASS_BRIDGE &&
+	    PCI_SUBCLASS(class) != PCI_SUBCLASS_BRIDGE_HOST)
+		return;
+
+	if (pci_can_enable_msi(pc, tag)) {
+		pba->pba_flags |= PCI_FLAGS_MSI_OKAY;
+		aprint_normal(": enable MSI");
+	}
+	if (pci_can_enable_msix(pc, tag)) {
+		pba->pba_flags |= PCI_FLAGS_MSIX_OKAY;
+		aprint_normal(": enable MSI-X");
+	}
 }
+
+#ifdef NOTYET
+int
+pci_can_enable_msi_device(pci_chipset_tag_t pc, pcitag_t tag)
+{
+	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSI))
+		return 0;
+
+	return 1;
+}
+
+int
+pci_can_enable_msix_device(pci_chipset_tag_t pc, pcitag_t tag)
+{
+	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSIX))
+		return 0;
+
+	return 1;
+}
+
+int
+pci_can_enable_intx(pci_chipset_tag_t pc, pcitag_t tag)
+{
+	if (pci_has_quirk(id, PCI_QUIRK_MSI_INTX_BUG))
+		return 0;
+
+	return 1;
+}
+#endif
 
 int
 pci_bus_maxdevs(pci_chipset_tag_t pc, int busno)
