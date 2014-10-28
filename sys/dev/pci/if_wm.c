@@ -1507,13 +1507,15 @@ wm_attach(device_t parent, device_t self, void *aux)
 	/*
 	 * Map and establish our interrupt.
 	 */
-#ifdef WM_MPSAFE
-	pci_intr_setattr(pc, &ih, PCI_INTR_MPSAFE, true);
-#endif
 	if (pci_msix_count(pa) >= msix_want_count &&
 	    !pci_msix_alloc(pa, &ihs, &msix_num) &&
 	    msix_num == msix_want_count) {
 		void *vih;
+
+#ifdef WM_MPSAFE
+		for (i = 0; i < WM_NINTR; i++)
+			pci_intr_setattr(pc, &ihs[i], PCI_INTR_MPSAFE, true);
+#endif
 
 		intrstr = pci_intr_string(pa->pa_pc, ihs[WM_RX_INTR_INDEX],
 					  intrbuf, sizeof(intrbuf));
@@ -1593,6 +1595,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 		sc->sc_msix_count = 3;
 	} else if (pci_msi_count(pa) >= wm_msi_num &&
 	    !pci_msi_alloc(pa, &ihs, &wm_msi_num)) {
+#ifdef WM_MPSAFE
+	pci_intr_setattr(pc, &ihs[0], PCI_INTR_MPSAFE, true);
+#endif
 		intrstr = pci_intr_string(pc, ihs[0], intrbuf, sizeof(intrbuf));
 		sc->sc_ih = pci_msi_establish(pc, ihs[0], IPL_NET, wm_intr, sc);
 		if (sc->sc_ih == NULL) {
@@ -1605,6 +1610,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 		sc->sc_msix_count = 0;
 	} else {
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &ih, PCI_INTR_MPSAFE, true);
+#endif
 		if (pci_intr_map(pa, &ih)) {
 			aprint_error_dev(sc->sc_dev, "unable to map interrupt\n");
 			return;
