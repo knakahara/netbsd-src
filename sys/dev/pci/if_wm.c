@@ -1610,13 +1610,14 @@ wm_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 		sc->sc_msix_count = 0;
 	} else {
-#ifdef WM_MPSAFE
-		pci_intr_setattr(pc, &ih, PCI_INTR_MPSAFE, true);
-#endif
 		if (pci_intr_map(pa, &ih)) {
 			aprint_error_dev(sc->sc_dev, "unable to map interrupt\n");
 			return;
 		}
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &ih, PCI_INTR_MPSAFE, true);
+#endif
+
 		intrstr = pci_intr_string(pc, ih, intrbuf, sizeof(intrbuf));
 		sc->sc_ih = pci_intr_establish(pc, ih, IPL_NET, wm_intr, sc);
 		if (sc->sc_ih == NULL) {
@@ -1628,10 +1629,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 		}
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 		sc->sc_msix_count = 0;
-	}
-	if (pci_intr_map(pa, &ih)) {
-		aprint_error_dev(sc->sc_dev, "unable to map interrupt\n");
-		return;
 	}
 
 	/*
