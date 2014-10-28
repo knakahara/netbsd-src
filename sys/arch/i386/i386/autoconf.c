@@ -91,6 +91,8 @@ extern void platform_init(void);
 #include <i386/pci/pcibios.h>
 #endif
 
+#include <x86/pci/msipic.h>
+
 /*
  * Determine i/o configuration for a machine.
  */
@@ -108,6 +110,8 @@ cpu_configure(void)
 #ifdef PCIBIOS
 	pcibios_init();
 #endif
+
+	msipic_init();
 
 	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("configure: mainbus not configured");
