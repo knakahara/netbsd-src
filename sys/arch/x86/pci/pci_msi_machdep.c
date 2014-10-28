@@ -153,13 +153,18 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 
 	while (*count > 0) {
 		vectors = pci_msi_alloc_vectors(msi_pic, count);
-		if (vectors == NULL && exact) {
-			aprint_normal("cannot allocate MSI vectors.\n");
-			return 1;
-		}
-		(*count) >>= 1; /* MSI must be power of 2. */
+		if (vectors == NULL) {
+			if (exact) {
+				aprint_normal("cannot allocate MSI vectors.\n");
+				return 1;
+			} else {
+				(*count) >>= 1; /* MSI must be power of 2. */
+				continue;
+			}
+		} else
+			break;
 	}
-	if (*count == 0) {
+	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI vectors.\n");
 		return 1;
 	}
@@ -250,16 +255,22 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 
 	while (*count > 0) {
 		vectors = pci_msi_alloc_vectors(msix_pic, count);
-		if (vectors == NULL && exact) {
-			aprint_normal("cannot allocate MSI-X vectors.\n");
-			return 1;
-		}
-		(*count)--;
+		if (vectors == NULL) {
+			if (exact) {
+				aprint_normal("cannot allocate MSI-X vectors.\n");
+				return 1;
+			} else {
+				(*count)--;
+				continue;
+			}
+		} else
+			break;
 	}
-	if (*count == 0) {
+	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI-X vectors.\n");
 		return 1;
 	}
+
 	for (i = 0; i < *count; i++) {
 		MSI_INT_MAKE_MSIX(vectors[i]);
 	}
