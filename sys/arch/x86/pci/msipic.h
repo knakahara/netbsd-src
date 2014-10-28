@@ -29,6 +29,8 @@
 #ifndef _X86_PCI_MSIPIC_H_
 #define _X86_PCI_MSIPIC_H_
 
+#include <dev/pci/pcivar.h>
+
 struct pic *construct_msi_pic(struct pci_attach_args *);
 void destruct_msi_pic(struct pic *);
 struct pic *construct_msix_pic(struct pci_attach_args *);
@@ -40,5 +42,7 @@ int remap_msix_vectors(struct pic *, pci_intr_handle_t *, int);
 
 bool is_msi_pic(struct pic *);
 int msi_get_devid(struct pic *);
+
+void msipic_init(void);
 
 #endif /* _X86_PCI_MSIPIC_H_ */

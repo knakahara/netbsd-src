@@ -81,7 +81,7 @@ struct msipic {
 	LIST_ENTRY(msipic) mp_list;
 };
 
-static __cpu_simple_lock_t msipic_list_lock = __SIMPLELOCK_UNLOCKED;
+static kmutex_t msipic_list_lock;
 static LIST_HEAD(, msipic) msipic_list =
 	LIST_HEAD_INITIALIZER(msipic_list);
 
@@ -150,14 +150,14 @@ find_msi_pic(int devid)
 {
 	struct msipic *mpp;
 
-	__cpu_simple_lock(&msipic_list_lock);
+	mutex_enter(&msipic_list_lock);
 	LIST_FOREACH(mpp, &msipic_list, mp_list) {
 		if(mpp->mp_devid == devid) {
-			__cpu_simple_unlock(&msipic_list_lock);
+			mutex_exit(&msipic_list_lock);
 			return mpp->mp_pic;
 		}
 	}
-	__cpu_simple_unlock(&msipic_list_lock);
+	mutex_exit(&msipic_list_lock);
 	return NULL;
 }
 
@@ -198,9 +198,9 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	 */
 	KASSERT(find_msi_pic(msipic->mp_devid) == NULL);
 
-	__cpu_simple_lock(&msipic_list_lock);
+	mutex_enter(&msipic_list_lock);
 	LIST_INSERT_HEAD(&msipic_list, msipic, mp_list);
-	__cpu_simple_unlock(&msipic_list_lock);
+	mutex_exit(&msipic_list_lock);
 
 	return pic;
 }
@@ -214,9 +214,9 @@ destruct_common_msi_pic(struct pic *msi_pic)
 		return;
 
 	msipic = msi_pic->pic_msipic;
-	__cpu_simple_lock(&msipic_list_lock);
+	mutex_enter(&msipic_list_lock);
 	LIST_REMOVE(msipic, mp_list);
-	__cpu_simple_unlock(&msipic_list_lock);
+	mutex_exit(&msipic_list_lock);
 
 	release_devid(msipic->mp_devid);
 	kmem_free(msipic, sizeof(*msipic));
@@ -720,4 +720,10 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 
 	kmem_free(newtable, sizeof(struct pci_msix_table_entry) * count);
 	return 0;
+}
+
+void
+msipic_init(void)
+{
+	mutex_init(&msipic_list_lock, MUTEX_DEFAULT, IPL_NONE);
 }
