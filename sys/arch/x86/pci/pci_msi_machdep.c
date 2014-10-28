@@ -133,11 +133,12 @@ pci_msi_free_vectors(struct pic *msi_pic, int count)
 }
 
 static int
-pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
+pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
+    struct pci_attach_args *pa, bool exact)
 {
 	int i, error;
 	struct pic *msi_pic;
-	pci_intr_handle_t *vectors;
+	pci_intr_handle_t *vectors = NULL;
 
 	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
 		aprint_normal("MSI is disabled by bus");
@@ -150,8 +151,15 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 		return 1;
 	}
 
-	vectors = pci_msi_alloc_vectors(msi_pic, count);
-	if (vectors == NULL) {
+	while (*count > 0) {
+		vectors = pci_msi_alloc_vectors(msi_pic, count);
+		if (vectors == NULL && exact) {
+			aprint_normal("cannot allocate MSI vectors.\n");
+			return 1;
+		}
+		(*count) >>= 1; /* MSI must be power of 2. */
+	}
+	if (*count == 0) {
 		aprint_normal("cannot allocate MSI vectors.\n");
 		return 1;
 	}
@@ -169,6 +177,19 @@ pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *p
 
 	*ihps = vectors;
 	return 0;
+}
+
+static int
+pci_msi_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
+{
+	return pci_msi_alloc_md_common(ihps, count, pa, false);
+}
+
+static int
+pci_msi_alloc_exact_md(pci_intr_handle_t **ihps, int count, struct pci_attach_args *pa)
+{
+	return pci_msi_alloc_md_common(ihps, &count, pa, true);
+
 }
 
 static void
@@ -211,11 +232,12 @@ pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
 }
 
 static int
-pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
+pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
+    struct pci_attach_args *pa, bool exact)
 {
 	int i, error;
 	struct pic *msix_pic;
-	pci_intr_handle_t *vectors;
+	pci_intr_handle_t *vectors = NULL;
 
 	if ((pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
 		aprint_normal("MSI-X is disabled by bus");
@@ -226,12 +248,18 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 	if (msix_pic == NULL)
 		return 1;
 
-	vectors = pci_msi_alloc_vectors(msix_pic, count);
-	if (vectors == NULL) {
+	while (*count > 0) {
+		vectors = pci_msi_alloc_vectors(msix_pic, count);
+		if (vectors == NULL && exact) {
+			aprint_normal("cannot allocate MSI-X vectors.\n");
+			return 1;
+		}
+		(*count)--;
+	}
+	if (*count == 0) {
 		aprint_normal("cannot allocate MSI-X vectors.\n");
 		return 1;
 	}
-
 	for (i = 0; i < *count; i++) {
 		MSI_INT_MAKE_MSIX(vectors[i]);
 	}
@@ -245,6 +273,19 @@ pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *
 
 	*ihps = vectors;
 	return 0;
+
+}
+
+static int
+pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
+{
+	return pci_msix_alloc_md_common(ihps, count, pa, false);
+}
+
+static int
+pci_msix_alloc_exact_md(pci_intr_handle_t **ihps, int count, struct pci_attach_args *pa)
+{
+	return pci_msix_alloc_md_common(ihps, &count, pa, true);
 }
 
 static void
@@ -359,6 +400,32 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 	return pci_msi_alloc_md(ihps, count, pa);
 }
 
+int
+pci_msi_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int count)
+{
+	int hw_max;
+
+	if (count < 1) {
+		aprint_normal("invalid count: %d\n", count);
+		return 1;
+	}
+	if (((count - 1) & count) != 0) {
+		aprint_normal("count %d must be power of 2.\n", count);
+		return 1;
+	}
+
+	hw_max = pci_msi_count(pa);
+	if (hw_max == 0)
+		return 1;
+
+	if (count > hw_max) {
+		aprint_normal("over hardware max MSI count %d\n", hw_max);
+		return 1;
+	}
+
+	return pci_msi_alloc_exact_md(ihps, count, pa);
+}
+
 void
 pci_msi_release(pci_intr_handle_t **pihs, int count)
 {
@@ -446,6 +513,28 @@ pci_msix_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 	}
 
 	return pci_msix_alloc_md(ihps, count, pa);
+}
+
+int
+pci_msix_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int count)
+{
+	int hw_max;
+
+	if (count < 1) {
+		aprint_normal("invalid count: %d\n", count);
+		return 1;
+	}
+
+	hw_max = pci_msix_count(pa);
+	if (hw_max == 0)
+		return 1;
+
+	if (count > hw_max) {
+		aprint_normal("over hardware max MSI-X count %d\n", hw_max);
+		return 1;
+	}
+
+	return pci_msix_alloc_exact_md(ihps, count, pa);
 }
 
 void
