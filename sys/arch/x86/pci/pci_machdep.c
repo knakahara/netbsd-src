@@ -474,14 +474,14 @@ pci_conf_select(uint32_t sel)
 static int pcix_chipset = 1;
 static int pcie_chipset = 1;
 
-static int
+static bool
 pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag,
     struct pcibus_attach_args *pba)
 {
 	if (pcix_chipset == 0 && pcie_chipset == 0 &&
 	    (pba->pba_flags & PCI_FLAGS_MSI_OKAY) == 0 &&
 	    (pba->pba_flags & PCI_FLAGS_MSIX_OKAY) == 0)
-		return 0;
+		return false;
 
 	if (pci_get_capability(pc, tag, PCI_CAP_PCIX, NULL, NULL)) {
 		pcireg_t bhlcr = pci_conf_read(pc, tag, PCI_BHLC_REG);
@@ -493,46 +493,46 @@ pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag,
 	    NULL, NULL);
 
 	if (pcix_chipset || pcie_chipset)
-		return 1;
+		return true;
 	else {
 		pcireg_t id = pci_conf_read(pc, tag, PCI_ID_REG);
 		if (pci_has_quirk(id, PCI_QUIRK_ENABLE_MSI_VM))
-			return 1;
+			return true;
 
-		return 0;
+		return false;
 	}
 }
 
-static int
+static bool
 pci_can_enable_msi(pci_chipset_tag_t pc, pcitag_t tag,
     struct pcibus_attach_args *pba)
 {
 	pcireg_t id;
 
 	if (!pci_can_msi_ancestor(pc, tag, pba))
-		return 0;
+		return false;
 
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSI))
-		return 0;
+		return false;
 
-	return 1;
+	return true;
 }
 
-static int
+static bool
 pci_can_enable_msix(pci_chipset_tag_t pc, pcitag_t tag,
     struct pcibus_attach_args *pba)
 {
 	pcireg_t id;
 
-	if (!pci_can_msi_ancestor(pc, tag, pba))
-		return 0;
+	if (!pci_can_enable_msi(pc, tag, pba))
+		return false;
 
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSIX))
-		return 0;
+		return false;
 
-	return 1;
+	return true;
 }
 
 void
@@ -579,34 +579,56 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	}
 }
 
-#ifdef NOTYET
-int
-pci_can_enable_msi_device(pci_chipset_tag_t pc, pcitag_t tag)
+bool
+pci_can_enable_msi_device(const struct pci_attach_args *pa)
 {
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+	pcireg_t id;
+
+	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0)
+		return 0;
+
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSI))
 		return 0;
 
 	return 1;
 }
 
-int
-pci_can_enable_msix_device(pci_chipset_tag_t pc, pcitag_t tag)
+bool
+pci_can_enable_msix_device(const struct pci_attach_args *pa)
 {
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+	pcireg_t id;
+
+	if (!pci_can_enable_msi_device(pa))
+		return 0;
+
+	if ((pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0)
+		return 0;
+
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSIX))
 		return 0;
 
 	return 1;
 }
 
-int
-pci_can_enable_intx(pci_chipset_tag_t pc, pcitag_t tag)
+bool
+pci_can_enable_intx_device(const struct pci_attach_args *pa)
 {
+	pci_chipset_tag_t pc = pa->pa_pc;
+	pcitag_t tag = pa->pa_tag;
+	pcireg_t id;
+
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_MSI_INTX_BUG))
 		return 0;
 
 	return 1;
 }
-#endif
 
 int
 pci_bus_maxdevs(pci_chipset_tag_t pc, int busno)
