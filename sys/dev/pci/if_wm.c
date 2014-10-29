@@ -6015,8 +6015,6 @@ wm_txintr_msix(void *arg)
 {
 	struct wm_softc *sc = arg;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-	uint32_t icr;
-	int handled = 0;
 
 	DPRINTF(WM_DEBUG_TX, ("%s: TX\n", device_xname(sc->sc_dev)));
 	CSR_WRITE(sc, WMREG_EIMC, 1 << WM_TX_INTR_INDEX);
@@ -6026,56 +6024,25 @@ wm_txintr_msix(void *arg)
 	if (sc->sc_stopping)
 		goto out;
 
-	while (1 /* CONSTCOND */) {
-		icr = CSR_READ(sc, WMREG_ICR);
-		if ((icr & sc->sc_icr) == 0)
-			break;
-		rnd_add_uint32(&sc->rnd_source, icr);
-
-		handled = 1;
-
-#if defined(WM_DEBUG) || defined(WM_EVENT_COUNTERS)
-		if (icr & ICR_TXDW) {
-			DPRINTF(WM_DEBUG_TX,
-			    ("%s: TX: got TXDW interrupt\n",
-			    device_xname(sc->sc_dev)));
-			WM_EVCNT_INCR(&sc->sc_ev_txdw);
-		}
-#endif
 #if defined(WM_EVENT_COUNTERS)
-		WM_EVCNT_INCR(&sc->sc_ev_txintr);
+	WM_EVCNT_INCR(&sc->sc_ev_txintr);
 #endif
-		wm_txintr(sc);
+	wm_txintr(sc);
 
-		if (icr & ICR_RXO) {
-#if defined(WM_DEBUG)
-			log(LOG_WARNING, "%s: Receive overrun\n",
-			    device_xname(sc->sc_dev));
-#endif /* defined(WM_DEBUG) */
-		}
-	}
 out:
 	WM_TX_UNLOCK(sc);
 
 	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_TX_INTR_INDEX);
 
-	if (handled) {
-		/* Try to get more packets going. */
-		ifp->if_start(ifp);
-	}
+	ifp->if_start(ifp);
 
-	return handled;
+	return 1;
 }
 
 static int
 wm_rxintr_msix(void *arg)
 {
 	struct wm_softc *sc = arg;
-#if 0
-	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-#endif
-	uint32_t icr;
-	int handled = 0;
 
 	DPRINTF(WM_DEBUG_RX, ("%s: RX\n", device_xname(sc->sc_dev)));
 
@@ -6085,49 +6052,17 @@ wm_rxintr_msix(void *arg)
 	if (sc->sc_stopping)
 		goto out;
 
-	while (1 /* CONSTCOND */) {
-		icr = CSR_READ(sc, WMREG_ICR);
-		if ((icr & sc->sc_icr) == 0)
-			break;
-		rnd_add_uint32(&sc->rnd_source, icr);
-
-
-		handled = 1;
-
-#if defined(WM_DEBUG)
-		if (icr & (ICR_RXDMT0|ICR_RXT0)) {
-			DPRINTF(WM_DEBUG_RX,
-			    ("%s: RX: got Rx intr 0x%08x\n",
-			    device_xname(sc->sc_dev),
-			    icr & (ICR_RXDMT0|ICR_RXT0)));
-		}
-#endif
 #if defined(WM_EVENT_COUNTERS)
-		WM_EVCNT_INCR(&sc->sc_ev_rxintr);
+	WM_EVCNT_INCR(&sc->sc_ev_rxintr);
 #endif
-		wm_rxintr(sc);
-
-		if (icr & ICR_RXO) {
-#if defined(WM_DEBUG)
-			log(LOG_WARNING, "%s: Receive overrun\n",
-			    device_xname(sc->sc_dev));
-#endif /* defined(WM_DEBUG) */
-		}
-	}
+	wm_rxintr(sc);
 
 out:
 	WM_RX_UNLOCK(sc);
 
 	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_RX_INTR_INDEX);
 
-#if 0 /* if_start() should be call in TX only */
-	if (handled) {
-		/* Try to get more packets going. */
-		ifp->if_start(ifp);
-	}
-#endif
-
-	return handled;
+	return 1;
 }
 
 static int
