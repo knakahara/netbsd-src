@@ -101,6 +101,9 @@ void		pci_mode_set(int);
  */
 void		pci_attach_hook(device_t, device_t,
 		    struct pcibus_attach_args *);
+bool		pci_can_enable_msi_device(const struct pci_attach_args *);
+bool		pci_can_enable_msix_device(const struct pci_attach_args *);
+bool		pci_can_enable_intx_device(const struct pci_attach_args *);
 int		pci_bus_maxdevs(pci_chipset_tag_t, int);
 pcitag_t	pci_make_tag(pci_chipset_tag_t, int, int, int);
 void		pci_decompose_tag(pci_chipset_tag_t, pcitag_t,

@@ -228,6 +228,11 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
 	char intrstr_buf[INTRID_LEN + 1];
 	pci_intr_handle_t *handle;
 
+	if (!pci_can_enable_intx_device(pa)) {
+		aprint_normal("INTx is disabled to avoid errata.\n");
+		return 1;
+	}
+
 	handle = kmem_zalloc(sizeof(handle), KM_SLEEP);
 	if (handle == NULL) {
 		aprint_normal("cannot allocate pci_intr_handle_t\n");
