@@ -140,8 +140,8 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	struct pic *msi_pic;
 	pci_intr_handle_t *vectors = NULL;
 
-	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
-		aprint_normal("MSI is disabled by bus");
+	if (!pci_can_enable_msi_device(pa)) {
+		aprint_normal("MSI is disabled to avoid errata.\n");
 		return 1;
 	}
 
@@ -244,8 +244,8 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	struct pic *msix_pic;
 	pci_intr_handle_t *vectors = NULL;
 
-	if ((pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
-		aprint_normal("MSI-X is disabled by bus");
+	if (!pci_can_enable_msix_device(pa)) {
+		aprint_normal("MSI-X is disabled to avoid errata.\n");
 		return 1;
 	}
 
