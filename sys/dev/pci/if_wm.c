@@ -6071,7 +6071,9 @@ static int
 wm_rxintr_msix(void *arg)
 {
 	struct wm_softc *sc = arg;
+#if 0
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+#endif
 	uint32_t icr;
 	int handled = 0;
 
@@ -6118,10 +6120,12 @@ out:
 
 	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_RX_INTR_INDEX);
 
+#if 0 /* if_start() should be call in TX only */
 	if (handled) {
 		/* Try to get more packets going. */
 		ifp->if_start(ifp);
 	}
+#endif
 
 	return handled;
 }
