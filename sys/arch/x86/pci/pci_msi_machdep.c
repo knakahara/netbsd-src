@@ -164,11 +164,6 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 		return 1;
 	}
 
-	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
-		aprint_normal("MSI is disabled by bus");
-		return 1;
-	}
-
 	for (i = 0; i < *count; i++) {
 		MSI_INT_MAKE_MSI(vectors[i]);
 	}
@@ -263,11 +258,6 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	}
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI-X vectors.\n");
-		return 1;
-	}
-
-	if ((pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
-		aprint_normal("MSI-X is disabled by bus");
 		return 1;
 	}
 
