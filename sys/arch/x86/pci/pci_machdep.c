@@ -475,11 +475,9 @@ static int pcix_chipset = 1;
 static int pcie_chipset = 1;
 
 static bool
-pci_can_msi_ancestor(struct pcibus_attach_args *pba)
+pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag,
+    struct pcibus_attach_args *pba)
 {
-	pci_chipset_tag_t pc = pba->pba_pc;
-	pcitag_t tag = pba->pba_intrtag;
-
 	if (pcix_chipset == 0 && pcie_chipset == 0 &&
 	    (pba->pba_flags & PCI_FLAGS_MSI_OKAY) == 0 &&
 	    (pba->pba_flags & PCI_FLAGS_MSIX_OKAY) == 0)
@@ -506,14 +504,15 @@ pci_can_msi_ancestor(struct pcibus_attach_args *pba)
 }
 
 static bool
-pci_can_enable_msi(struct pcibus_attach_args *pba)
+pci_can_enable_msi(pci_chipset_tag_t pc, pcitag_t tag,
+    struct pcibus_attach_args *pba)
 {
 	pcireg_t id;
 
-	if (!pci_can_msi_ancestor(pba))
+	if (!pci_can_msi_ancestor(pc, tag, pba))
 		return false;
 
-	id = pci_conf_read(pba->pba_pc, pba->pba_intrtag, PCI_ID_REG);
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSI))
 		return false;
 
@@ -521,14 +520,15 @@ pci_can_enable_msi(struct pcibus_attach_args *pba)
 }
 
 static bool
-pci_can_enable_msix(struct pcibus_attach_args *pba)
+pci_can_enable_msix(pci_chipset_tag_t pc, pcitag_t tag,
+    struct pcibus_attach_args *pba)
 {
 	pcireg_t id;
 
-	if (!pci_can_enable_msi(pba))
+	if (!pci_can_enable_msi(pc, tag, pba))
 		return false;
 
-	id = pci_conf_read(pba->pba_pc, pba->pba_intrtag, PCI_ID_REG);
+	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_DISABLE_MSIX))
 		return false;
 
@@ -552,12 +552,7 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	mpacpi_pci_attach_hook(parent, self, pba);
 #endif
 
-	/*
-	 * Atom C2000 series SoC's ether controller is directly connected to
-	 * transaction router. The transaction router has  neither PCI-X
-	 * capability nor PCI Express capability, but support MSIs.
-	 * So enable MSI and MSI-X here.
-	 */
+	/* Workaround for Atom C2000 series SoC */
 	tag = pci_make_tag(pc, 0, 0, 0);
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
 	if (pci_has_quirk(id, PCI_QUIRK_ENABLE_MSI)) {
@@ -565,6 +560,7 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 		pba->pba_flags |= PCI_FLAGS_MSIX_OKAY;
 		return;
 	}
+
 	/* Should the device check whether it can enable MSI/MSI-X? */
 	tag = pba->pba_intrtag;
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
@@ -573,11 +569,11 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	    PCI_SUBCLASS(class) != PCI_SUBCLASS_BRIDGE_HOST)
 		return;
 
-	if (pci_can_enable_msi(pba)) {
+	if (pci_can_enable_msi(pc, tag, pba)) {
 		pba->pba_flags |= PCI_FLAGS_MSI_OKAY;
 		aprint_normal(": enable MSI");
 	}
-	if (pci_can_enable_msix(pba)) {
+	if (pci_can_enable_msix(pc, tag, pba)) {
 		pba->pba_flags |= PCI_FLAGS_MSIX_OKAY;
 		aprint_normal(": enable MSI-X");
 	}
