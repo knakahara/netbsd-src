@@ -475,12 +475,9 @@ static int pcix_chipset = 1;
 static int pcie_chipset = 1;
 
 static int
-pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag,
-    struct pcibus_attach_args *pba)
+pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag)
 {
-	if (pcix_chipset == 0 && pcie_chipset == 0 &&
-	    (pba->pba_flags & PCI_FLAGS_MSI_OKAY) == 0 &&
-	    (pba->pba_flags & PCI_FLAGS_MSIX_OKAY) == 0)
+	if (pcix_chipset == 0 && pcie_chipset == 0)
 		return 0;
 
 	if (pci_get_capability(pc, tag, PCI_CAP_PCIX, NULL, NULL)) {
@@ -504,12 +501,11 @@ pci_can_msi_ancestor(pci_chipset_tag_t pc, pcitag_t tag,
 }
 
 static int
-pci_can_enable_msi(pci_chipset_tag_t pc, pcitag_t tag,
-    struct pcibus_attach_args *pba)
+pci_can_enable_msi(pci_chipset_tag_t pc, pcitag_t tag)
 {
 	pcireg_t id;
 
-	if (!pci_can_msi_ancestor(pc, tag, pba))
+	if (!pci_can_msi_ancestor(pc, tag))
 		return 0;
 
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
@@ -520,12 +516,11 @@ pci_can_enable_msi(pci_chipset_tag_t pc, pcitag_t tag,
 }
 
 static int
-pci_can_enable_msix(pci_chipset_tag_t pc, pcitag_t tag,
-    struct pcibus_attach_args *pba)
+pci_can_enable_msix(pci_chipset_tag_t pc, pcitag_t tag)
 {
 	pcireg_t id;
 
-	if (!pci_can_msi_ancestor(pc, tag, pba))
+	if (!pci_can_msi_ancestor(pc, tag))
 		return 0;
 
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
@@ -542,6 +537,7 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	pcitag_t tag;
 	pcireg_t class;
 	pcireg_t id;
+
 
 	if (pba->pba_bus == 0)
 		aprint_normal(": configuration mode %d", pci_mode);
@@ -569,11 +565,11 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	    PCI_SUBCLASS(class) != PCI_SUBCLASS_BRIDGE_HOST)
 		return;
 
-	if (pci_can_enable_msi(pc, tag, pba)) {
+	if (pci_can_enable_msi(pc, tag)) {
 		pba->pba_flags |= PCI_FLAGS_MSI_OKAY;
 		aprint_normal(": enable MSI");
 	}
-	if (pci_can_enable_msix(pc, tag, pba)) {
+	if (pci_can_enable_msix(pc, tag)) {
 		pba->pba_flags |= PCI_FLAGS_MSIX_OKAY;
 		aprint_normal(": enable MSI-X");
 	}
