@@ -525,7 +525,7 @@ pci_can_enable_msix(pci_chipset_tag_t pc, pcitag_t tag,
 {
 	pcireg_t id;
 
-	if (!pci_can_enable_msi(pc, tag, pba))
+	if (!pci_can_msi_ancestor(pc, tag, pba))
 		return 0;
 
 	id = pci_conf_read(pc, tag, PCI_ID_REG);
