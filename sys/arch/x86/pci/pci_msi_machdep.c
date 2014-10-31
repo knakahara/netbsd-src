@@ -140,6 +140,11 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	struct pic *msi_pic;
 	pci_intr_handle_t *vectors = NULL;
 
+	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
+		aprint_normal("PCI host bridge does not support MSI.\n");
+		return 1;
+	}
+
 	msi_pic = construct_msi_pic(pa);
 	if (msi_pic == NULL) {
 		aprint_normal("cannot allocate MSI pic.\n");
@@ -239,6 +244,12 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	struct pic *msix_pic;
 	pci_intr_handle_t *vectors = NULL;
 
+	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0 ||
+	    (pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
+		aprint_normal("PCI host bridge does not support MSI-X.\n");
+		return 1;
+	}
+
 	msix_pic = construct_msix_pic(pa);
 	if (msix_pic == NULL)
 		return 1;
@@ -274,7 +285,6 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 
 	*ihps = vectors;
 	return 0;
-
 }
 
 static int
