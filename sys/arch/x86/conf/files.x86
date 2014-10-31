@@ -13,9 +13,6 @@ defflag opt_intrdebug.h	INTRDEBUG
 defflag opt_pcifixup.h	PCI_ADDR_FIXUP PCI_BUS_FIXUP
 			PCI_INTR_FIXUP PCI_INTR_FIXUP_FORCE
 
-# PCI MSI/MSI-X options
-defflag opt_pcimsi.h	PCI_MSI_ASSIGN_RR
-
 # To be able to test for NetBSD/xen in shared files
 defflag	opt_xen.h		DO_NOT_DEFINE
 
