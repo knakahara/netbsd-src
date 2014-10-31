@@ -471,10 +471,12 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	if (pci_has_msi_quirk(id, PCI_QUIRK_DISABLE_MSI)) {
 		pba->pba_flags &= ~PCI_FLAGS_MSI_OKAY;
 		pba->pba_flags &= ~PCI_FLAGS_MSIX_OKAY;
-	}
-	else if (pci_has_msi_quirk(id, PCI_QUIRK_DISABLE_MSIX)) {
+	} else if (pci_has_msi_quirk(id, PCI_QUIRK_DISABLE_MSIX)) {
 		pba->pba_flags |= PCI_FLAGS_MSI_OKAY;
 		pba->pba_flags &= ~PCI_FLAGS_MSIX_OKAY;
+	} else {
+		pba->pba_flags |= PCI_FLAGS_MSI_OKAY;
+		pba->pba_flags |= PCI_FLAGS_MSIX_OKAY;
 	}
 
 	/* VMware and KVM use old chipset, but they can use MSI/MSI-X */
