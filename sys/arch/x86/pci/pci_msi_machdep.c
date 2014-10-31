@@ -26,6 +26,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * TODO
+ *
+ *     - PBA (Pending Bit Array) support
+ *     - HyperTransport mapping support
+ */
+
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD$");
 
@@ -344,8 +351,7 @@ pci_msix_remap_md(pci_intr_handle_t *pihs, int count)
 
 /*****************************************************************************/
 /*
- * XXXX below APIs are tentative.
- * XXXX these APIS should be MI code.
+ * these APIS should be MI code.
  */
 
 /*
@@ -588,7 +594,6 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 	pci_msi_common_disestablish(pc, cookie);
 }
 
-#define MAX_MSIX_COUNT 2048
 int
 pci_msix_remap(pci_intr_handle_t *pihs, int count)
 {
