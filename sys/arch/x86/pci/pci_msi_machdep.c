@@ -140,8 +140,8 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	struct pic *msi_pic;
 	pci_intr_handle_t *vectors = NULL;
 
-	if (!pci_can_enable_msi_device(pa)) {
-		aprint_normal("MSI is disabled to avoid errata.\n");
+	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
+		aprint_normal("PCI host bridge does not support MSI.\n");
 		return 1;
 	}
 
@@ -244,8 +244,9 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	struct pic *msix_pic;
 	pci_intr_handle_t *vectors = NULL;
 
-	if (!pci_can_enable_msix_device(pa)) {
-		aprint_normal("MSI-X is disabled to avoid errata.\n");
+	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0 ||
+	    (pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
+		aprint_normal("PCI host bridge does not support MSI-X.\n");
 		return 1;
 	}
 
@@ -284,7 +285,6 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 
 	*ihps = vectors;
 	return 0;
-
 }
 
 static int
