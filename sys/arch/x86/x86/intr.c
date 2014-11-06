@@ -152,7 +152,6 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <sys/atomic.h>
 #include <sys/xcall.h>
 
-#include <sys/intrio.h>
 #include <sys/kauth.h>
 #include <sys/conf.h>
 
