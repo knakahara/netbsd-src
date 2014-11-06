@@ -11,7 +11,7 @@ SUBDIR=	ac accton acpitools altq apm apmd arp \
 	flashctl fssconfig fusermount fwctl \
 	gpioctl grfconfig gspa \
 	hdaudioctl \
-	i2cscan ifwatchd inetd installboot iopctl iostat ipwctl irdaattach \
+	i2cscan ifwatchd inetd installboot intrctl iopctl iostat ipwctl irdaattach \
 	isdn isibootd iteconfig iwictl \
 	kgmon \
 	lastlogin ldpd link lmcconfig lockstat lpr \

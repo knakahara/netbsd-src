@@ -32,12 +32,23 @@
 #ifndef _SYS_INTR_H_
 #define	_SYS_INTR_H_
 
+#define INTR_LIST_BUFSIZE 4096
+
+#define INTRID_LEN 47 /* should use max size of interrupt name of supporting
+		       * architectures.
+		       *     - x86
+		       *       sizeof(struct device.dv_xname) +
+		       *           sizeof(struct intrsource.is_evname) - 1
+		       *       see intr_string()
+		       */
+
 #ifdef _KERNEL
 
 #include <sys/types.h>
-#include <sys/kcpuset.h>
 
 struct cpu_info;
+struct kcpuset;
+typedef struct kcpuset	kcpuset_t;
 
 /* Public interface. */
 void	*softint_establish(u_int, void (*)(void *), void *);
