@@ -129,6 +129,7 @@ file	kern/subr_exec_fd.c		kern
 file	kern/subr_extent.c		kern
 file	kern/subr_hash.c		kern
 file	kern/subr_humanize.c		kern
+file	kern/subr_intr.c		kern
 file	kern/subr_iostat.c		kern
 file	kern/subr_ipi.c			kern
 file	kern/subr_kcpuset.c		kern

@@ -36,6 +36,8 @@ options	SCHED_4BSD
 
 pseudo-device	cpuctl
 
+pseudo-device	intrctl
+
 #
 # Kernel entropy pool and random-number generator pseudodevice.
 # The pseudodevice might stop being "std" when the two are torn
