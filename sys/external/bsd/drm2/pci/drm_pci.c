@@ -217,7 +217,7 @@ static int
 drm_pci_get_irq(struct drm_device *dev)
 {
 	pci_intr_handle_t ih_pih;
-	int ih_int;
+	pci_intr_handle_t ih_int;
 
 	/*
 	 * This is a compile-time assertion that the types match.  If
@@ -230,7 +230,7 @@ drm_pci_get_irq(struct drm_device *dev)
 		return -1;	/* XXX Hope -1 is an invalid intr handle.  */
 
 	ih_int = ih_pih;
-	return ih_int;
+	return (int)ih_int;
 }
 
 static int
