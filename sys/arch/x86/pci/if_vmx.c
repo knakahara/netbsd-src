@@ -812,18 +812,22 @@ vmxnet3_setup_msix_interrupts(struct vmxnet3_softc *sc)
 	int intr_idx, i;
 	const char *intrstr;
 	char intrbuf[PCI_INTRSTR_LEN];
+	char xnamebuf[32];
 
 	intr = sc->vmx_intrs;
 	intr_idx = 0;
 	ihs = sc->vmx_ihs;
 
 	for (i = 0; i < sc->vmx_ntxqueues; i++, intr++, ihs++, intr_idx++) {
+		snprintf(xnamebuf, 32, "%s: tx %d", device_xname(sc->vmx_dev), i);
+
 		txq = &sc->vmx_txq[i];
 
 		intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
 
 		pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
-		*ihs = pci_msix_establish(pc, *intr, IPL_NET, vmxnet3_txq_intr, txq);
+		*ihs = pci_msix_establish_xname(pc, *intr, IPL_NET,
+		    vmxnet3_txq_intr, txq, xnamebuf);
 		if (*ihs == NULL) {
 			aprint_error_dev(sc->vmx_dev,
 			    "unable to establish tx interrupt at %s\n", intrstr);
@@ -835,12 +839,15 @@ vmxnet3_setup_msix_interrupts(struct vmxnet3_softc *sc)
 	}
 
 	for (i = 0; i < sc->vmx_nrxqueues; i++, intr++, ihs++, intr_idx++) {
+		snprintf(xnamebuf, 32, "%s: rx %d", device_xname(sc->vmx_dev), i);
+
 		rxq = &sc->vmx_rxq[i];
 
 		intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
 
 		pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
-		*ihs = pci_msix_establish(pc, *intr, IPL_NET, vmxnet3_rxq_intr, rxq);
+		*ihs = pci_msix_establish_xname(pc, *intr, IPL_NET,
+		    vmxnet3_rxq_intr, rxq, xnamebuf);
 		if (*ihs == NULL) {
 			aprint_error_dev(sc->vmx_dev,
 			    "unable to establish rx interrupt at %s\n", intrstr);
@@ -853,8 +860,10 @@ vmxnet3_setup_msix_interrupts(struct vmxnet3_softc *sc)
 
 	intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
 
+	snprintf(xnamebuf, 32, "%s: link", device_xname(sc->vmx_dev));
 	pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
-	*ihs = pci_msix_establish(pc, *intr, IPL_NET, vmxnet3_event_intr, sc);
+	*ihs = pci_msix_establish_xname(pc, *intr, IPL_NET,
+	    vmxnet3_event_intr, sc, xnamebuf);
 	if (*ihs == NULL) {
 		aprint_error_dev(sc->vmx_dev,
 		    "unable to establish event interrupt at %s\n", intrstr);
@@ -876,14 +885,17 @@ vmxnet3_setup_msi_interrupt(struct vmxnet3_softc *sc)
 	int i;
 	const char *intrstr;
 	char intrbuf[PCI_INTRSTR_LEN];
+	char xnamebuf[32];
 
 	intr = &sc->vmx_intrs[0];
 	ihs = sc->vmx_ihs;
 
 	intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
 
+	snprintf(xnamebuf, 32, "%s: msi", device_xname(sc->vmx_dev));
 	pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
-	*ihs = pci_msi_establish(pc, *intr, IPL_NET, vmxnet3_legacy_intr, sc);
+	*ihs = pci_msi_establish_xname(pc, *intr, IPL_NET,
+	    vmxnet3_legacy_intr, sc, xnamebuf);
 	if (*ihs == NULL) {
 		aprint_error_dev(sc->vmx_dev,
 		    "unable to establish interrupt at %s\n", intrstr);
@@ -909,14 +921,17 @@ vmxnet3_setup_legacy_interrupt(struct vmxnet3_softc *sc)
 	int i;
 	const char *intrstr;
 	char intrbuf[PCI_INTRSTR_LEN];
+	char xnamebuf[32];
 
 	intr = &sc->vmx_intrs[0];
 	ihs = sc->vmx_ihs;
 
 	intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
 
+	snprintf(xnamebuf, 32, "%s:legacy", device_xname(sc->vmx_dev));
 	pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
-	*ihs = pci_intr_establish(pc, *intr, IPL_NET, vmxnet3_legacy_intr, sc);
+	*ihs = pci_intr_establish_xname(pc, *intr, IPL_NET,
+	    vmxnet3_legacy_intr, sc, xnamebuf);
 	if (*ihs == NULL) {
 		aprint_error_dev(sc->vmx_dev,
 		    "unable to establish interrupt at %s\n", intrstr);
