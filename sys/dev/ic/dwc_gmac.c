@@ -1,4 +1,4 @@
-/* $NetBSD: dwc_gmac.c,v 1.22 2014/10/26 17:39:16 martin Exp $ */
+/* $NetBSD: dwc_gmac.c,v 1.24 2014/10/27 09:40:00 skrll Exp $ */
 
 /*-
  * Copyright (c) 2013, 2014 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(1, "$NetBSD: dwc_gmac.c,v 1.22 2014/10/26 17:39:16 martin Exp $");
+__KERNEL_RCSID(1, "$NetBSD: dwc_gmac.c,v 1.24 2014/10/27 09:40:00 skrll Exp $");
 
 /* #define	DWC_GMAC_DEBUG	1 */
 
@@ -879,7 +879,7 @@ dwc_gmac_queue(struct dwc_gmac_softc *sc, struct mbuf *m0)
 
 		/*
 		 * Defer passing ownership of the first descriptor
-		 * untill we are done.
+		 * until we are done.
 		 */
 		if (i)
 			desc->ddesc_status = htole32(DDESC_STATUS_OWNEDBYDEV);
@@ -1112,7 +1112,7 @@ skip:
 }
 
 /*
- * Revers order of bits - http://aggregate.org/MAGIC/#Bit%20Reversal
+ * Reverse order of bits - http://aggregate.org/MAGIC/#Bit%20Reversal
  */
 static uint32_t
 bitrev32(uint32_t x)

@@ -1,6 +1,36 @@
+o Call module as module.
+
+  Until now, everything is called as attribute.  Separate module from it:
+
+	- Module is a collection of code (*.[cSo]), and provides a function.
+	  Module can depend on other modules.
+
+	- Attribute provides metadata for modules.  One module can have
+	  multiple attributes.  Attribute doesn't generate a module (*.o,
+	  *.ko).
+
 o Emit everything (ioconf.*, Makefile, ...) per-attribute.
 
+  config(9) related metadata (cfdriver, cfattach, cfdata, ...) should be
+  collected using linker.  Create ELF sections like
+  .{rodata,data}.config.{cfdriver,cfattach,cfdata}.  Provide reference
+  symbols (e.g. cfdriverinit[]) using linker script.  Sort entries by name
+  to lookup entries by binary search in kernel.
+
 o Generate modular(9) related information.  Especially module dependency.
+
+  At this moment modular(9) modules hardcode dependency in *.c using the
+  MODULE() macro:
+
+	MODULE(MODULE_CLASS_DRIVER, hdaudio, "pci");
+
+  This information already exists in config(5) definitions (files.*).
+  Extend config(5) to be able to specify module's class.
+
+  Ideally these module metadata are kept somewhere in ELF headers, so that
+  loaders (e.g. boot(8)) can easily read.  One idea is to abuse DYNAMIC
+  sections to record dependency, as shared library does.  (Feasibility
+  unknown.)
 
 o Rename "interface attribute" to "bus".
 
@@ -13,6 +43,20 @@ o Rename "interface attribute" to "bus".
 
 	defbus	audiobus {}
 	attach	audio at audiobus
+
+o Retire "attach foo at bar with foo_bar.c"
+
+  Most of these should be rewritten by defining a common interface attribute
+  "foobus", instead of writing multiple attachments.  com(4), ld(4), ehci(4)
+  are typical examples.  For ehci(4), EHCI-capable controller drivers implement
+  "ehcibus" interface, like:
+
+	defne	ehcibus {}
+	device	imxehci: ehcibus
+
+  These drivers' attach functions call config_found() to attach ehci(4) via
+  the "ehcibus" interface attribute, instead of calling ehci_init() directly.
+  Same for com(4) (com_attach_subr()) and ld(4) (ldattach()).
 
 o Sort objects in more reasonable order.
 
@@ -59,7 +103,7 @@ o Generate things only by definitions.
 
 o Split cfdata.
 
-  cfdata is pattern matching rules to enable devices at runtime device
+  cfdata is a set of pattern matching rules to enable devices at runtime device
   auto-configuration.  It is pure data and can (should) be generated separately
   from the code.
 
@@ -78,3 +122,64 @@ o Allow easier adding and removing of options.
   errors like "options BAR was already defined" or "options FOO
   was not defined".
 
+o Introduce "class".
+
+  Every module should be classified as at least one class, as modular(9)
+  modules already do.  For example, file systems are marked as "vfs", network
+  protocols are "netproto".
+
+  Consider to merge "devclass" into "class".
+
+  For syntax clarity, class names could be used as a keyword to select the
+  class's instance module:
+
+	# Define net80211 module as netproto class
+	class netproto
+	define net80211: netproto
+
+	# Select net80211 to be builtin
+	netproto net80211
+
+  Accordingly device/attach selection syntax should be revisited.
+
+o Support kernel constructor/destructor (.kctors/.kdtors)
+
+  Initialization and finalization should be called via constructors and
+  destructors.  Don't hardcode those sequences as sys/kern/init_main.c:main()
+  does.
+
+  The order of .kctors/.kdtors is resolved by dependency.  The difference from
+  userland is that in kernel depended ones are located in lower addresses;
+  "machdep" module is the lowest.  Thus the lowest entry in .ctors must be
+  executed the first.
+
+  The .kctors/.kdtors entries are executed by kernel's main() function, unlike
+  userland where start code executes .ctors/.dtors before main().  The hardcoded
+  sequence of various subsystem initializations in init_main.c:main() will be
+  replaced by an array of .kctors invocations, and #ifdef's there will be gone.
+
+o Replace linkset.
+
+  Don't allow kernel subsystems create random ELF sections (with potentially
+  long names) in the final kernel.  To collect some data in statically linked
+  modules, creating intermediate sections (e.g. .data.linkset.sysctl) and
+  exporting the start/end symbols (e.g. _data_linkset_sysctl_{start,end})
+  using linker script should be fine.
+
+  Dynamically loaded modules have to register those entries via constructors
+  (functions).  This means that dynamically loaded modules are flexible but
+  come with overhead.
+
+o Shared kernel objects.
+
+  Since NetBSD has not established a clear kernel ABI, every single kernel
+  has to build all the objects by their own.  As a result, similar kernels
+  (e.g. evbarm kernels) repeatedly compile similar objects, that is waste of
+  energy & space.
+
+  Share them if possible.  For evb* ports, ideally everything except machdep.ko
+  should be shared.
+
+  While leaving optimizations as options (CPU specific optimizations, inlined
+  bus_space(9) operations, etc.) for users, the official binaries build
+  provided by TNF should be as portable as possible.

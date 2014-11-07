@@ -1,5 +1,5 @@
 %{
-/*	$NetBSD: scan.l,v 1.18 2014/10/11 15:20:36 uebayasi Exp $	*/
+/*	$NetBSD: scan.l,v 1.21 2014/10/31 07:38:36 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -40,6 +40,9 @@
  *
  *	from: @(#)scan.l	8.1 (Berkeley) 6/6/93
  */
+
+#include <sys/cdefs.h>
+__RCSID("$NetBSD: scan.l,v 1.21 2014/10/31 07:38:36 uebayasi Exp $");
 
 #include <sys/param.h>
 #include <errno.h>
@@ -164,6 +167,7 @@ prefix		return PREFIX;
 pseudo-device	return PSEUDO_DEVICE;
 pseudo-root	return PSEUDO_ROOT;
 root		return ROOT;
+select		return SELECT;
 single		return SINGLE;
 source		return SOURCE;
 type		return TYPE;
@@ -335,7 +339,7 @@ package[ \t]+{FILENAME}{RESTOFLINE}	{
 	}
 0[xX][0-9a-fA-F]+ {
 		yylval.num.fmt = 16;
-		yylval.num.val = strtoull(yytext + 2, NULL, 16);
+		yylval.num.val = (long long)strtoull(yytext + 2, NULL, 16);
 		return NUMBER;
 	}
 [1-9][0-9]* {
@@ -605,12 +609,12 @@ endinclude(void)
  * us to consume a newline, we have to subtract one.  yychar is yacc's
  * token lookahead, so we can tell.
  */
-int
+u_short
 currentline(void)
 {
 	extern int yychar;
 
-	return (yyline - (yychar == '\n'));
+	return (u_short)(yyline - (yychar == '\n'));
 }
 
 static int

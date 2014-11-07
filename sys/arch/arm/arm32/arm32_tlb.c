@@ -26,8 +26,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include "opt_multiprocessor.h"
+
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: arm32_tlb.c,v 1.4 2014/10/14 20:35:03 matt Exp $");
+__KERNEL_RCSID(1, "$NetBSD: arm32_tlb.c,v 1.7 2014/10/30 10:45:17 skrll Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -48,8 +51,9 @@ void
 tlb_set_asid(tlb_asid_t asid)
 {
 	arm_dsb();
-	if (asid == 0) {
+	if (asid == KERNEL_PID) {
 		armreg_ttbcr_write(armreg_ttbcr_read() | TTBCR_S_PD0);
+		arm_isb();
 	}
 	armreg_contextidr_write(asid);
 	arm_isb();
@@ -118,6 +122,7 @@ tlb_invalidate_addr(vaddr_t va, tlb_asid_t asid)
 #endif
 		//armreg_tlbiall_write(asid);
 	}
+	arm_dsb();
 	arm_isb();
 }
 
