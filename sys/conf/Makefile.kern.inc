@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.kern.inc,v 1.176 2014/10/10 08:13:52 uebayasi Exp $
+#	$NetBSD: Makefile.kern.inc,v 1.178 2014/11/06 12:02:59 uebayasi Exp $
 #
 # This file contains common `MI' targets and definitions and it is included
 # at the bottom of each `MD' ${MACHINE}/conf/Makefile.${MACHINE}.
@@ -160,8 +160,8 @@ NORMAL_S?=	@${_MKSHMSG} "compile  ${.CURDIR:T}/${.TARGET}" && \
 # link rules: 
 LINK_O?=	@${_MKSHMSG} "   link  ${.CURDIR:T}/${.TARGET}" && \
 		${_MKSHECHO}\
-		${LD} -r -o ${.TARGET} ${.ALLSRC} && \
-		${LD} -r -o ${.TARGET} ${.ALLSRC}
+		${LD} -r -Map=${.TARGET}.map -o ${.TARGET} ${.ALLSRC} && \
+		${LD} -r -Map=${.TARGET}.map -o ${.TARGET} ${.ALLSRC}
 
 ##
 ## (3) libkern and compat
@@ -346,7 +346,7 @@ assym.h machdep.o: Makefile
 .if !target(__CLEANKERNEL)
 __CLEANKERNEL: .USE
 	${_MKMSG} "${.TARGET}ing the kernel objects"
-	rm -f ${KERNELS} eddep tags *.[io] *.ln [a-z]*.s vers.c \
+	rm -f ${KERNELS} *.map eddep tags *.[io] *.ko *.ln [a-z]*.s vers.c \
 	    [Ee]rrs linterrs makelinks assym.h.tmp assym.h \
 	    ${EXTRA_KERNELS} ${EXTRA_CLEAN}
 .endif

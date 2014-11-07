@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.58 2014/10/18 06:36:40 uebayasi Exp $	*/
+/*	$NetBSD: defs.h,v 1.62 2014/11/06 11:40:32 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -107,7 +107,7 @@ extern const char *progname;
  * The next two lines define the current version of the config(1) binary,
  * and the minimum version of the configuration files it supports.
  */
-#define CONFIG_VERSION		20141010
+#define CONFIG_VERSION		20141030
 #define CONFIG_MINVERSION	0
 
 /*
@@ -149,6 +149,18 @@ struct defoptlist {
 	struct nvlist *dl_depends;
 };
 
+struct module {
+	const char		*m_name;
+#if 1
+	struct attrlist		*m_deps;
+#else
+	struct attrlist		*m_attrs;
+	struct modulelist	*m_deps;
+#endif
+	int			m_expanding;
+	TAILQ_HEAD(, files)	m_files;
+};
+
 /*
  * Attributes.  These come in three flavors: "plain", "device class,"
  * and "interface".  Plain attributes (e.g., "ether") simply serve
@@ -165,10 +177,12 @@ struct defoptlist {
  * SCSI host adapter drivers such as the SPARC "esp").
  */
 struct attr {
-	const char *a_name;		/* name of this attribute */
-	struct	attrlist *a_deps;	/* we depend on these other attrs */
-	int	a_expanding;		/* to detect cycles in attr graph */
-	TAILQ_HEAD(, files) a_files;	/* files in this attr */
+	/* XXX */
+	struct module a_m;
+#define	a_name		a_m.m_name
+#define	a_deps		a_m.m_deps
+#define	a_expanding	a_m.m_expanding
+#define	a_files		a_m.m_files
 
 	/* "interface attribute" */
 	int	a_iattr;		/* true => allows children */
@@ -304,8 +318,8 @@ struct devi {
 
 	/* created during packing or ioconf.c generation */
 	short	i_collapsed;	/* set => this alias no longer needed */
-	short	i_cfindex;	/* our index in cfdata */
-	short	i_locoff;	/* offset in locators.vec */
+	u_short	i_cfindex;	/* our index in cfdata */
+	int	i_locoff;	/* offset in locators.vec */
 
 };
 /* special units */
@@ -530,8 +544,8 @@ void	checkfiles(void);
 int	fixfiles(void);		/* finalize */
 int	fixobjects(void);
 int	fixdevsw(void);
-void	addfile(const char *, struct condexpr *, int, const char *);
-void	addobject(const char *, struct condexpr *, int);
+void	addfile(const char *, struct condexpr *, u_char, const char *);
+void	addobject(const char *, struct condexpr *, u_char);
 int	expr_eval(struct condexpr *, int (*)(const char *, void *), void *);
 
 /* hash.c */
@@ -573,6 +587,7 @@ void	emit_options(void);
 void	emit_params(void);
 
 /* main.c */
+extern	int Mflag;
 void	addoption(const char *, const char *);
 void	addfsoption(const char *);
 void	addmkoption(const char *, const char *);
@@ -615,7 +630,6 @@ int	emitioconfh(void);
 int	mkioconf(void);
 
 /* mkmakefile.c */
-extern int usekobjs;
 int	mkmakefile(void);
 
 /* mkswap.c */
@@ -625,7 +639,7 @@ int	mkswap(void);
 void	pack(void);
 
 /* scan.l */
-int	currentline(void);
+u_short	currentline(void);
 int	firstfile(const char *);
 void	package(const char *);
 int	include(const char *, int, int, int);

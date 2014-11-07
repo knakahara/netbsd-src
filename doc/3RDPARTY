@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1166 2014/10/25 21:02:31 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1169 2014/10/30 08:31:27 wiz Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.5.1
-Current Vers:	6.5.1
+Version:	6.6.0
+Current Vers:	6.6.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -382,8 +382,8 @@ Notes:
 use file2netbsd
 
 Package:	flex
-Version:	2.5.37
-Current Vers:	2.5.37
+Version:	2.5.39
+Current Vers:	2.5.39
 Maintainer:	Will Estes <wlestes@users.sourceforge.net>
 Archive Site:	http://flex.sourceforge.net/
 Home Page:	http://flex.sourceforge.net/
@@ -425,7 +425,7 @@ Before importing a new version of external/gpl3/gcc:
 
 Package:	gdb
 Version:	7.7.1
-Current Vers:	7.7.1
+Current Vers:	7.8.1
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
@@ -945,8 +945,8 @@ Location:	external/bsd/openpam/dist
 Notes:
 
 Package:	openresolv
-Version:	3.6.0
-Current Vers:	3.6.0
+Version:	3.6.1
+Current Vers:	3.6.1
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/openresolv/
 Home Page:	http://roy.marples.name/projects/openresolv/
