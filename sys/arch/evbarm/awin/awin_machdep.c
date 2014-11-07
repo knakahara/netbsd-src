@@ -1,4 +1,4 @@
-/*	$NetBSD: awin_machdep.c,v 1.21 2014/10/22 11:11:40 jmcneill Exp $ */
+/*	$NetBSD: awin_machdep.c,v 1.24 2014/11/06 23:19:38 jmcneill Exp $ */
 
 /*
  * Machine dependent functions for kernel setup for TI OSK5912 board.
@@ -125,7 +125,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.21 2014/10/22 11:11:40 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.24 2014/11/06 23:19:38 jmcneill Exp $");
 
 #include "opt_machdep.h"
 #include "opt_ddb.h"
@@ -647,6 +647,9 @@ awin_device_register(device_t self, void *aux)
 		    (cubietruck_p ? "<PH22" : "<PH5"));
 		prop_dictionary_set_cstring(dict, "usb1drv", ">PH6");
 #endif
+#if AWIN_board == AWIN_cubietruck
+		prop_dictionary_set_cstring(dict, "usb0restrict", ">PH0");
+#endif
 		prop_dictionary_set_cstring(dict, "status-led1", ">PH21");
 		prop_dictionary_set_cstring(dict, "status-led2", ">PH20");
 		if (cubietruck_p) {
@@ -739,6 +742,7 @@ awin_device_register(device_t self, void *aux)
 #endif
 #if AWIN_BOARD == AWIN_bpi
 		prop_dictionary_set_cstring(dict, "phy-power", "gmacpwren");
+		prop_dictionary_set_cstring(dict, "phy-type", "rgmii-bpi");
 #endif
 		return;
 	}
@@ -765,12 +769,15 @@ awin_gpio_sysconfig(prop_dictionary_t dict)
 		{ "usb0drv",		"usbc0", "usb_drv_vbus_gpio" },
 		{ "usb0iddet",		"usbc0", "usb_id_gpio" },
 		{ "usb0vbusdet",	"usbc0", "usb_det_vbus_gpio" },
+		{ "usb0restrict",	"usbc0", "usb_restrict_gpio" },
 		{ "usb1drv",		"usbc1", "usb_drv_vbus_gpio" },
 		{ "usb1iddet",		"usbc1", "usb_id_gpio" },
 		{ "usb1vbusdet",	"usbc1", "usb_det_vbus_gpio" },
+		{ "usb1restrict",	"usbc1", "usb_restrict_gpio" },
 		{ "usb2drv",		"usbc2", "usb_drv_vbus_gpio" },
 		{ "usb2iddet",		"usbc2", "usb_id_gpio" },
 		{ "usb2vbusdet",	"usbc2", "usb_det_vbus_gpio" },
+		{ "usb2restrict",	"usbc2", "usb_restrict_gpio" },
 		{ "status-led1",	"leds_para", "leds_pin_1" },
 		{ "status-led2",	"leds_para", "leds_pin_2" },
 		{ "status-led3",	"leds_para", "leds_pin_3" },

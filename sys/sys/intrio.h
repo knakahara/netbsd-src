@@ -31,20 +31,8 @@
 
 #include <sys/ioccom.h>
 #include <sys/types.h>
-
-#ifndef _KERNEL
-#include <sched.h>
-#endif
-
-#define INTR_LIST_BUFSIZE 4096
-
-#define INTRID_LEN 47 /* should use max size of interrupt name of supporting
-		       * architectures.
-		       *     - x86
-		       *       sizeof(struct device.dv_xname) +
-		       *           sizeof(struct intrsource.is_evname) - 1
-		       *       see intr_string()
-		       */
+#include <sys/intr.h>
+#include <sys/sched.h>
 
 struct intr_set {
 	char intrid[INTRID_LEN + 1];

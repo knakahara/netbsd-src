@@ -42,7 +42,6 @@
 #endif
 
 #include <sys/evcnt.h>
-#include <sys/intrio.h>
 #include <sys/queue.h>
 #include <machine/intrdefs.h>
 

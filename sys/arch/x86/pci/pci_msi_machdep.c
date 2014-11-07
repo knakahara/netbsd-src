@@ -351,7 +351,7 @@ pci_msix_remap_md(pci_intr_handle_t *pihs, int count)
 
 /*****************************************************************************/
 /*
- * these APIS should be MI code.
+ * these APIs should be MI code.
  */
 
 /*

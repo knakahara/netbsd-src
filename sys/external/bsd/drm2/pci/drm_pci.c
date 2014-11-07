@@ -1,4 +1,4 @@
-/*	$NetBSD: drm_pci.c,v 1.6 2014/07/26 07:53:14 riastradh Exp $	*/
+/*	$NetBSD: drm_pci.c,v 1.7 2014/11/04 11:27:31 jmcneill Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: drm_pci.c,v 1.6 2014/07/26 07:53:14 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: drm_pci.c,v 1.7 2014/11/04 11:27:31 jmcneill Exp $");
 
 #include <sys/types.h>
 #include <sys/errno.h>
@@ -217,7 +217,7 @@ static int
 drm_pci_get_irq(struct drm_device *dev)
 {
 	pci_intr_handle_t ih_pih;
-	int ih_int;
+	pci_intr_handle_t ih_int;
 
 	/*
 	 * This is a compile-time assertion that the types match.  If
@@ -230,7 +230,7 @@ drm_pci_get_irq(struct drm_device *dev)
 		return -1;	/* XXX Hope -1 is an invalid intr handle.  */
 
 	ih_int = ih_pih;
-	return ih_int;
+	return (int)ih_int;
 }
 
 static int
@@ -248,7 +248,7 @@ drm_pci_irq_install(struct drm_device *dev, irqreturn_t (*handler)(void *),
 		return -ENOENT;
 
 	intrstr = pci_intr_string(pa->pa_pc, ih, intrbuf, sizeof(intrbuf));
-	ih_cookie = pci_intr_establish(pa->pa_pc, ih, IPL_DRM, handler, arg);
+	ih_cookie = pci_intr_establish(pa->pa_pc, ih, IPL_SCHED, handler, arg);
 	if (ih_cookie == NULL) {
 		aprint_error_dev(dev->dev,
 		    "couldn't establish interrupt at %s (%s)\n",

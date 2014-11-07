@@ -1,4 +1,4 @@
-/*  $NetBSD: ops.c,v 1.76 2014/10/11 04:19:38 manu Exp $ */
+/*  $NetBSD: ops.c,v 1.80 2014/11/04 09:17:31 manu Exp $ */
 
 /*-
  *  Copyright (c) 2010-2011 Emmanuel Dreyfus. All rights reserved.
@@ -813,11 +813,6 @@ requeue_request(struct puffs_usermount *pu, puffs_cookie_t opc,
 {
 	struct perfuse_cc_queue pcq;
 	struct perfuse_node_data *pnd;
-#ifdef PERFUSE_DEBUG
-	struct perfuse_state *ps;
-
-	ps = perfuse_getspecific(pu);
-#endif
 
 	pnd = PERFUSE_NODE_DATA(opc);
 	pcq.pcq_type = type;
@@ -2821,11 +2816,11 @@ perfuse_node_inactive(struct puffs_usermount *pu, puffs_cookie_t opc)
 	if (opc == 0)
 		return 0;
 
-	node_ref(opc);
 	pnd = PERFUSE_NODE_DATA(opc);
-
 	if (!(pnd->pnd_flags & (PND_OPEN|PND_REMOVED)))
-		goto out;
+		return 0;
+
+	node_ref(opc);
 
 	/*
 	 * Make sure all operation are finished
@@ -3299,6 +3294,7 @@ perfuse_node_write2(struct puffs_usermount *pu, puffs_cookie_t opc,
 	if (*resid != 0)
 		error = EFBIG;
 
+out:
 #ifdef PERFUSE_DEBUG
 	if (perfuse_diagflags & PDF_RESIZE) {
 		if (offset > (off_t)vap->va_size)
@@ -3314,16 +3310,6 @@ perfuse_node_write2(struct puffs_usermount *pu, puffs_cookie_t opc,
 	 */
 	if (offset > (off_t)vap->va_size) 
 		vap->va_size = offset;
-
-	if (inresize) {
-#ifdef PERFUSE_DEBUG
-		if (!(pnd->pnd_flags & PND_INRESIZE))
-			DERRX(EX_SOFTWARE, "file write grow without resize");
-#endif
-		pnd->pnd_flags &= ~PND_INRESIZE;
-		(void)dequeue_requests(opc, PCQ_RESIZE, DEQUEUE_ALL);
-	}
-
 
 	/*
 	 * Statistics
@@ -3344,7 +3330,15 @@ perfuse_node_write2(struct puffs_usermount *pu, puffs_cookie_t opc,
 			__func__, (void*)opc, perfuse_node_path(ps, opc));
 #endif
 
-out:
+	if (inresize) {
+#ifdef PERFUSE_DEBUG
+		if (!(pnd->pnd_flags & PND_INRESIZE))
+			DERRX(EX_SOFTWARE, "file write grow without resize");
+#endif
+		pnd->pnd_flags &= ~PND_INRESIZE;
+		(void)dequeue_requests(opc, PCQ_RESIZE, DEQUEUE_ALL);
+	}
+
 	/*
 	 * VOP_PUTPAGE causes FAF write where kernel does not 
 	 * check operation result. At least warn if it failed.
@@ -3633,9 +3627,50 @@ perfuse_node_deleteextattr(struct puffs_usermount *pu, puffs_cookie_t opc,
 	(void)strlcpy(np, attrname, attrnamelen);
 	
 	error = xchg_msg(pu, opc, pm, NO_PAYLOAD_REPLY_LEN, wait_reply);
-	
+	if (error != 0)
+		goto out;
+		
 	ps->ps_destroy_msg(pm);
 
+out:
+	node_rele(opc);
+	return error;
+}
+
+int
+perfuse_node_fallocate(struct puffs_usermount *pu, puffs_cookie_t opc,
+	off_t off, off_t len)
+{
+	struct perfuse_state *ps;
+	perfuse_msg_t *pm;
+	struct fuse_fallocate_in *fai;
+	int error;
+	
+	ps = puffs_getspecific(pu);
+	if (ps->ps_flags & PS_NO_FALLOCATE)
+		return EOPNOTSUPP;
+
+	node_ref(opc);
+
+	pm = ps->ps_new_msg(pu, opc, FUSE_FALLOCATE, sizeof(*fai), NULL);
+
+	fai = GET_INPAYLOAD(ps, pm, fuse_fallocate_in);
+	fai->fh = perfuse_get_fh(opc, FWRITE);
+	fai->offset = off;
+	fai->length = len;
+	fai->mode = 0;
+		
+	error = xchg_msg(pu, opc, pm, NO_PAYLOAD_REPLY_LEN, wait_reply);
+	if (error == EOPNOTSUPP || error == ENOSYS) {
+		ps->ps_flags |= PS_NO_FALLOCATE;
+		error = EOPNOTSUPP;
+	}
+	if (error != 0)
+		goto out;
+		
+	ps->ps_destroy_msg(pm);
+
+out:
 	node_rele(opc);
 	return error;
 }
