@@ -1,4 +1,4 @@
-/*	$NetBSD: su.c,v 1.4 2013/12/27 20:10:20 christos Exp $	*/
+/*	$NetBSD: su.c,v 1.6 2014/10/24 18:27:12 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002-2003 Networks Associates Technology, Inc.

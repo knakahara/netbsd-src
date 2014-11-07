@@ -1,4 +1,4 @@
-/*	$NetBSD: sem.c,v 1.64 2014/10/18 06:36:40 uebayasi Exp $	*/
+/*	$NetBSD: sem.c,v 1.69 2014/11/04 23:02:14 joerg Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -43,6 +43,9 @@
 #if HAVE_NBTOOL_CONFIG_H
 #include "nbtool_config.h"
 #endif
+
+#include <sys/cdefs.h>
+__RCSID("$NetBSD: sem.c,v 1.69 2014/11/04 23:02:14 joerg Exp $");
 
 #include <sys/param.h>
 #include <ctype.h>
@@ -395,7 +398,7 @@ defdevclass(const char *name, struct loclist *locs, struct attrlist *deps,
 			    "lower-case alphanumeric characters");
 			errored = 1;
 		}
-		*cp = toupper((unsigned char)*cp);
+		*cp = (char)toupper((unsigned char)*cp);
 	}
 	a->a_devclass = intern(classenum);
 
@@ -885,7 +888,7 @@ resolve(struct nvlist **nvp, const char *name, const char *what,
 	const char *cp;
 	devmajor_t maj;
 	devminor_t min;
-	int i, l;
+	size_t i, l;
 	int unit;
 	char buf[NAMESIZE];
 
@@ -905,7 +908,7 @@ resolve(struct nvlist **nvp, const char *name, const char *what,
 			cp = makedevstr(maj, min);
 		} else
 			cp = NULL;
-		*nvp = nv = newnv(NULL, cp, NULL, d, NULL);
+		*nvp = nv = newnv(NULL, cp, NULL, (long long)d, NULL);
 	}
 	if ((dev_t)nv->nv_num != NODEV) {
 		/*
@@ -952,7 +955,7 @@ resolve(struct nvlist **nvp, const char *name, const char *what,
 	 * don't bother making a device number.
 	 */
 	if (has_attr(dev->d_attrs, s_ifnet)) {
-		nv->nv_num = NODEV;
+		nv->nv_num = (long long)NODEV;
 		nv->nv_ifunit = unit;	/* XXX XXX XXX */
 	} else {
 		maj = dev2major(dev);
@@ -961,7 +964,7 @@ resolve(struct nvlist **nvp, const char *name, const char *what,
 			    name, what, nv->nv_str);
 			return (1);
 		}
-		nv->nv_num = makedev(maj, unit * maxpartitions + part);
+		nv->nv_num = (long long)makedev(maj, unit * maxpartitions + part);
 	}
 
 	nv->nv_name = dev->d_name;
@@ -1302,6 +1305,7 @@ remove_devi(struct devi *i)
 	struct devi *f, *j, **ppi;
 	struct deva *iba;
 
+	CFGDBG(5, "removing devi `%s'", i->i_name);
 	f = ht_lookup(devitab, i->i_name);
 	if (f == NULL)
 		panic("remove_devi(): instance %s disappeared from devitab",
@@ -1325,7 +1329,8 @@ remove_devi(struct devi *i)
 	 *      list.
 	 */
 	if (i != f) {
-		for (j = f; j->i_alias != i; j = j->i_alias);
+		for (j = f; j->i_alias != i; j = j->i_alias)
+			continue;
 		j->i_alias = i->i_alias;
 	} else {
 		if (i->i_alias == NULL) {
@@ -1348,7 +1353,8 @@ remove_devi(struct devi *i)
 		 */
 		for (ppi = &d->d_ihead;
 		    *ppi != NULL && *ppi != i && (*ppi)->i_bsame != i;
-		    ppi = &(*ppi)->i_bsame);
+		    ppi = &(*ppi)->i_bsame)
+			continue;
 		if (*ppi == NULL)
 			panic("deldev: dev (%s) doesn't list the devi"
 			    " (%s at %s)", d->d_name, i->i_name, i->i_at);
@@ -1374,7 +1380,8 @@ remove_devi(struct devi *i)
 	iba = i->i_atdeva;
 	for (ppi = &iba->d_ihead;
 	    *ppi != NULL && *ppi != i && (*ppi)->i_asame != i;
-	    ppi = &(*ppi)->i_asame);
+	    ppi = &(*ppi)->i_asame)
+		continue;
 	if (*ppi == NULL)
 		panic("deldev: deva (%s) doesn't list the devi (%s)",
 		    iba->d_name, i->i_name);
@@ -1438,7 +1445,8 @@ remove_devi(struct devi *i)
 			panic("remove_devi(%s) - can't add to deaddevitab",
 			    i->i_name);
 	} else {
-		for (j = f; j->i_alias != NULL; j = j->i_alias);
+		for (j = f; j->i_alias != NULL; j = j->i_alias)
+			continue;
 		j->i_alias = i;
 	}
 	/*
@@ -1466,14 +1474,18 @@ deldeva(const char *at)
 			if (i->i_at == NULL)
 				stack = newnv(NULL, NULL, i, 0, stack);
 	} else {
-		int l;
+		size_t l;
 
 		CFGDBG(5, "deselecting deva `%s'", at);
+		if (at[0] == '\0')
+			goto out;
+			
 		l = strlen(at) - 1;
 		if (at[l] == '?' || isdigit((unsigned char)at[l])) {
 			char base[NAMESIZE];
 
 			if (split(at, l+1, base, sizeof base, &unit)) {
+out:
 				cfgerror("invalid attachment name `%s'", at);
 				return;
 			}
@@ -1548,16 +1560,20 @@ deldeva(const char *at)
 void
 deldev(const char *name)
 {
-	int l;
+	size_t l;
 	struct devi *firsti, *i;
 	struct nvlist *nv, *stack = NULL;
 
 	CFGDBG(5, "deselecting dev `%s'", name);
+	if (name[0] == '\0')
+		goto out;
+
 	l = strlen(name) - 1;
 	if (name[l] == '*' || isdigit((unsigned char)name[l])) {
 		/* `no mydev0' or `no mydev*' */
 		firsti = ht_lookup(devitab, name);
 		if (firsti == NULL) {
+out:
 			cfgerror("unknown instance %s", name);
 			return;
 		}
@@ -1883,8 +1899,8 @@ concat(const char *name, int c)
 		len = sizeof(buf) - 2;
 	}
 	memmove(buf, name, len);
-	buf[len] = c;
-	buf[len + 1] = 0;
+	buf[len] = (char)c;
+	buf[len + 1] = '\0';
 	return (intern(buf));
 }
 
@@ -1937,17 +1953,56 @@ split(const char *name, size_t nlen, char *base, size_t bsize, int *aunit)
 }
 
 void
+addattr(const char *name)
+{
+	struct attr *a;
+
+	a = refattr(name);
+	selectattr(a);
+}
+
+void
+delattr(const char *name)
+{
+	struct attr *a;
+
+	a = refattr(name);
+	deselectattr(a);
+}
+
+void
 selectattr(struct attr *a)
 {
 	struct attrlist *al;
 	struct attr *dep;
 
+	CFGDBG(5, "selecting attr `%s'", a->a_name);
 	for (al = a->a_deps; al != NULL; al = al->al_next) {
 		dep = al->al_this;
 		selectattr(dep);
 	}
 	(void)ht_insert(selecttab, a->a_name, __UNCONST(a->a_name));
 	CFGDBG(3, "attr selected `%s'", a->a_name);
+}
+
+static int
+deselectattrcb2(const char *name1, const char *name2, void *v, void *arg)
+{
+	const char *name = arg;
+
+	if (strcmp(name, name2) == 0)
+		delattr(name1);
+	return 0;
+}
+
+void
+deselectattr(struct attr *a)
+{
+
+	CFGDBG(5, "deselecting attr `%s'", a->a_name);
+	ht_enumerate2(attrdeptab, deselectattrcb2, __UNCONST(a->a_name));
+	(void)ht_remove(selecttab, a->a_name);
+	CFGDBG(3, "attr deselected `%s'", a->a_name);
 }
 
 static int
@@ -2047,7 +2102,7 @@ fixloc(const char *name, struct attr *attr, struct loclist *got)
 	if (attr->a_loclen == 0)	/* e.g., "at root" */
 		lp = nullvec;
 	else
-		lp = emalloc((attr->a_loclen + 1) * sizeof(const char *));
+		lp = emalloc((size_t)(attr->a_loclen + 1) * sizeof(const char *));
 	for (n = got; n != NULL; n = n->ll_next)
 		n->ll_num = -1;
 	nmissing = 0;

@@ -1,4 +1,4 @@
-/*	$NetBSD: pam_permit.c,v 1.4 2013/12/27 20:10:21 christos Exp $	*/
+/*	$NetBSD: pam_permit.c,v 1.6 2014/10/24 18:27:13 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002-2003 Networks Associates Technology, Inc.

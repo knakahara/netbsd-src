@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1163 2014/10/23 18:46:49 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1169 2014/10/30 08:31:27 wiz Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -40,8 +40,8 @@
 #
 
 Package:	acpica
-Version:	20131218
-Current Vers:	20140627
+Version:	20140926
+Current Vers:	20140926
 Maintainer:	Intel
 Archive Site:	http://www.acpica.org/downloads/
 Home Page:	http://www.acpica.org/
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.5.1
-Current Vers:	6.5.1
+Version:	6.6.0
+Current Vers:	6.6.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -382,8 +382,8 @@ Notes:
 use file2netbsd
 
 Package:	flex
-Version:	2.5.37
-Current Vers:	2.5.37
+Version:	2.5.39
+Current Vers:	2.5.39
 Maintainer:	Will Estes <wlestes@users.sourceforge.net>
 Archive Site:	http://flex.sourceforge.net/
 Home Page:	http://flex.sourceforge.net/
@@ -425,7 +425,7 @@ Before importing a new version of external/gpl3/gcc:
 
 Package:	gdb
 Version:	7.7.1
-Current Vers:	7.7.1
+Current Vers:	7.8.1
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
@@ -933,8 +933,8 @@ Location:	external/bsd/openldap/dist
 Notes:
 
 Package:	OpenPAM
-Version:	20130907 (Nummularia)
-Current Vers:	20130907 (Nummularia)
+Version:	20140912 (Ourouparia)
+Current Vers:	20140912 (Ourouparia)
 Maintainer:	Dag-Erling Smørgrav <des@FreeBSD.org>
 Archive Site:	http://www.openpam.org/
 Home Page:	http://www.openpam.org/
@@ -943,11 +943,10 @@ Responsible:	christos
 License:	BSD (3-clause)
 Location:	external/bsd/openpam/dist
 Notes:
-Next import will need moving lib sources to lib/libpam
 
 Package:	openresolv
-Version:	3.6.0
-Current Vers:	3.6.0
+Version:	3.6.1
+Current Vers:	3.6.1
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/openresolv/
 Home Page:	http://roy.marples.name/projects/openresolv/
@@ -1130,8 +1129,8 @@ directory layout (the easiest way to check is by running ``postfix
 set-permissions'').
 
 Package:	ppp
-Version:	2.4.5
-Current Vers:	2.4.6
+Version:	2.4.7
+Current Vers:	2.4.7
 Maintainer:	Paul Mackerras <paulus@samba.org>
 Archive Site:	ftp://ftp.samba.org/pub/ppp/
 Home Page:
