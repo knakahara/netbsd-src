@@ -79,9 +79,11 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/systm.h>
+#include <sys/cpu.h>
 #include <sys/errno.h>
 #include <sys/device.h>
 #include <sys/intr.h>
+#include <sys/kmem.h>
 #include <sys/malloc.h>
 
 #include <dev/pci/pcivar.h>
@@ -110,11 +112,10 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include <machine/mpacpi.h>
 #endif
 
-#define	MPSAFE_MASK	0x80000000
-
 int
-pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
+pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *pihp)
 {
+	int *ihp = (int *)pihp; /* IRQ interrupts use lower 32bit only */
 	int pin = pa->pa_intrpin;
 	int line = pa->pa_intrline;
 	pci_chipset_tag_t ipc, pc = pa->pa_pc;
@@ -126,7 +127,7 @@ pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_MAP) == 0)
 			continue;
-		return (*ipc->pc_ov->ov_intr_map)(ipc->pc_ctx, pa, ihp);
+		return (*ipc->pc_ov->ov_intr_map)(ipc->pc_ctx, pa, pihp);
 	}
 
 	if (pin == 0) {
@@ -219,11 +220,65 @@ bad:
 	return 1;
 }
 
+int
+pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
+{
+	struct intrsource *isp;
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+	pci_intr_handle_t *handle;
+
+	handle = kmem_zalloc(sizeof(handle), KM_SLEEP);
+	if (handle == NULL) {
+		aprint_normal("cannot allocate pci_intr_handle_t\n");
+		return 1;
+	}
+
+	if (pci_intr_map(pa, handle) != 0) {
+		aprint_normal("cannot set up pci_intr_handle_t\n");
+		return 1;
+	}
+
+	intrstr = pci_intr_string(pa->pa_pc, *handle,
+	    intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	isp = intr_allocate_io_intrsource(intrstr);
+	if (isp == NULL) {
+		aprint_normal("can't allocate io_intersource\n");
+		return 1;
+	}
+	mutex_exit(&cpu_lock);
+
+	*pih = handle;
+	return 0;
+}
+
+void
+pci_intr_release(pci_intr_handle_t *pih)
+{
+	const char *intrstr;
+	char intrstr_buf[INTRID_LEN + 1];
+
+	if (pih == NULL)
+		return;
+
+	/* XXXX ov_intr_disestablish() care? */
+	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	intr_free_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+
+	kmem_free(pih, sizeof(*pih));
+}
+
 const char *
 pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
     size_t len)
 {
 	pci_chipset_tag_t ipc;
+
+	if (INT_VIA_MSI(ih))
+		return pci_msi_string(ih, buf, len);
 
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)
@@ -290,7 +345,7 @@ pci_intr_establish_xname(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	}
 
 	pic = &i8259_pic;
-	pin = irq = (ih & ~MPSAFE_MASK);
+	pin = irq = ((int)ih & ~MPSAFE_MASK);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
 #if NIOAPIC > 0
@@ -335,6 +390,7 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 	intr_disestablish(cookie);
 }
 
+#if 0
 #if NIOAPIC > 0
 /*
  * experimental support for MSI, does support a single vector,
@@ -342,7 +398,6 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
  * (while it doesn't need the ioapic technically, it borrows
  * from its kernel support)
  */
-
 /* dummies, needed by common intr_establish code */
 static void
 msipic_hwmask(struct pic *pic, int pin)
@@ -437,4 +492,5 @@ pci_msi_disestablish(void *ih)
 	intr_disestablish(msih->ih);
 	free(msih, M_DEVBUF);
 }
+#endif
 #endif

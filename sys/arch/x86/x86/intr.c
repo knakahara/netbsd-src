@@ -179,6 +179,8 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <dev/pci/ppbreg.h>
 #endif
 
+#include <x86/pci/msipic.h>
+
 #ifdef DDB
 #include <ddb/db_output.h>
 #endif
@@ -424,6 +426,22 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 {
 	int ih;
 
+	if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX) {
+		uint64_t pih;
+		int dev, vec;
+
+		dev = msi_get_devid(pic);
+		vec = pin;
+		pih = __SHIFTIN((uint64_t)dev, MSI_INT_DEV_MASK) |
+			__SHIFTIN((uint64_t)vec, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
+		if (pic->pic_type == PIC_MSI)
+			MSI_INT_MAKE_MSI(pih);
+		else if (pic->pic_type == PIC_MSIX)
+			MSI_INT_MAKE_MSIX(pih);
+
+		return pci_msi_string(pih, buf, len);
+	}
+
 	ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
 		((pin << APIC_INT_PIN_SHIFT) & APIC_INT_PIN_MASK);
 	if (pic->pic_type == PIC_IOAPIC) {
@@ -524,13 +542,18 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		KASSERT(CPU_IS_PRIMARY(ci));
 		slot = pin;
 	} else {
+		int start = 0;
 		slot = -1;
+
+		/* avoid reserved slots for legacy interrupts. */
+		if (is_msi_pic(pic))
+			start = NUM_LEGACY_IRQS;
 
 		/*
 		 * intr_allocate_slot has checked for an existing mapping.
 		 * Now look for a free slot.
 		 */
-		for (i = 0; i < MAX_INTR_SOURCES ; i++) {
+		for (i = start; i < MAX_INTR_SOURCES ; i++) {
 			if (ci->ci_isources[i] == NULL) {
 				slot = i;
 				break;
@@ -842,8 +865,15 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 	/* allocate intrsource pool, if not yet. */
 	chained = intr_get_io_intrsource(intrstr);
 	if (chained == NULL) {
+		if (is_msi_pic(pic)) {
+			mutex_exit(&cpu_lock);
+			printf("%s: %s has no intrsource\n", __func__, intrstr);
+			return NULL;
+		}
+
 		chained = intr_allocate_io_intrsource(intrstr);
 		if (chained == NULL) {
+			mutex_exit(&cpu_lock);
 			printf("%s: can't allocate io_intersource\n", __func__);
 			return NULL;
 		}
@@ -1086,7 +1116,7 @@ intr_disestablish(struct intrhand *ih)
 		where = xc_unicast(0, intr_disestablish_xcall, ih, NULL, ci);
 		xc_wait(where);
 	}	
-	if (intr_num_handlers(isp) < 1) {
+	if (!is_msi_pic(isp->is_pic) && intr_num_handlers(isp) < 1) {
 		intr_free_io_intrsource_direct(isp);
 	}
 	mutex_exit(&cpu_lock);
@@ -1103,7 +1133,6 @@ intr_string(int ih, char *buf, size_t len)
 
 	if (ih == 0)
 		panic("%s: bogus handle 0x%x", __func__, ih);
-
 
 #if NIOAPIC > 0
 	if (ih & APIC_INT_VIA_APIC) {
