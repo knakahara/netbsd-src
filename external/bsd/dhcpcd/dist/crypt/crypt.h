@@ -1,4 +1,4 @@
-/* $NetBSD: crypt.h,v 1.3 2014/10/17 23:42:24 roy Exp $ */
+/* $NetBSD: crypt.h,v 1.5 2014/11/07 20:51:03 roy Exp $ */
 
 /*
  * dhcpcd - DHCP client daemon

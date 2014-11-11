@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.309 2014/11/05 09:13:16 skrll Exp $	*/
+/*	$NetBSD: pmap.c,v 1.316 2014/11/10 15:46:33 skrll Exp $	*/
 
 /*
  * Copyright 2003 Wasabi Systems, Inc.
@@ -215,7 +215,7 @@
 
 #include <arm/locore.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.309 2014/11/05 09:13:16 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.316 2014/11/10 15:46:33 skrll Exp $");
 
 //#define PMAP_DEBUG
 #ifdef PMAP_DEBUG
@@ -946,13 +946,19 @@ pmap_is_cached(pmap_t pm)
  *       - There is no pmap active in the cache/tlb.
  *       - The specified pmap is 'active' in the cache/tlb.
  */
+
+static inline void
+pmap_pte_sync_current(pmap_t pm, pt_entry_t *ptep)
+{
+	if (PMAP_NEEDS_PTE_SYNC && pmap_is_cached(pm))
+		PTE_SYNC(ptep);
+#if ARM_MMU_V7 > 0
+	__asm("dsb":::"memory");
+#endif
+}
+
 #ifdef PMAP_INCLUDE_PTE_SYNC
-#define	PTE_SYNC_CURRENT(pm, ptep)	\
-do {					\
-	if (PMAP_NEEDS_PTE_SYNC && 	\
-	    pmap_is_cached(pm))		\
-		PTE_SYNC(ptep);		\
-} while (/*CONSTCOND*/0)
+#define	PTE_SYNC_CURRENT(pm, ptep)	pmap_pte_sync_current(pm, ptep)
 #else
 #define	PTE_SYNC_CURRENT(pm, ptep)	/* nothing */
 #endif
@@ -1282,13 +1288,18 @@ pmap_alloc_l1(pmap_t pm)
 {
 #ifdef ARM_MMU_EXTENDED
 #ifdef __HAVE_MM_MD_DIRECT_MAPPED_PHYS
-#ifdef PMAP_NEED_ALLOC_POOLPAGE
-	struct vm_page *pg = arm_pmap_alloc_poolpage(UVM_PGA_ZERO);
-#else
-	struct vm_page *pg = uvm_pagealloc(NULL, 0, NULL, UVM_PGA_ZERO);
-#endif
+	struct vm_page *pg;
 	bool ok __diagused;
-	KASSERT(pg != NULL);
+	for (;;) {
+#ifdef PMAP_NEED_ALLOC_POOLPAGE
+		pg = arm_pmap_alloc_poolpage(UVM_PGA_ZERO);
+#else
+		pg = uvm_pagealloc(NULL, 0, NULL, UVM_PGA_ZERO);
+#endif
+		if (pg != NULL)
+			break;
+		uvm_wait("pmapl1alloc");
+	}
 	pm->pm_l1_pa = VM_PAGE_TO_PHYS(pg);
 	vaddr_t va = pmap_direct_mapped_phys(pm->pm_l1_pa, &ok, 0);
 	KASSERT(ok);
@@ -2910,7 +2921,6 @@ pmap_page_remove(struct vm_page_md *md, paddr_t pa)
 		PTE_SYNC_CURRENT(pm, ptep);
 
 #ifdef ARM_MMU_EXTENDED
-		/* XXXNH pmap_tlb_flush_SE()? */
 		pmap_tlb_invalidate_addr(pm, pv->pv_va);
 #endif
 
@@ -3316,8 +3326,9 @@ pmap_enter(pmap_t pm, vaddr_t va, paddr_t pa, vm_prot_t prot, u_int flags)
 	if (npte != opte) {
 		l2pte_reset(ptep);
 		PTE_SYNC(ptep);
-		pmap_tlb_flush_SE(pm, va, oflags);
-
+		if (l2pte_valid_p(opte)) {
+			pmap_tlb_flush_SE(pm, va, oflags);
+		}
 		l2pte_set(ptep, npte, 0);
 		PTE_SYNC(ptep);
 #ifndef ARM_MMU_EXTENDED
@@ -3489,7 +3500,6 @@ pmap_remove(pmap_t pm, vaddr_t sva, vaddr_t eva)
 				 */
 				l2pte_reset(ptep);
 				PTE_SYNC_CURRENT(pm, ptep);
- 				pmap_tlb_flush_SE(pm, sva, flags);
 				continue;
 			}
 
@@ -4573,6 +4583,7 @@ pmap_fault_fixup(pmap_t pm, vaddr_t va, vm_prot_t ftype, int user)
 	}
 #endif
 
+#ifndef MULTIPROCESSOR
 #if defined(DEBUG) || 1
 	/*
 	 * If 'rv == 0' at this point, it generally indicates that there is a
@@ -4651,6 +4662,13 @@ pmap_fault_fixup(pmap_t pm, vaddr_t va, vm_prot_t ftype, int user)
 		}
 #endif
 	}
+#endif
+#endif
+
+#ifndef ARM_MMU_EXTENDED
+	/* Flush the TLB in the shared L1 case - see comment above */
+	pmap_tlb_flush_SE(pm, va,
+	    (ftype & VM_PROT_EXECUTE) ? PVF_EXEC | PVF_REF : PVF_REF);
 #endif
 
 	rv = 1;

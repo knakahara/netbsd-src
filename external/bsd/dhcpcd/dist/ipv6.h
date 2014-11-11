@@ -1,4 +1,4 @@
-/* $NetBSD: ipv6.h,v 1.4 2014/10/29 01:08:31 roy Exp $ */
+/* $NetBSD: ipv6.h,v 1.6 2014/11/07 20:51:03 roy Exp $ */
 
 /*
  * dhcpcd - DHCP client daemon
