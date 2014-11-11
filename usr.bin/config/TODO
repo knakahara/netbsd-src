@@ -183,3 +183,57 @@ o Shared kernel objects.
   While leaving optimizations as options (CPU specific optimizations, inlined
   bus_space(9) operations, etc.) for users, the official binaries build
   provided by TNF should be as portable as possible.
+
+o Control ELF sections using linker script.
+
+  Now kernel is linked and built directly from object files (*.o).  Each port
+  has an MD linker script, which does everything needed to be done at link
+  time.  As a result, they do from MI alignment restriction (read_mostly,
+  cacheline_aligned) to load address specification for external boot loaders.
+
+  Make this into multiple stages to make linkage more structural.  Especially,
+  reserve the final link for purely MD purpose.  Note that in modular build,
+  *.ko are shared between build of kernel and modular(9) modules (*.kmod).
+
+	Monolithic build:
+		     *.o  ---> netbsd.ko	Generic MI linkage
+		netbsd.ko ---> netbsd.ro	Kernel MI linkage
+		netbsd.ro ---> netbsd		Kernel MD linkage
+
+	Modular build (kernel):
+		     *.o  --->      *.ko	Generic + Per-module MI linkage
+		     *.ko ---> netbsd.ro	Kernel MI linkage
+		netbsd.ro ---> netbsd		Kernel MD linkage
+
+	Modular build (module):
+		     *.o  --->      *.ko	Generic + Per-module MI linkage
+		     *.ko --->      *.ro	Modular MI linkage
+		     *.ro --->      *.kmod	Modular MD linkage
+
+  Genric MI linkage is for processing MI linkage that can be applied generally.
+  Data section alignment (.data.read_mostly and .data.cacheline_aligned) is
+  processed here.
+
+  Per-module MI linkage is for modules that want some ordering.  For example,
+  machdep.ko wants to put entry code at the top of .text and .data.
+
+  Kernel MI linkage is for collecting kernel global section data, that is what
+  link-set is used for now.  Once they are collected and symbols to the ranges
+  are assigned, those sections are merged into the pre-existing sections
+  (.rodata) because link-set sections in "netbsd" will never be interpreted by
+  external loaders.
+
+  Kernel MD linkage is used purely for MD purposes, that is, how kernels are
+  loaded by external loaders.  It might be possible that one kernel relocatable
+  (netbsd.ro) is linked into multiple final kernel image (netbsd) for diferent
+  load addresses.
+
+  Modular MI linkage is to prepare a module to be loadable as modular(9).  This
+  may add some extra sections and/or symbols.
+
+  Modular MD linkage is again for pure MD purposes like kernel MD linkage.
+  Adjustment and/or optimization may be done.
+
+  Kernel and modular MI linkages may change behavior depending on existence
+  of debug information.  In the future .symtab will be copied using linker
+  during this stage.
