@@ -559,7 +559,7 @@ static int	wm_setup_msix(struct wm_softc *, struct pci_attach_args *,
 static int	wm_setup_msi(struct wm_softc *, struct pci_attach_args *,
     pci_intr_handle_t **);
 static int	wm_setup_legacy(struct wm_softc *, struct pci_attach_args *,
-    pci_intr_handle_t *);
+    pci_intr_handle_t **);
 
 /* MAC address related */
 static uint16_t	wm_check_alt_mac_addr(struct wm_softc *);
@@ -1358,7 +1358,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 	prop_dictionary_t dict;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	pci_chipset_tag_t pc = pa->pa_pc;
-	pci_intr_handle_t ih;
 	pci_intr_handle_t *ihs;
 	const char *eetype, *xname;
 	bus_space_tag_t memt;
@@ -1513,7 +1512,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	if (error)
 		error = wm_setup_msi(sc, pa, &ihs);
 	if (error)
-		error = wm_setup_legacy(sc, pa, &ih);
+		error = wm_setup_legacy(sc, pa, &ihs);
 	if (error)
 		return;
 
@@ -2939,24 +2938,29 @@ wm_setup_msi(struct wm_softc *sc, struct pci_attach_args *pa,
 
 static int
 wm_setup_legacy(struct wm_softc *sc, struct pci_attach_args *pa,
-    pci_intr_handle_t *pih)
+    pci_intr_handle_t **pihs)
 {
 	pci_chipset_tag_t pc = pa->pa_pc;
+	pci_intr_handle_t *ihs;
 	const char *intrstr = NULL;
 	char intrbuf[PCI_INTRSTR_LEN];
 	char xnamebuf[32];
+	int error;
 
-	if (pci_intr_map(pa, pih)) {
+
+	error = pci_intr_alloc(pa, pihs);
+	if (error) {
 		aprint_error_dev(sc->sc_dev, "unable to map interrupt\n");
-		return 1;
+		return error;
 	}
-#ifdef WM_MPSAFE
-	pci_intr_setattr(pc, pih, PCI_INTR_MPSAFE, true);
-#endif
 
-	intrstr = pci_intr_string(pc, *pih, intrbuf, sizeof(intrbuf));
+	ihs = *pihs;
+#ifdef WM_MPSAFE
+	pci_intr_setattr(pc, &ihs[0], PCI_INTR_MPSAFE, true);
+#endif
+	intrstr = pci_intr_string(pc, ihs[0], intrbuf, sizeof(intrbuf));
 	snprintf(xnamebuf, 32, "%s: legacy", device_xname(sc->sc_dev));
-	sc->sc_ih = pci_intr_establish_xname(pc, *pih, IPL_NET, wm_intr,
+	sc->sc_ih = pci_intr_establish_xname(pc, ihs[0], IPL_NET, wm_intr,
 	    sc, xnamebuf);
 	if (sc->sc_ih == NULL) {
 		aprint_error_dev(sc->sc_dev, "unable to establish interrupt");
