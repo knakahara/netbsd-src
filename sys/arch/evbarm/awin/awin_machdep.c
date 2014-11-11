@@ -1,4 +1,4 @@
-/*	$NetBSD: awin_machdep.c,v 1.24 2014/11/06 23:19:38 jmcneill Exp $ */
+/*	$NetBSD: awin_machdep.c,v 1.27 2014/11/10 20:36:12 jmcneill Exp $ */
 
 /*
  * Machine dependent functions for kernel setup for TI OSK5912 board.
@@ -125,7 +125,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.24 2014/11/06 23:19:38 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.27 2014/11/10 20:36:12 jmcneill Exp $");
 
 #include "opt_machdep.h"
 #include "opt_ddb.h"
@@ -138,6 +138,7 @@ __KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.24 2014/11/06 23:19:38 jmcneill E
 
 #include "com.h"
 #include "ukbd.h"
+#include "genfb.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -724,14 +725,18 @@ awin_device_register(device_t self, void *aux)
 		char *mac_addr;
 		snprintf(argname, sizeof(argname), "%s.mac-address",
 		    device_xname(self));
+
 		if (get_bootconf_option(boot_args, argname,
-		    BOOTOPT_TYPE_STRING, &mac_addr) &&
-		    ether_aton_r(enaddr, sizeof(enaddr), mac_addr) == 0) {
-			prop_data_t pd;
-			pd = prop_data_create_data(enaddr, sizeof(enaddr));
-			KASSERT(pd != NULL);
-			prop_dictionary_set(dict, "mac-address", pd);
-			prop_object_release(pd);
+		    BOOTOPT_TYPE_STRING, &mac_addr)) {
+			char mac[strlen("XX:XX:XX:XX:XX:XX") + 1];
+			strlcpy(mac, mac_addr, sizeof(mac));
+			if (!ether_aton_r(enaddr, sizeof(enaddr), mac)) {
+				prop_data_t pd;
+				pd = prop_data_create_data(enaddr, sizeof(enaddr));
+				KASSERT(pd != NULL);
+				prop_dictionary_set(dict, "mac-address", pd);
+				prop_object_release(pd);
+			}
 		}
 
 #if AWIN_board == AWIN_cubieboard
@@ -743,6 +748,7 @@ awin_device_register(device_t self, void *aux)
 #if AWIN_BOARD == AWIN_bpi
 		prop_dictionary_set_cstring(dict, "phy-power", "gmacpwren");
 		prop_dictionary_set_cstring(dict, "phy-type", "rgmii-bpi");
+		prop_dictionary_set_uint8(dict, "pinset-func", 2);
 #endif
 		return;
 	}
@@ -754,6 +760,24 @@ awin_device_register(device_t self, void *aux)
 #endif
 		return;
 	}
+
+#if NGENFB > 0
+	if (device_is_a(self, "genfb")) {
+#ifdef DDB
+		db_trap_callback = awin_fb_ddb_trap_callback;
+#endif
+		char *ptr;
+		if (get_bootconf_option(boot_args, "console",
+		    BOOTOPT_TYPE_STRING, &ptr) && strncmp(ptr, "fb", 2) == 0) {
+			prop_dictionary_set_bool(dict, "is_console", true);
+#if NUKBD > 0
+			ukbd_cnattach();
+#endif
+		} else {
+			prop_dictionary_set_bool(dict, "is_console", false);
+		}
+	}
+#endif
 }
 
 #ifdef AWIN_SYSCONFIG
