@@ -168,6 +168,20 @@ typedef struct wiseman_txdesc {
 /* Maximum payload per Tx descriptor */
 #define	WTX_MAX_LEN	4096
 
+/* MSI-X interrupts vector index */
+#define WM_MAX_RX_QUEUES	8
+#define WM_MAX_TX_QUEUES	8
+#define WM_MAX_INTRS		(WM_MAX_RX_QUEUES + WM_MAX_TX_QUEUES + 1)
+
+#define WM_NINTR		3
+#define WM_RX_INTR_INDEX	0
+#define WM_TX_INTR_INDEX	1
+#define WM_LINK_INTR_INDEX	2
+
+#define WM_IT_LEGACY		0x1
+#define WM_IT_MSI		0x2
+#define WM_IT_MSIX		0x3
+
 /*
  * The Livengood TCP/IP context descriptor.
  */
