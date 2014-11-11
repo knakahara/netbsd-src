@@ -4172,13 +4172,12 @@ wm_init_locked(struct ifnet *ifp)
 		CSR_WRITE(sc, WMREG_EIAC, mask);
 		CSR_WRITE(sc, WMREG_EIAM, mask);
 		CSR_WRITE(sc, WMREG_EIMS, mask);
-		if (sc->sc_type != WM_T_82574) {
-			CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
-		}
-		else {
+		if (sc->sc_type == WM_T_82574) {
 			sc->sc_icr |= ICR_RXQ0 | ICR_TXQ0;
 			CSR_WRITE(sc, WMREG_EIAC_82574, ICR_RXQ0 | ICR_TXQ0);
 			CSR_WRITE(sc, WMREG_IMS, sc->sc_icr | ICR_OTHER | ICR_LSC);
+		} else {
+			CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
 		}
 	} else {
 		CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
