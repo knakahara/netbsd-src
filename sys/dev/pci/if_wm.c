@@ -2899,35 +2899,42 @@ wm_setup_msi(struct wm_softc *sc, struct pci_attach_args *pa,
     pci_intr_handle_t **pihs)
 {
 	pci_chipset_tag_t pc = pa->pa_pc;
+	pci_intr_handle_t *ihs;
 	const char *intrstr = NULL;
 	char intrbuf[PCI_INTRSTR_LEN];
 	char xnamebuf[32];
-	int wm_msi_num = 1; /* if use multi MSI, sc->sc_ih must be array */
+	int wm_msi_num = 1; /* use only one MSI vector */
+	int error;
 
-	if (pci_msi_count(pa) >= wm_msi_num &&
-	    !pci_msi_alloc(pa, pihs, &wm_msi_num)) {
-		pci_intr_handle_t *ihs = *pihs;
-
-#ifdef WM_MPSAFE
-		pci_intr_setattr(pc, &ihs[0], PCI_INTR_MPSAFE, true);
-#endif
-		intrstr = pci_intr_string(pc, ihs[0], intrbuf, sizeof(intrbuf));
-		snprintf(xnamebuf, 32, "%s: msi", device_xname(sc->sc_dev));
-		sc->sc_ih = pci_msi_establish_xname(pc, ihs[0], IPL_NET,
-		    wm_intr, sc, xnamebuf);
-		if (sc->sc_ih == NULL) {
-			aprint_error_dev(sc->sc_dev, "unable to establish MSI");
-			if (intrstr != NULL)
-				aprint_error(" at %s", intrstr);
-			aprint_error("\n");
-			return 1;
-		}
-		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
-		sc->sc_msix_count = 0;
-		return 0;
+	if (pci_msi_count(pa) < wm_msi_num) {
+		aprint_error_dev(sc->sc_dev,
+		    "device does not have enough MSI vectors.\n");
+		return ENOMEM;
 	}
 
-	return 1;
+	error = pci_msi_alloc_exact(pa, pihs, wm_msi_num);
+	if (error)
+		return error;
+
+	ihs = *pihs;
+#ifdef WM_MPSAFE
+	pci_intr_setattr(pc, &ihs[0], PCI_INTR_MPSAFE, true);
+#endif
+	intrstr = pci_intr_string(pc, ihs[0], intrbuf, sizeof(intrbuf));
+	snprintf(xnamebuf, 32, "%s: msi", device_xname(sc->sc_dev));
+	sc->sc_ih = pci_msi_establish_xname(pc, ihs[0], IPL_NET,
+	    wm_intr, sc, xnamebuf);
+	if (sc->sc_ih == NULL) {
+		aprint_error_dev(sc->sc_dev, "unable to establish MSI");
+		if (intrstr != NULL)
+			aprint_error(" at %s", intrstr);
+		aprint_error("\n");
+		return EBUSY;
+	}
+
+	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
+	sc->sc_msix_count = 0;
+	return 0;
 }
 
 static int
