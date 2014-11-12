@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.4 2014/07/24 21:18:40 riastradh Exp $
+# $NetBSD: Makefile,v 1.6 2014/11/12 02:15:16 christos Exp $
 
 .include "../Makefile.inc"
 .include "../drmkms/Makefile.inc"
@@ -11,6 +11,7 @@ CPPFLAGS+=	-I${S}/external/bsd/drm2/i915drm
 
 KMOD=	i915drmkms
 IOCONF=	i915drmkms.ioconf
+MKLDSCRIPT=yes
 
 SRCS+=	dvo_ch7017.c
 SRCS+=	dvo_ch7xxx.c
@@ -38,7 +39,7 @@ SRCS+=	i915_params.c
 SRCS+=	i915_suspend.c
 SRCS+=	i915_sysfs.c		# XXX No sysfs in NetBSD.
 SRCS+=	i915_ums.c
-#SRCS+=	intel_acpi.c		# XXX ACPI
+SRCS+=	intel_acpi.c
 SRCS+=	intel_bios.c
 SRCS+=	intel_crt.c
 SRCS+=	intel_ddi.c
@@ -53,7 +54,7 @@ SRCS+=	intel_hdmi.c
 SRCS+=	intel_i2c.c
 SRCS+=	intel_lvds.c
 SRCS+=	intel_modes.c
-#SRCS+=	intel_opregion.c	# XXX ACPI
+SRCS+=	intel_opregion.c
 SRCS+=	intel_overlay.c
 SRCS+=	intel_panel.c
 SRCS+=	intel_pm.c
@@ -75,5 +76,8 @@ COPTS.intel_panel.c+=	-Wno-shadow
 COPTS.intel_pm.c+=	-Wno-shadow
 
 CPPFLAGS+=		-DCONFIG_DRM_I915_FBDEV
+
+CPPFLAGS+=		-DNACPICA=1
+CPPFLAGS+=		-DNVGA=1
 
 .include <bsd.kmodule.mk>

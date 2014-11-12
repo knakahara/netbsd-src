@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2013 The NetBSD Foundation, Inc.
+ * Copyright (c) 2014 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -13,9 +13,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of The NetBSD Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
@@ -29,31 +26,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+struct sysctllog;
 
-#define RT_AFLAG	__BIT(0)	/* show address field */
-#define RT_TFLAG	__BIT(1)	/* show tag field */
-#define RT_VFLAG	__BIT(2)	/* show verbose statistics */
-#define RT_NFLAG	__BIT(3)	/* numeric output */
-#define RT_LFLAG	__BIT(4)	/* don't show LLINFO entries */
+struct drm_sysctl_def {
+	struct sysctllog *log;
+	const void *bp, *ep, *bd, *ed;
+};
 
-void p_rttables(int, int, int, int);
-void p_rthdr(int, int);
-void p_family(int);
-void p_sockaddr(const struct sockaddr *, const struct sockaddr *, int, int, int);
-void p_flags(int);
-struct rt_metrics;
-void p_rtrmx(const struct rt_metrics *);
-void p_addr(const struct sockaddr *sa, const struct sockaddr *mask, int, int);
-void p_gwaddr(const struct sockaddr *sa, int, int);
+void drm_sysctl_init(struct drm_sysctl_def *);
+void drm_sysctl_fini(struct drm_sysctl_def *);
 
-char *routename(const struct sockaddr *sa, int);
-char *routename4(in_addr_t, int);
-#ifdef INET6
-char *routename6(const struct sockaddr_in6 *, int);
-char *netname6(const struct sockaddr_in6 *, const struct sockaddr_in6 *, int);
-#endif
-char *netname(const struct sockaddr *, const struct sockaddr *, int);
-char *netname4(in_addr_t, in_addr_t, int);
+#define DRM_SYSCTL_INIT() {				\
+	NULL,						\
+	__link_set_start(linux_module_param_info),	\
+	__link_set_end(linux_module_param_info),	\
+	__link_set_start(linux_module_param_desc),	\
+	__link_set_end(linux_module_param_desc),	\
+};
 
-char *mpls_ntoa(const struct sockaddr *);
-char *any_ntoa(const struct sockaddr *);
+__link_set_decl(linux_module_param_info, struct linux_module_param_info);
+__link_set_decl(linux_module_param_desc, struct linux_module_param_desc);
