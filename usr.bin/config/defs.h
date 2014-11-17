@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.62 2014/11/06 11:40:32 uebayasi Exp $	*/
+/*	$NetBSD: defs.h,v 1.64 2014/11/17 00:53:15 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -159,6 +159,7 @@ struct module {
 #endif
 	int			m_expanding;
 	TAILQ_HEAD(, files)	m_files;
+	int			m_weight;
 };
 
 /*
@@ -183,6 +184,7 @@ struct attr {
 #define	a_deps		a_m.m_deps
 #define	a_expanding	a_m.m_expanding
 #define	a_files		a_m.m_files
+#define	a_weight	a_m.m_weight
 
 	/* "interface attribute" */
 	int	a_iattr;		/* true => allows children */
@@ -338,6 +340,8 @@ struct filetype
 	char	fit_lastc;	/* last char from path */
 	const char *fit_path;	/* full file path */
 	const char *fit_prefix;	/* any file prefix */
+	size_t fit_len;		/* path string length */
+	int fit_suffix;		/* single char suffix */
 	struct attr *fit_attr;	/* owner attr */
 	TAILQ_ENTRY(files) fit_anext;	/* next file in attr */
 };
@@ -369,6 +373,8 @@ struct files {
 #define fi_lastc   fi_fit.fit_lastc
 #define fi_path    fi_fit.fit_path
 #define fi_prefix  fi_fit.fit_prefix
+#define fi_suffix  fi_fit.fit_suffix
+#define fi_len     fi_fit.fit_len
 #define fi_attr    fi_fit.fit_attr
 #define fi_anext   fi_fit.fit_anext
 

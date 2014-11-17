@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.kmodule.mk,v 1.46 2014/11/06 12:05:44 uebayasi Exp $
+#	$NetBSD: bsd.kmodule.mk,v 1.52 2014/11/13 02:31:24 christos Exp $
 
 # We are not building this with PIE
 MKPIE=no
@@ -11,6 +11,7 @@ MKPIE=no
 realinstall:	kmodinstall
 
 KERN=		$S/kern
+MKLDSCRIPT?=	no
 
 CFLAGS+=	-ffreestanding ${COPTS}
 CPPFLAGS+=	-nostdinc -I. -I${.CURDIR} -isystem $S -isystem $S/arch
@@ -72,9 +73,15 @@ DPSRCS+=	${_YKMSRCS}
 CLEANFILES+=	${_YKMSRCS}
 
 .if exists($S/../sys/modules/xldscripts/kmodule)
-KMODSCRIPT=	$S/../sys/modules/xldscripts/kmodule
+KMODSCRIPTSRC=	$S/../sys/modules/xldscripts/kmodule
 .else
-KMODSCRIPT=	${DESTDIR}/usr/libdata/ldscripts/kmodule
+KMODSCRIPTSRC=	${DESTDIR}/usr/libdata/ldscripts/kmodule
+.endif
+.if ${MKLDSCRIPT} == "yes"
+KMODSCRIPT=	kldscript
+MKLDSCRIPTSH=	
+.else
+KMODSCRIPT=	${KMODSCRIPTSRC}
 .endif
 
 PROG?=		${KMOD}.kmod
@@ -100,8 +107,14 @@ NODPSRCS+=	${f}
 ${XOBJS}:	${DPSRCS}
 .endif
 
-${PROG}: ${XOBJS} ${XSRCS} ${DPSRCS} ${DPADD}
-	${_MKTARGET_LINK}
+.if ${MKLDSCRIPT} == "yes"
+${KMODSCRIPT}: ${KMODSCRIPTSRC} ${XOBJS} $S/conf/mkldscript.sh
+	@rm -f ${.TARGET}
+	@OBJDUMP=${OBJDUMP} ${HOST_SH} $S/conf/mkldscript.sh \
+	    -t ${KMODSCRIPTSRC} ${XOBJS} > ${.TARGET}
+.endif
+
+${PROG}: ${XOBJS} ${XSRCS} ${DPSRCS} ${DPADD} ${KMODSCRIPT}
 	${CC} ${LDFLAGS} -nostdlib -MD -combine -r -Wl,-T,${KMODSCRIPT},-d \
 		-Wl,-Map=${.TARGET}.map \
 		-o ${.TARGET} ${CFLAGS} ${CPPFLAGS} ${XOBJS} \
@@ -112,6 +125,13 @@ ${PROG}: ${XOBJS} ${XSRCS} ${DPSRCS} ${DPADD}
 OBJS+=		${SRCS:N*.h:N*.sh:R:S/$/.o/g}
 
 ${OBJS} ${LOBJS}: ${DPSRCS}
+
+.if ${MKLDSCRIPT} == "yes"
+${KMODSCRIPT}: ${KMODSCRIPTSRC} ${OBJS} $S/conf/mkldscript.sh
+	@rm -f ${.TARGET}
+	@OBJDUMP=${OBJDUMP} ${HOST_SH} $S/conf/mkldscript.sh \
+	    -t ${KMODSCRIPTSRC} ${OBJS} > ${.TARGET}
+.endif
 
 .if ${MACHINE_CPU} == "arm"
 # The solution to limited branch space involves generating trampolines for
@@ -149,8 +169,7 @@ ${PROG}: ${KMOD}_tmp.o ${KMOD}_tramp.o
 	    -o ${.TARGET} ${KMOD}_tmp.o ${KMOD}_tramp.o
 .endif
 .else
-${PROG}: ${OBJS} ${DPADD}
-	${_MKTARGET_LINK}
+${PROG}: ${OBJS} ${DPADD} ${KMODSCRIPT}
 	${CC} ${LDFLAGS} -nostdlib -r -Wl,-T,${KMODSCRIPT},-d \
 		-Wl,-Map=${.TARGET}.map \
 		-o ${.TARGET} ${OBJS}
@@ -200,6 +219,9 @@ kmodinstall::	${_PROG}
 ##### Clean rules
 CLEANFILES+= a.out [Ee]rrs mklog core *.core ${PROG} ${OBJS} ${LOBJS}
 CLEANFILES+= ${PROG}.map
+.if ${MKLDSCRIPT} == "yes"
+CLEANFILES+= kldscript
+.endif
 
 ##### Custom rules
 lint: ${LOBJS}
