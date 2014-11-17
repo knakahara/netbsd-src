@@ -816,7 +816,7 @@ struct awin_mmc_idma_descriptor {
 #define AWIN_IR_TXSTA_TPE		__BIT(1)
 #define AWIN_IR_TXSTA_TU		__BIT(0)
 
-#define AWIN_IR_RXINT_RAL		__BITS(11,8)
+#define AWIN_IR_RXINT_RAL		__BITS(13,8)
 #define AWIN_IR_RXINT_DRQ_EN		__BIT(5)
 #define AWIN_IR_RXINT_RAI_EN		__BIT(4)
 #define AWIN_IR_RXINT_CRCI_EN		__BIT(3)
@@ -833,6 +833,8 @@ struct awin_mmc_idma_descriptor {
 #define AWIN_IR_RXSTA_ROI		__BIT(0)
 
 #define AWIN_IR_CIR_SCS2		__BIT(24)
+#define AWIN_IR_CIR_ATHC		__BIT(23)
+#define AWIN_IR_CIR_ATHR		__BITS(22,16)
 #define AWIN_IR_CIR_ITHR		__BITS(15,8)
 #define AWIN_IR_CIR_NTHR		__BITS(7,2)
 #define AWIN_IR_CIR_SCS			__BITS(1,0)
@@ -905,7 +907,7 @@ struct awin_mmc_idma_descriptor {
 #define AWIN_SPI0_CLK_REG		0x00A0
 #define AWIN_SPI1_CLK_REG		0x00A4
 #define AWIN_SPI2_CLK_REG		0x00A8
-#define AWIN_IR0_CLK_REG		0x00B9
+#define AWIN_IR0_CLK_REG		0x00B0
 #define AWIN_IR1_CLK_REG		0x00B4
 #define AWIN_IIS_CLK_REG		0x00B8
 #define AWIN_AC97_CLK_REG		0x00BC
@@ -1072,6 +1074,8 @@ struct awin_mmc_idma_descriptor {
 #define AWIN_CLK_SRC_SEL_DE_PLL3	0
 #define AWIN_CLK_SRC_SEL_DE_PLL7	1
 #define AWIN_CLK_SRC_SEL_DE_PLL5	2
+#define AWIN_CLK_SRC_SEL_CIR_LOSC	0
+#define AWIN_CLK_SRC_SEL_CIR_HOSC	1
 #define AWIN_CLK_DIV_RATIO_N		__BITS(17,16)
 #define AWIN_CLK_DIV_RATIO_M		__BITS(3,0)
 
@@ -1316,8 +1320,10 @@ struct awin_mmc_idma_descriptor {
 #define AWIN_PIO_PB_STANBYWFI_FUNC	6
 
 #define AWIN_PIO_PC_PINS		25
-#define AWIN_PIO_PC_NAND_PINS		0x017fffff /* PC pins 24,22-0 */
+#define AWIN_PIO_PC_NAND_PINS		0x0107ffff /* PC pins 24,18-0 */
 #define AWIN_PIO_PC_NAND_FUNC		2
+#define AWIN_PIO_PC_NAND_PINS2		0x00800000 /* PC pin 23 */
+#define AWIN_PIO_PC_NAND_FUNC2		3
 #define AWIN_PIO_PC_SPI0_PINS		0x00800007 /* PC pins 23-23,3-0 */
 #define AWIN_PIO_PC_SPI0_FUNC		3
 #define AWIN_PIO_PC_SPI2_PINS		0x00f80000 /* PC pins 23-19 */
@@ -1747,11 +1753,16 @@ struct awin_mmc_idma_descriptor {
 #define AWIN_TCON_GINT1_TCON1_LINENO	__BITS(11,0)
 
 #define AWIN_TCON_CTL_EN		__BIT(31)
+#define AWIN_TCON_CTL_INTERLACE_EN	__BIT(20)
 #define AWIN_TCON_CTL_START_DELAY	__BITS(8,4)
 #define AWIN_TCON_CTL_SRC_SEL		__BITS(1,0)
 #define AWIN_TCON_CTL_SRC_SEL_DE0	0
 #define AWIN_TCON_CTL_SRC_SEL_DE1	1
 #define AWIN_TCON_CTL_SRC_SEL_BLUEDATA	2
+
+#define AWIN_TCON_IO_POL_IO2_INV	__BIT(26)
+#define AWIN_TCON_IO_POL_PVSYNC		__BIT(25)
+#define AWIN_TCON_IO_POL_PHSYNC		__BIT(24)
 
 #define AWIN_TCON_IO_TRI_IO3		__BIT(27)
 #define AWIN_TCON_IO_TRI_IO2		__BIT(26)

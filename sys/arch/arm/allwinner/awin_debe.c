@@ -1,4 +1,4 @@
-/* $NetBSD: awin_debe.c,v 1.4 2014/11/11 19:22:32 jmcneill Exp $ */
+/* $NetBSD: awin_debe.c,v 1.8 2014/11/14 23:45:02 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2014 Jared D. McNeill <jmcneill@invisible.ca>
@@ -34,7 +34,7 @@
 #endif
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: awin_debe.c,v 1.4 2014/11/11 19:22:32 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: awin_debe.c,v 1.8 2014/11/14 23:45:02 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/bus.h>
@@ -49,6 +49,7 @@ __KERNEL_RCSID(0, "$NetBSD: awin_debe.c,v 1.4 2014/11/11 19:22:32 jmcneill Exp $
 #include <arm/allwinner/awin_var.h>
 
 #include <dev/videomode/videomode.h>
+#include <dev/wscons/wsconsio.h>
 
 struct awin_debe_softc {
 	device_t sc_dev;
@@ -63,6 +64,8 @@ struct awin_debe_softc {
 	bus_size_t sc_dmasize;
 	bus_dmamap_t sc_dmamap;
 	void *sc_dmap;
+
+	uint16_t sc_margin;
 };
 
 #define DEBE_READ(sc, reg) \
@@ -98,6 +101,7 @@ awin_debe_attach(device_t parent, device_t self, void *aux)
 	struct awin_debe_softc *sc = device_private(self);
 	struct awinio_attach_args * const aio = aux;
 	const struct awin_locators * const loc = &aio->aio_loc;
+	prop_dictionary_t cfg = device_properties(self);
 	int error;
 
 	sc->sc_dev = self;
@@ -111,6 +115,8 @@ awin_debe_attach(device_t parent, device_t self, void *aux)
 
 	aprint_naive("\n");
 	aprint_normal(": Display Engine Backend (BE%d)\n", loc->loc_port);
+
+	prop_dictionary_get_uint16(cfg, "margin", &sc->sc_margin);
 
 	if (awin_chip_id() == AWIN_CHIP_ID_A31) {
 		awin_reg_set_clear(aio->aio_core_bst, aio->aio_ccm_bsh,
@@ -202,6 +208,8 @@ awin_debe_alloc_videomem(struct awin_debe_softc *sc)
 	if (error)
 		goto destroy;
 
+	memset(sc->sc_dmap, 0, sc->sc_dmasize);
+
 	return 0;
 
 destroy:
@@ -220,11 +228,19 @@ free:
 static void
 awin_debe_setup_fbdev(struct awin_debe_softc *sc, const struct videomode *mode)
 {
+	if (mode == NULL)
+		return;
+
+	const u_int interlace_p = !!(mode->flags & VID_INTERLACE);
+	const u_int fb_width = mode->hdisplay - (sc->sc_margin * 2);
+	const u_int fb_height = (mode->vdisplay << interlace_p) -
+				(sc->sc_margin * 2);
+
 	if (mode && sc->sc_fbdev == NULL) {
 		struct awinfb_attach_args afb = {
 			.afb_fb = sc->sc_dmap,
-			.afb_width = mode->hdisplay,
-			.afb_height = mode->vdisplay,
+			.afb_width = fb_width,
+			.afb_height = fb_height,
 			.afb_dmat = sc->sc_dmat,
 			.afb_dmasegs = sc->sc_dmasegs,
 			.afb_ndmasegs = 1
@@ -234,7 +250,7 @@ awin_debe_setup_fbdev(struct awin_debe_softc *sc, const struct videomode *mode)
 	}
 #if NGENFB > 0
 	else if (sc->sc_fbdev != NULL) {
-		awin_fb_set_videomode(sc->sc_fbdev, mode);
+		awin_fb_set_videomode(sc->sc_fbdev, fb_width, fb_height);
 	}
 #endif
 }
@@ -283,28 +299,40 @@ awin_debe_set_videomode(const struct videomode *mode)
 	sc = device_private(dev);
 
 	if (mode) {
-		uint32_t vmem = mode->vdisplay * mode->hdisplay * 4;
+		const u_int interlace_p = !!(mode->flags & VID_INTERLACE);
+		const u_int width = mode->hdisplay;
+		const u_int height = (mode->vdisplay << interlace_p);
+		const u_int fb_width = width - (sc->sc_margin * 2);
+		const u_int fb_height = height - (sc->sc_margin * 2);
+		uint32_t vmem = width * height * 4;
 
 		if (vmem > sc->sc_dmasize) {
 			device_printf(sc->sc_dev,
 			    "not enough memory for %ux%u fb (req %u have %u)\n",
-			    mode->hdisplay, mode->vdisplay,
-			    vmem, (unsigned int)sc->sc_dmasize);
+			    width, height, vmem, (unsigned int)sc->sc_dmasize);
 			return;
 		}
+
+		paddr_t pa = sc->sc_dmamap->dm_segs[0].ds_addr;
+		/*
+		 * On 2GB systems, we need to subtract AWIN_SDRAM_PBASE from
+		 * the phys addr.
+		 */
+		if (pa >= AWIN_SDRAM_PBASE)
+			pa -= AWIN_SDRAM_PBASE;
 
 		/* notify fb */
 		awin_debe_setup_fbdev(sc, mode);
 
 		DEBE_WRITE(sc, AWIN_DEBE_DISSIZE_REG,
-		    ((mode->vdisplay - 1) << 16) | (mode->hdisplay - 1));
+		    ((height - 1) << 16) | (width - 1));
 		DEBE_WRITE(sc, AWIN_DEBE_LAYSIZE_REG,
-		    ((mode->vdisplay - 1) << 16) | (mode->hdisplay - 1));
-		DEBE_WRITE(sc, AWIN_DEBE_LAYLINEWIDTH_REG, mode->hdisplay << 5);
-		DEBE_WRITE(sc, AWIN_DEBE_LAYFB_L32ADD_REG,
-		    sc->sc_dmamap->dm_segs[0].ds_addr << 3);
-		DEBE_WRITE(sc, AWIN_DEBE_LAYFB_H4ADD_REG,
-		    sc->sc_dmamap->dm_segs[0].ds_addr >> 29);
+		    ((fb_height - 1) << 16) | (fb_width - 1));
+		DEBE_WRITE(sc, AWIN_DEBE_LAYCOOR_REG,
+		    (sc->sc_margin << 16) | sc->sc_margin);
+		DEBE_WRITE(sc, AWIN_DEBE_LAYLINEWIDTH_REG, (fb_width << 5));
+		DEBE_WRITE(sc, AWIN_DEBE_LAYFB_L32ADD_REG, pa << 3);
+		DEBE_WRITE(sc, AWIN_DEBE_LAYFB_H4ADD_REG, pa >> 29);
 
 		val = DEBE_READ(sc, AWIN_DEBE_ATTCTL1_REG);
 		val &= ~AWIN_DEBE_ATTCTL1_LAY_FBFMT;
@@ -316,6 +344,11 @@ awin_debe_set_videomode(const struct videomode *mode)
 
 		val = DEBE_READ(sc, AWIN_DEBE_MODCTL_REG);
 		val |= AWIN_DEBE_MODCTL_LAY0_EN;
+		if (interlace_p) {
+			val |= AWIN_DEBE_MODCTL_ITLMOD_EN;
+		} else {
+			val &= ~AWIN_DEBE_MODCTL_ITLMOD_EN;
+		}
 		DEBE_WRITE(sc, AWIN_DEBE_MODCTL_REG, val);
 	} else {
 		/* disable */
@@ -328,3 +361,30 @@ awin_debe_set_videomode(const struct videomode *mode)
 		awin_debe_setup_fbdev(sc, mode);
 	}
 }
+
+int
+awin_debe_ioctl(device_t self, u_long cmd, void *data)
+{
+	struct awin_debe_softc *sc = device_private(self);
+	uint32_t val;
+	int enable;
+
+	switch (cmd) {
+	case WSDISPLAYIO_SVIDEO:
+		enable = *(int *)data;
+		val = DEBE_READ(sc, AWIN_DEBE_MODCTL_REG);
+		if (enable)
+			val |= AWIN_DEBE_MODCTL_LAY0_EN;
+		else
+			val &= ~AWIN_DEBE_MODCTL_LAY0_EN;
+		DEBE_WRITE(sc, AWIN_DEBE_MODCTL_REG, val);
+		return 0;
+	case WSDISPLAYIO_GVIDEO:
+		val = DEBE_READ(sc, AWIN_DEBE_MODCTL_REG);
+		*(int *)data = !!(val & AWIN_DEBE_MODCTL_LAY0_EN);
+		return 0;
+	}
+
+	return EPASSTHROUGH;
+}
+
