@@ -1411,13 +1411,13 @@ wm_setup_tx_buffer(struct wm_softc *sc)
 			aprint_error_dev(sc->sc_dev,
 			    "unable to create Tx DMA map %d, error = %d\n",
 			    i, error);
-			goto fail_4;
+			goto fail;
 		}
 	}
 
 	return 0;
 
- fail_4:
+ fail:
 	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
 		if (sc->sc_txsoft[i].txs_dmamap != NULL)
 			bus_dmamap_destroy(sc->sc_dmat,
@@ -1451,14 +1451,14 @@ wm_setup_rx_buffer(struct wm_softc *sc)
 			aprint_error_dev(sc->sc_dev,
 			    "unable to create Rx DMA map %d error = %d\n",
 			    i, error);
-			goto fail_5;
+			goto fail;
 		}
 		sc->sc_rxsoft[i].rxs_mbuf = NULL;
 	}
 
 	return 0;
 
- fail_5:
+ fail:
 	for (i = 0; i < WM_NRXDESC; i++) {
 		if (sc->sc_rxsoft[i].rxs_dmamap != NULL)
 			bus_dmamap_destroy(sc->sc_dmat,
@@ -1805,15 +1805,15 @@ wm_attach(device_t parent, device_t self, void *aux)
 
 	error = wm_setup_descs(sc);
 	if (error)
-		goto fail_2;
+		goto fail_0;
 
 	error = wm_setup_tx_buffer(sc);
 	if (error)
-		goto fail_3;
+		goto fail_1;
 
 	error = wm_setup_rx_buffer(sc);
 	if (error)
-		goto fail_4;
+		goto fail_2;
 
 	/* clear interesting stat counters */
 	CSR_READ(sc, WMREG_COLC);
@@ -1922,7 +1922,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		    &sc->sc_flasht, &sc->sc_flashh, NULL, NULL)) {
 			aprint_error_dev(sc->sc_dev,
 			    "can't map FLASH registers\n");
-			goto fail_5;
+			goto fail_3;
 		}
 		reg = ICH8_FLASH_READ32(sc, ICH_FLASH_GFPREG);
 		sc->sc_ich8_flash_base = (reg & ICH_GFPREG_BASE_MASK) *
@@ -2045,7 +2045,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		if (wm_read_mac_addr(sc, enaddr) != 0) {
 			aprint_error_dev(sc->sc_dev,
 			    "unable to read Ethernet address\n");
-			goto fail_5;
+			goto fail_3;
 		}
 	}
 
@@ -2063,7 +2063,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	} else {
 		if (wm_nvm_read(sc, NVM_OFF_CFG1, 1, &cfg1)) {
 			aprint_error_dev(sc->sc_dev, "unable to read CFG1\n");
-			goto fail_5;
+			goto fail_3;
 		}
 	}
 
@@ -2074,7 +2074,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	} else {
 		if (wm_nvm_read(sc, NVM_OFF_CFG2, 1, &cfg2)) {
 			aprint_error_dev(sc->sc_dev, "unable to read CFG2\n");
-			goto fail_5;
+			goto fail_3;
 		}
 	}
 
@@ -2143,7 +2143,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 			if (wm_nvm_read(sc, NVM_OFF_SWDPIN, 1, &swdpin)) {
 				aprint_error_dev(sc->sc_dev,
 				    "unable to read SWDPIN\n");
-				goto fail_5;
+				goto fail_3;
 			}
 		}
 	}
@@ -2506,13 +2506,13 @@ wm_attach(device_t parent, device_t self, void *aux)
 	 * Free any resources we've allocated during the failed attach
 	 * attempt.  Do this in reverse order and fall through.
 	 */
- fail_5:
-	wm_teardown_rx_buffer(sc);
- fail_4:
-	wm_teardown_tx_buffer(sc);
  fail_3:
-	wm_teardown_descs(sc);
+	wm_teardown_rx_buffer(sc);
  fail_2:
+	wm_teardown_tx_buffer(sc);
+ fail_1:
+	wm_teardown_descs(sc);
+ fail_0:
 	return;
 }
 
