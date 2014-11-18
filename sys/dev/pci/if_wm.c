@@ -541,6 +541,10 @@ static inline void wm_set_dma_addr(volatile wiseman_addr_t *, bus_addr_t);
  */
 static int wm_setup_descs(struct wm_softc *);
 static void wm_teardown_descs(struct wm_softc *);
+static int wm_setup_tx_buffer(struct wm_softc *);
+static void wm_teardown_tx_buffer(struct wm_softc *);
+static int wm_setup_rx_buffer(struct wm_softc *);
+static void wm_teardown_rx_buffer(struct wm_softc *);
 
 /*
  * Device driver interface functions and commonly used functions.
@@ -1391,6 +1395,90 @@ wm_teardown_descs(struct wm_softc *sc)
 	bus_dmamem_free(sc->sc_dmat, &sc->sc_cd_seg, sc->sc_cd_rseg);
 }
 
+static int
+wm_setup_tx_buffer(struct wm_softc *sc)
+{
+	int i, error;
+
+	/* Create the transmit buffer DMA maps. */
+	WM_TXQUEUELEN(sc) =
+	    (sc->sc_type == WM_T_82547 || sc->sc_type == WM_T_82547_2) ?
+	    WM_TXQUEUELEN_MAX_82547 : WM_TXQUEUELEN_MAX;
+	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
+		if ((error = bus_dmamap_create(sc->sc_dmat, WM_MAXTXDMA,
+			    WM_NTXSEGS, WTX_MAX_LEN, 0, 0,
+			    &sc->sc_txsoft[i].txs_dmamap)) != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to create Tx DMA map %d, error = %d\n",
+			    i, error);
+			goto fail_4;
+		}
+	}
+
+	return 0;
+
+ fail_4:
+	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
+		if (sc->sc_txsoft[i].txs_dmamap != NULL)
+			bus_dmamap_destroy(sc->sc_dmat,
+			    sc->sc_txsoft[i].txs_dmamap);
+	}
+	return 1;
+}
+
+static void
+wm_teardown_tx_buffer(struct wm_softc *sc)
+{
+	int i;
+
+	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
+		if (sc->sc_txsoft[i].txs_dmamap != NULL)
+			bus_dmamap_destroy(sc->sc_dmat,
+			    sc->sc_txsoft[i].txs_dmamap);
+	}
+}
+
+static int
+wm_setup_rx_buffer(struct wm_softc *sc)
+{
+	int i, error;
+
+	/* Create the receive buffer DMA maps. */
+	for (i = 0; i < WM_NRXDESC; i++) {
+		if ((error = bus_dmamap_create(sc->sc_dmat, MCLBYTES, 1,
+			    MCLBYTES, 0, 0,
+			    &sc->sc_rxsoft[i].rxs_dmamap)) != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to create Rx DMA map %d error = %d\n",
+			    i, error);
+			goto fail_5;
+		}
+		sc->sc_rxsoft[i].rxs_mbuf = NULL;
+	}
+
+	return 0;
+
+ fail_5:
+	for (i = 0; i < WM_NRXDESC; i++) {
+		if (sc->sc_rxsoft[i].rxs_dmamap != NULL)
+			bus_dmamap_destroy(sc->sc_dmat,
+			    sc->sc_rxsoft[i].rxs_dmamap);
+	}
+	return 1;
+}
+
+static void
+wm_teardown_rx_buffer(struct wm_softc *sc)
+{
+	int i;
+
+	for (i = 0; i < WM_NRXDESC; i++) {
+		if (sc->sc_rxsoft[i].rxs_dmamap != NULL)
+			bus_dmamap_destroy(sc->sc_dmat,
+			    sc->sc_rxsoft[i].rxs_dmamap);
+	}
+}
+
 /*
  * Device driver interface functions and commonly used functions.
  * match, attach, detach, init, start, stop, ioctl, watchdog and so on.
@@ -1717,35 +1805,15 @@ wm_attach(device_t parent, device_t self, void *aux)
 
 	error = wm_setup_descs(sc);
 	if (error)
+		goto fail_2;
+
+	error = wm_setup_tx_buffer(sc);
+	if (error)
 		goto fail_3;
 
-	/* Create the transmit buffer DMA maps. */
-	WM_TXQUEUELEN(sc) =
-	    (sc->sc_type == WM_T_82547 || sc->sc_type == WM_T_82547_2) ?
-	    WM_TXQUEUELEN_MAX_82547 : WM_TXQUEUELEN_MAX;
-	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
-		if ((error = bus_dmamap_create(sc->sc_dmat, WM_MAXTXDMA,
-			    WM_NTXSEGS, WTX_MAX_LEN, 0, 0,
-			    &sc->sc_txsoft[i].txs_dmamap)) != 0) {
-			aprint_error_dev(sc->sc_dev,
-			    "unable to create Tx DMA map %d, error = %d\n",
-			    i, error);
-			goto fail_4;
-		}
-	}
-
-	/* Create the receive buffer DMA maps. */
-	for (i = 0; i < WM_NRXDESC; i++) {
-		if ((error = bus_dmamap_create(sc->sc_dmat, MCLBYTES, 1,
-			    MCLBYTES, 0, 0,
-			    &sc->sc_rxsoft[i].rxs_dmamap)) != 0) {
-			aprint_error_dev(sc->sc_dev,
-			    "unable to create Rx DMA map %d error = %d\n",
-			    i, error);
-			goto fail_5;
-		}
-		sc->sc_rxsoft[i].rxs_mbuf = NULL;
-	}
+	error = wm_setup_rx_buffer(sc);
+	if (error)
+		goto fail_4;
 
 	/* clear interesting stat counters */
 	CSR_READ(sc, WMREG_COLC);
@@ -2439,19 +2507,12 @@ wm_attach(device_t parent, device_t self, void *aux)
 	 * attempt.  Do this in reverse order and fall through.
 	 */
  fail_5:
-	for (i = 0; i < WM_NRXDESC; i++) {
-		if (sc->sc_rxsoft[i].rxs_dmamap != NULL)
-			bus_dmamap_destroy(sc->sc_dmat,
-			    sc->sc_rxsoft[i].rxs_dmamap);
-	}
+	wm_teardown_rx_buffer(sc);
  fail_4:
-	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
-		if (sc->sc_txsoft[i].txs_dmamap != NULL)
-			bus_dmamap_destroy(sc->sc_dmat,
-			    sc->sc_txsoft[i].txs_dmamap);
-	}
-	wm_teardown_descs(sc);
+	wm_teardown_tx_buffer(sc);
  fail_3:
+	wm_teardown_descs(sc);
+ fail_2:
 	return;
 }
 
@@ -2461,7 +2522,6 @@ wm_detach(device_t self, int flags __unused)
 {
 	struct wm_softc *sc = device_private(self);
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-	int i;
 #ifndef WM_MPSAFE
 	int s;
 #endif
@@ -2503,16 +2563,8 @@ wm_detach(device_t self, int flags __unused)
 	/* Must unlock here */
 
 	/* Free dmamap. It's the same as the end of the wm_attach() function */
-	for (i = 0; i < WM_NRXDESC; i++) {
-		if (sc->sc_rxsoft[i].rxs_dmamap != NULL)
-			bus_dmamap_destroy(sc->sc_dmat,
-			    sc->sc_rxsoft[i].rxs_dmamap);
-	}
-	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
-		if (sc->sc_txsoft[i].txs_dmamap != NULL)
-			bus_dmamap_destroy(sc->sc_dmat,
-			    sc->sc_txsoft[i].txs_dmamap);
-	}
+	wm_teardown_rx_buffer(sc);
+	wm_teardown_tx_buffer(sc);
 	wm_teardown_descs(sc);
 
 	/* Disestablish the interrupt handler */
