@@ -189,35 +189,18 @@ int	wm_debug = WM_DEBUG_TX | WM_DEBUG_RX | WM_DEBUG_LINK | WM_DEBUG_GMII
 #define	WM_NEXTRX(x)		(((x) + 1) & WM_NRXDESC_MASK)
 #define	WM_PREVRX(x)		(((x) - 1) & WM_NRXDESC_MASK)
 
-/*
- * Control structures are DMA'd to the i82542 chip.  We allocate them in
- * a single clump that maps to a single DMA segment to make several things
- * easier.
- */
-struct wm_control_data_82544 {
-	/*
-	 * The receive descriptors.
-	 */
-	wiseman_rxdesc_t wcd_rxdescs[WM_NRXDESC];
-
-	/*
-	 * The transmit descriptors.  Put these at the end, because
-	 * we might use a smaller number of them.
-	 */
-	union {
-		wiseman_txdesc_t wcdu_txdescs[WM_NTXDESC_82544];
-		nq_txdesc_t      wcdu_nq_txdescs[WM_NTXDESC_82544];
-	} wdc_u;
-};
+typedef union _txdescs {
+	wiseman_txdesc_t sctxu_txdescs[WM_NTXDESC_82544];
+	nq_txdesc_t      sctxu_nq_txdescs[WM_NTXDESC_82544];
+} txdescs_t;
 
 struct wm_control_data_82542 {
 	wiseman_rxdesc_t wcd_rxdescs[WM_NRXDESC];
 	wiseman_txdesc_t wcd_txdescs[WM_NTXDESC_82542];
 };
 
-#define	WM_CDOFF(x)	offsetof(struct wm_control_data_82544, x)
-#define	WM_CDTXOFF(x)	WM_CDOFF(wdc_u.wcdu_txdescs[(x)])
-#define	WM_CDRXOFF(x)	WM_CDOFF(wcd_rxdescs[(x)])
+#define	WM_CDTXOFF(x)	(sizeof(wiseman_txdesc_t) * x)
+#define	WM_CDRXOFF(x)	(sizeof(wiseman_rxdesc_t) * x)
 
 /*
  * Software state for transmit jobs.
@@ -303,16 +286,22 @@ struct wm_softc {
 	struct wm_rxsoft sc_rxsoft[WM_NRXDESC];
 
 	/* Control data structures. */
+	wiseman_rxdesc_t *sc_rxdescs;
+	bus_dmamap_t sc_rxdesc_dmamap;	/* control data DMA map */
+	bus_dma_segment_t sc_rxdesc_seg;/* control data segment */
+	int sc_rxdesc_rseg;		/* real number of control segment */
+	size_t sc_rxdesc_size;		/* control data size */
+#define	sc_rxdesc_dma	sc_rxdesc_dmamap->dm_segs[0].ds_addr
+
 	int sc_ntxdesc;			/* must be a power of two */
-	struct wm_control_data_82544 *sc_control_data;
-	bus_dmamap_t sc_cddmamap;	/* control data DMA map */
-	bus_dma_segment_t sc_cd_seg;	/* control data segment */
-	int sc_cd_rseg;			/* real number of control segment */
-	size_t sc_cd_size;		/* control data size */
-#define	sc_cddma	sc_cddmamap->dm_segs[0].ds_addr
-#define	sc_txdescs	sc_control_data->wdc_u.wcdu_txdescs
-#define	sc_nq_txdescs	sc_control_data->wdc_u.wcdu_nq_txdescs
-#define	sc_rxdescs	sc_control_data->wcd_rxdescs
+	txdescs_t *sc_txdescs_u;
+	bus_dmamap_t sc_txdesc_dmamap;	/* control data DMA map */
+	bus_dma_segment_t sc_txdesc_seg;/* control data segment */
+	int sc_txdesc_rseg;		/* real number of control segment */
+	size_t sc_txdesc_size;		/* control data size */
+#define	sc_txdesc_dma	sc_txdesc_dmamap->dm_segs[0].ds_addr
+#define	sc_txdescs	sc_txdescs_u->sctxu_txdescs
+#define	sc_nq_txdescs	sc_txdescs_u->sctxu_nq_txdescs
 
 #ifdef WM_EVENT_COUNTERS
 	/* Event counters. */
@@ -450,8 +439,8 @@ do {									\
 #define ICH8_FLASH_WRITE16(sc, reg, data) \
 	bus_space_write_2((sc)->sc_flasht, (sc)->sc_flashh, (reg), (data))
 
-#define	WM_CDTXADDR(sc, x)	((sc)->sc_cddma + WM_CDTXOFF((x)))
-#define	WM_CDRXADDR(sc, x)	((sc)->sc_cddma + WM_CDRXOFF((x)))
+#define	WM_CDTXADDR(sc, x)	((sc)->sc_txdesc_dma + WM_CDTXOFF((x)))
+#define	WM_CDRXADDR(sc, x)	((sc)->sc_rxdesc_dma + WM_CDRXOFF((x)))
 
 #define	WM_CDTXADDR_LO(sc, x)	(WM_CDTXADDR((sc), (x)) & 0xffffffffU)
 #define	WM_CDTXADDR_HI(sc, x)						\
@@ -472,7 +461,7 @@ do {									\
 									\
 	/* If it will wrap around, sync to the end of the ring. */	\
 	if ((__x + __n) > WM_NTXDESC(sc)) {				\
-		bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_cddmamap,	\
+		bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_txdesc_dmamap,	\
 		    WM_CDTXOFF(__x), sizeof(wiseman_txdesc_t) *		\
 		    (WM_NTXDESC(sc) - __x), (ops));			\
 		__n -= (WM_NTXDESC(sc) - __x);				\
@@ -480,13 +469,13 @@ do {									\
 	}								\
 									\
 	/* Now sync whatever is left. */				\
-	bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_cddmamap,		\
+	bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_txdesc_dmamap,		\
 	    WM_CDTXOFF(__x), sizeof(wiseman_txdesc_t) * __n, (ops));	\
 } while (/*CONSTCOND*/0)
 
 #define	WM_CDRXSYNC(sc, x, ops)						\
 do {									\
-	bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_cddmamap,		\
+	bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_rxdesc_dmamap,		\
 	   WM_CDRXOFF((x)), sizeof(wiseman_rxdesc_t), (ops));		\
 } while (/*CONSTCOND*/0)
 
@@ -539,8 +528,13 @@ static inline void wm_set_dma_addr(volatile wiseman_addr_t *, bus_addr_t);
 /*
  * DMA setting
  */
+static int wm_setup_tx_descs(struct wm_softc *);
+static void wm_teardown_tx_descs(struct wm_softc *);
+static int wm_setup_rx_descs(struct wm_softc *);
+static void wm_teardown_rx_descs(struct wm_softc *);
 static int wm_setup_descs(struct wm_softc *);
 static void wm_teardown_descs(struct wm_softc *);
+
 static int wm_setup_tx_buffer(struct wm_softc *);
 static void wm_teardown_tx_buffer(struct wm_softc *);
 static int wm_setup_rx_buffer(struct wm_softc *);
@@ -1322,7 +1316,7 @@ wm_set_dma_addr(volatile wiseman_addr_t *wa, bus_addr_t v)
 }
 
 static int
-wm_setup_descs(struct wm_softc *sc)
+wm_setup_tx_descs(struct wm_softc *sc)
 {
 	int error;
 
@@ -1336,38 +1330,38 @@ wm_setup_descs(struct wm_softc *sc)
 	 */
 	WM_NTXDESC(sc) = sc->sc_type < WM_T_82544 ?
 	    WM_NTXDESC_82542 : WM_NTXDESC_82544;
-	sc->sc_cd_size = sc->sc_type < WM_T_82544 ?
-	    sizeof(struct wm_control_data_82542) :
-	    sizeof(struct wm_control_data_82544);
-	if ((error = bus_dmamem_alloc(sc->sc_dmat, sc->sc_cd_size, PAGE_SIZE,
-		    (bus_size_t) 0x100000000ULL, &sc->sc_cd_seg, 1,
-		    &sc->sc_cd_rseg, 0)) != 0) {
+	sc->sc_txdesc_size = sc->sc_type < WM_T_82544 ?
+	    sizeof(wiseman_txdesc_t) * WM_NTXDESC(sc) :
+	    sizeof(txdescs_t) * WM_NTXDESC(sc);
+	if ((error = bus_dmamem_alloc(sc->sc_dmat, sc->sc_txdesc_size, PAGE_SIZE,
+		    (bus_size_t) 0x100000000ULL, &sc->sc_txdesc_seg, 1,
+		    &sc->sc_txdesc_rseg, 0)) != 0) {
 		aprint_error_dev(sc->sc_dev,
-		    "unable to allocate control data, error = %d\n",
+		    "unable to allocate transmit descriptor, error = %d\n",
 		    error);
 		goto fail_0;
 	}
 
-	if ((error = bus_dmamem_map(sc->sc_dmat, &sc->sc_cd_seg,
-		    sc->sc_cd_rseg, sc->sc_cd_size,
-		    (void **)&sc->sc_control_data, BUS_DMA_COHERENT)) != 0) {
+	if ((error = bus_dmamem_map(sc->sc_dmat, &sc->sc_txdesc_seg,
+		    sc->sc_txdesc_rseg, sc->sc_txdesc_size,
+		    (void **)&sc->sc_txdescs_u, BUS_DMA_COHERENT)) != 0) {
 		aprint_error_dev(sc->sc_dev,
-		    "unable to map control data, error = %d\n", error);
+		    "unable to map transmit descriptor, error = %d\n", error);
 		goto fail_1;
 	}
 
-	if ((error = bus_dmamap_create(sc->sc_dmat, sc->sc_cd_size, 1,
-		    sc->sc_cd_size, 0, 0, &sc->sc_cddmamap)) != 0) {
+	if ((error = bus_dmamap_create(sc->sc_dmat, sc->sc_txdesc_size, 1,
+		    sc->sc_txdesc_size, 0, 0, &sc->sc_txdesc_dmamap)) != 0) {
 		aprint_error_dev(sc->sc_dev,
-		    "unable to create control data DMA map, error = %d\n",
+		    "unable to create transmit descriptor DMA map, error = %d\n",
 		    error);
 		goto fail_2;
 	}
 
-	if ((error = bus_dmamap_load(sc->sc_dmat, sc->sc_cddmamap,
-		    sc->sc_control_data, sc->sc_cd_size, NULL, 0)) != 0) {
+	if ((error = bus_dmamap_load(sc->sc_dmat, sc->sc_txdesc_dmamap,
+		    sc->sc_txdescs_u, sc->sc_txdesc_size, NULL, 0)) != 0) {
 		aprint_error_dev(sc->sc_dev,
-		    "unable to load control data DMA map, error = %d\n",
+		    "unable to load transmit descriptor DMA map, error = %d\n",
 		    error);
 		goto fail_3;
 	}
@@ -1375,24 +1369,117 @@ wm_setup_descs(struct wm_softc *sc)
 	return 0;
 
  fail_3:
-	bus_dmamap_destroy(sc->sc_dmat, sc->sc_cddmamap);
+	bus_dmamap_destroy(sc->sc_dmat, sc->sc_txdesc_dmamap);
  fail_2:
-	bus_dmamem_unmap(sc->sc_dmat, (void *)sc->sc_control_data,
-	    sc->sc_cd_size);
+	bus_dmamem_unmap(sc->sc_dmat, (void *)sc->sc_txdescs_u,
+	    sc->sc_txdesc_size);
  fail_1:
-	bus_dmamem_free(sc->sc_dmat, &sc->sc_cd_seg, sc->sc_cd_rseg);
+	bus_dmamem_free(sc->sc_dmat, &sc->sc_txdesc_seg, sc->sc_txdesc_rseg);
  fail_0:
 	return 1;
 }
 
 static void
+wm_teardown_tx_descs(struct wm_softc *sc)
+{
+	bus_dmamap_unload(sc->sc_dmat, sc->sc_txdesc_dmamap);
+	bus_dmamap_destroy(sc->sc_dmat, sc->sc_txdesc_dmamap);
+	bus_dmamem_unmap(sc->sc_dmat, (void *)sc->sc_txdescs,
+	    sc->sc_txdesc_size);
+	bus_dmamem_free(sc->sc_dmat, &sc->sc_txdesc_seg, sc->sc_txdesc_rseg);
+}
+
+static int
+wm_setup_rx_descs(struct wm_softc *sc)
+{
+	int error;
+
+	/*
+	 * Allocate the control data structures, and create and load the
+	 * DMA map for it.
+	 *
+	 * NOTE: All Tx descriptors must be in the same 4G segment of
+	 * memory.  So must Rx descriptors.  We simplify by allocating
+	 * both sets within the same 4G segment.
+	 */
+	sc->sc_rxdesc_size = sizeof(wiseman_rxdesc_t) * WM_NRXDESC;
+	if ((error = bus_dmamem_alloc(sc->sc_dmat, sc->sc_rxdesc_size, PAGE_SIZE,
+		    (bus_size_t) 0x100000000ULL, &sc->sc_rxdesc_seg, 1,
+		    &sc->sc_rxdesc_rseg, 0)) != 0) {
+		aprint_error_dev(sc->sc_dev,
+		    "unable to allocate receive descriptor, error = %d\n",
+		    error);
+		goto fail_0;
+	}
+
+	if ((error = bus_dmamem_map(sc->sc_dmat, &sc->sc_rxdesc_seg,
+		    sc->sc_rxdesc_rseg, sc->sc_rxdesc_size,
+		    (void **)&sc->sc_rxdescs, BUS_DMA_COHERENT)) != 0) {
+		aprint_error_dev(sc->sc_dev,
+		    "unable to map receive descriptor, error = %d\n", error);
+		goto fail_1;
+	}
+
+	if ((error = bus_dmamap_create(sc->sc_dmat, sc->sc_rxdesc_size, 1,
+		    sc->sc_rxdesc_size, 0, 0, &sc->sc_rxdesc_dmamap)) != 0) {
+		aprint_error_dev(sc->sc_dev,
+		    "unable to create receive descriptor DMA map, error = %d\n",
+		    error);
+		goto fail_2;
+	}
+
+	if ((error = bus_dmamap_load(sc->sc_dmat, sc->sc_rxdesc_dmamap,
+		    sc->sc_rxdescs, sc->sc_rxdesc_size, NULL, 0)) != 0) {
+		aprint_error_dev(sc->sc_dev,
+		    "unable to load receive descriptor DMA map, error = %d\n",
+		    error);
+		goto fail_3;
+	}
+
+	return 0;
+
+ fail_3:
+	bus_dmamap_destroy(sc->sc_dmat, sc->sc_rxdesc_dmamap);
+ fail_2:
+	bus_dmamem_unmap(sc->sc_dmat, (void *)sc->sc_rxdescs,
+	    sc->sc_rxdesc_size);
+ fail_1:
+	bus_dmamem_free(sc->sc_dmat, &sc->sc_rxdesc_seg, sc->sc_rxdesc_rseg);
+ fail_0:
+	return 1;
+}
+
+static void
+wm_teardown_rx_descs(struct wm_softc *sc)
+{
+	bus_dmamap_unload(sc->sc_dmat, sc->sc_rxdesc_dmamap);
+	bus_dmamap_destroy(sc->sc_dmat, sc->sc_rxdesc_dmamap);
+	bus_dmamem_unmap(sc->sc_dmat, (void *)sc->sc_rxdescs,
+	    sc->sc_rxdesc_size);
+	bus_dmamem_free(sc->sc_dmat, &sc->sc_txdesc_seg, sc->sc_rxdesc_rseg);
+}
+
+static int
+wm_setup_descs(struct wm_softc *sc)
+{
+	int error;
+
+	error = wm_setup_tx_descs(sc);
+	if (error)
+		return error;
+
+	error = wm_setup_rx_descs(sc);
+	if (error)
+		wm_teardown_tx_descs(sc);
+
+	return error;
+}
+
+static void
 wm_teardown_descs(struct wm_softc *sc)
 {
-	bus_dmamap_unload(sc->sc_dmat, sc->sc_cddmamap);
-	bus_dmamap_destroy(sc->sc_dmat, sc->sc_cddmamap);
-	bus_dmamem_unmap(sc->sc_dmat, (void *)sc->sc_control_data,
-	    sc->sc_cd_size);
-	bus_dmamem_free(sc->sc_dmat, &sc->sc_cd_seg, sc->sc_cd_rseg);
+	wm_teardown_rx_descs(sc);
+	wm_teardown_tx_descs(sc);
 }
 
 static int
@@ -4084,7 +4171,7 @@ wm_init_locked(struct ifnet *ifp)
 	if (sc->sc_type < WM_T_82543) {
 		CSR_WRITE(sc, WMREG_OLD_RDBAH0, WM_CDRXADDR_HI(sc, 0));
 		CSR_WRITE(sc, WMREG_OLD_RDBAL0, WM_CDRXADDR_LO(sc, 0));
-		CSR_WRITE(sc, WMREG_OLD_RDLEN0, sizeof(sc->sc_rxdescs));
+		CSR_WRITE(sc, WMREG_OLD_RDLEN0, sizeof(wiseman_rxdesc_t) * WM_NRXDESC);
 		CSR_WRITE(sc, WMREG_OLD_RDH0, 0);
 		CSR_WRITE(sc, WMREG_OLD_RDT0, 0);
 		CSR_WRITE(sc, WMREG_OLD_RDTR0, 28 | RDTR_FPD);
@@ -4098,7 +4185,7 @@ wm_init_locked(struct ifnet *ifp)
 	} else {
 		CSR_WRITE(sc, WMREG_RDBAH, WM_CDRXADDR_HI(sc, 0));
 		CSR_WRITE(sc, WMREG_RDBAL, WM_CDRXADDR_LO(sc, 0));
-		CSR_WRITE(sc, WMREG_RDLEN, sizeof(sc->sc_rxdescs));
+		CSR_WRITE(sc, WMREG_RDLEN, sizeof(wiseman_rxdesc_t) * WM_NRXDESC);
 		if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
 			CSR_WRITE(sc, WMREG_EITR(0), 450);
 			if (MCLBYTES & ((1 << SRRCTL_BSIZEPKT_SHIFT) - 1))
