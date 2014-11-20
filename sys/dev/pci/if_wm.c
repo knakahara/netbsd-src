@@ -4171,7 +4171,7 @@ wm_init_locked(struct ifnet *ifp)
 	if (sc->sc_type < WM_T_82543) {
 		CSR_WRITE(sc, WMREG_OLD_RDBAH0, WM_CDRXADDR_HI(sc, 0));
 		CSR_WRITE(sc, WMREG_OLD_RDBAL0, WM_CDRXADDR_LO(sc, 0));
-		CSR_WRITE(sc, WMREG_OLD_RDLEN0, sizeof(wiseman_rxdesc_t) * WM_NRXDESC);
+		CSR_WRITE(sc, WMREG_OLD_RDLEN0, sc->sc_rxdesc_size);
 		CSR_WRITE(sc, WMREG_OLD_RDH0, 0);
 		CSR_WRITE(sc, WMREG_OLD_RDT0, 0);
 		CSR_WRITE(sc, WMREG_OLD_RDTR0, 28 | RDTR_FPD);
@@ -4185,7 +4185,7 @@ wm_init_locked(struct ifnet *ifp)
 	} else {
 		CSR_WRITE(sc, WMREG_RDBAH, WM_CDRXADDR_HI(sc, 0));
 		CSR_WRITE(sc, WMREG_RDBAL, WM_CDRXADDR_LO(sc, 0));
-		CSR_WRITE(sc, WMREG_RDLEN, sizeof(wiseman_rxdesc_t) * WM_NRXDESC);
+		CSR_WRITE(sc, WMREG_RDLEN, sc->sc_rxdesc_size);
 		if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
 			CSR_WRITE(sc, WMREG_EITR(0), 450);
 			if (MCLBYTES & ((1 << SRRCTL_BSIZEPKT_SHIFT) - 1))
