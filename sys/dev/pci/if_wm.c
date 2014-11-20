@@ -4154,14 +4154,6 @@ wm_init_locked(struct ifnet *ifp)
 			    RXDCTL_HTHRESH(0) | RXDCTL_WTHRESH(1));
 		}
 	}
-	/*
-	 * XXX
-	 * This 2 registers are not found in gettable specification(after 82544).
-	 * So, we cannot understand what this code does.
-	 * Maybe, only 82542 and 82543 have these registers, don't they?
-	 */
-	CSR_WRITE(sc, WMREG_TQSA_LO, 0);
-	CSR_WRITE(sc, WMREG_TQSA_HI, 0);
 
 	/* Initialize the transmit job descriptors. */
 	for (i = 0; i < WM_TXQUEUELEN(sc); i++)
