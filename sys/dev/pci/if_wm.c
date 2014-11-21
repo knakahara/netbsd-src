@@ -2005,17 +2005,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 	}
 
 	/*
-	 * Map and establish our interrupt.
-	 */
-	error = wm_setup_msix(sc, pa);
-	if (error)
-		error = wm_setup_msi(sc, pa);
-	if (error)
-		error = wm_setup_legacy(sc, pa);
-	if (error)
-		return;
-
-	/*
 	 * Check the function ID (unit number of the chip).
 	 */
 	if ((sc->sc_type == WM_T_82546) || (sc->sc_type == WM_T_82546_3)
@@ -2148,6 +2137,17 @@ wm_attach(device_t parent, device_t self, void *aux)
 	error = wm_alloc_rx_queue(sc);
 	if (error)
 		goto fail_1;
+
+	/*
+	 * Map and establish our interrupt.
+	 */
+	error = wm_setup_msix(sc, pa);
+	if (error)
+		error = wm_setup_msi(sc, pa);
+	if (error)
+		error = wm_setup_legacy(sc, pa);
+	if (error)
+		goto fail_2;
 
 	/* clear interesting stat counters */
 	CSR_READ(sc, WMREG_COLC);
