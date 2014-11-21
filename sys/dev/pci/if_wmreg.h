@@ -633,9 +633,6 @@ struct livengood_tcpip_ctxdesc {
 
 #define	DEFAULT_80003ES2LAN_TCTL_EXT_GCEX 0x00010000
 
-#define	WMREG_TQSA_LO	0x0408
-#define	WMREG_TQSA_HI	0x040c
-
 #define	WMREG_TIPG	0x0410	/* Transmit IPG Register */
 #define	TIPG_IPGT(x)	(x)		/* IPG transmit time */
 #define	TIPG_IPGR1(x)	((x) << 10)	/* IPG receive time 1 */
@@ -647,8 +644,6 @@ struct livengood_tcpip_ctxdesc {
     (TIPG_IPGT(0x08) | TIPG_IPGR1(0x02) | TIPG_IPGR2(0x07))
 #define	TIPG_10_100_80003_DFLT \
     (TIPG_IPGT(0x09) | TIPG_IPGR1(0x02) | TIPG_IPGR2(0x07))
-
-#define	WMREG_TQC	0x0418
 
 #define	WMREG_OLD_TDBAL	0x0420	/* Transmit Descriptor Base Lo */
 #define	WMREG_TDBAL	0x3800
