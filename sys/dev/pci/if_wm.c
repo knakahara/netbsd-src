@@ -447,67 +447,6 @@ do {									\
 	(sizeof(bus_addr_t) == 8 ?					\
 	 (uint64_t)WM_CDRXADDR((sc), (x)) >> 32 : 0)
 
-#define	WM_CDTXSYNC(sc, x, n, ops)					\
-do {									\
-	int __x, __n;							\
-									\
-	__x = (x);							\
-	__n = (n);							\
-									\
-	/* If it will wrap around, sync to the end of the ring. */	\
-	if ((__x + __n) > WM_NTXDESC(sc)) {				\
-		bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_txdesc_dmamap,	\
-		    WM_CDTXOFF(__x), sizeof(wiseman_txdesc_t) *		\
-		    (WM_NTXDESC(sc) - __x), (ops));			\
-		__n -= (WM_NTXDESC(sc) - __x);				\
-		__x = 0;						\
-	}								\
-									\
-	/* Now sync whatever is left. */				\
-	bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_txdesc_dmamap,		\
-	    WM_CDTXOFF(__x), sizeof(wiseman_txdesc_t) * __n, (ops));	\
-} while (/*CONSTCOND*/0)
-
-#define	WM_CDRXSYNC(sc, x, ops)						\
-do {									\
-	bus_dmamap_sync((sc)->sc_dmat, (sc)->sc_rxdesc_dmamap,		\
-	   WM_CDRXOFF((x)), sizeof(wiseman_rxdesc_t), (ops));		\
-} while (/*CONSTCOND*/0)
-
-#define	WM_INIT_RXDESC(sc, x)						\
-do {									\
-	struct wm_rxsoft *__rxs = &(sc)->sc_rxsoft[(x)];		\
-	wiseman_rxdesc_t *__rxd = &(sc)->sc_rxdescs[(x)];		\
-	struct mbuf *__m = __rxs->rxs_mbuf;				\
-									\
-	/*								\
-	 * Note: We scoot the packet forward 2 bytes in the buffer	\
-	 * so that the payload after the Ethernet header is aligned	\
-	 * to a 4-byte boundary.					\
-	 *								\
-	 * XXX BRAINDAMAGE ALERT!					\
-	 * The stupid chip uses the same size for every buffer, which	\
-	 * is set in the Receive Control register.  We are using the 2K	\
-	 * size option, but what we REALLY want is (2K - 2)!  For this	\
-	 * reason, we can't "scoot" packets longer than the standard	\
-	 * Ethernet MTU.  On strict-alignment platforms, if the total	\
-	 * size exceeds (2K - 2) we set align_tweak to 0 and let	\
-	 * the upper layer copy the headers.				\
-	 */								\
-	__m->m_data = __m->m_ext.ext_buf + (sc)->sc_align_tweak;	\
-									\
-	wm_set_dma_addr(&__rxd->wrx_addr,				\
-	    __rxs->rxs_dmamap->dm_segs[0].ds_addr + (sc)->sc_align_tweak); \
-	__rxd->wrx_len = 0;						\
-	__rxd->wrx_cksum = 0;						\
-	__rxd->wrx_status = 0;						\
-	__rxd->wrx_errors = 0;						\
-	__rxd->wrx_special = 0;						\
-	WM_CDRXSYNC((sc), (x), BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE); \
-									\
-	CSR_WRITE((sc), (sc)->sc_rdt_reg, (x));				\
-} while (/*CONSTCOND*/0)
-
 /*
  * Register read/write functions.
  * Other than CSR_{READ|WRITE}().
@@ -537,8 +476,8 @@ static void wm_teardown_rx_buffer(struct wm_softc *);
 /*
  * DMA initializing (for wm_init)
  */
-static void wm_init_txdesc(struct wm_softc *);
-static void wm_init_rxdesc(struct wm_softc *);
+static void wm_init_txdescs(struct wm_softc *);
+static void wm_init_rxdescs(struct wm_softc *);
 static void wm_init_tx_buffer(struct wm_softc *);
 static int wm_init_rx_buffer(struct wm_softc *);
 
@@ -1317,6 +1256,65 @@ wm_set_dma_addr(volatile wiseman_addr_t *wa, bus_addr_t v)
 		wa->wa_high = 0;
 }
 
+static inline
+void wm_cdtxsync(struct wm_softc *sc, int start, int num, int ops)
+{
+	/* If it will wrap around, sync to the end of the ring. */
+	if (start + num > WM_NTXDESC(sc)) {
+		bus_dmamap_sync(sc->sc_dmat, sc->sc_txdesc_dmamap,
+		    WM_CDTXOFF(start), sizeof(wiseman_txdesc_t) *
+		    (WM_NTXDESC(sc) - start), ops);
+		num -= WM_NTXDESC(sc) - start;
+		start = 0;
+	}
+
+	/* Now sync whatever is left. */
+	bus_dmamap_sync(sc->sc_dmat, sc->sc_txdesc_dmamap,
+	    WM_CDTXOFF(start), sizeof(wiseman_txdesc_t) * num, ops);
+}
+
+static inline
+void wm_cdrxsync(struct wm_softc *sc, int start, int ops)
+{
+	bus_dmamap_sync(sc->sc_dmat, sc->sc_rxdesc_dmamap,
+	    WM_CDRXOFF(start), sizeof(wiseman_rxdesc_t), ops);
+}
+
+static inline
+void wm_init_rxdesc(struct wm_softc *sc, int start)
+{
+	struct wm_rxsoft *rxs = &(sc)->sc_rxsoft[start];
+	wiseman_rxdesc_t *rxd = &(sc)->sc_rxdescs[start];
+	struct mbuf *m = rxs->rxs_mbuf;
+
+	/*
+	 * Note: We scoot the packet forward 2 bytes in the buffer
+	 * so that the payload after the Ethernet header is aligned
+	 * to a 4-byte boundary.
+	 *
+	 * XXX BRAINDAMAGE ALERT!
+	 * The stupid chip uses the same size for every buffer, which
+	 * is set in the Receive Control register.  We are using the 2K
+	 * size option, but what we REALLY want is (2K - 2)!  For this
+	 * reason, we can't "scoot" packets longer than the standard
+	 * Ethernet MTU.  On strict-alignment platforms, if the total
+	 * size exceeds (2K - 2) we set align_tweak to 0 and let
+	 * the upper layer copy the headers.
+	 */
+	m->m_data = m->m_ext.ext_buf + sc->sc_align_tweak;
+
+	wm_set_dma_addr(&rxd->wrx_addr,
+	    rxs->rxs_dmamap->dm_segs[0].ds_addr + sc->sc_align_tweak);
+	rxd->wrx_len = 0;
+	rxd->wrx_cksum = 0;
+	rxd->wrx_status = 0;
+	rxd->wrx_errors = 0;
+	rxd->wrx_special = 0;
+	wm_cdrxsync(sc, start,  BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
+
+	CSR_WRITE(sc, sc->sc_rdt_reg, start);
+}
+
 static int
 wm_setup_tx_descs(struct wm_softc *sc)
 {
@@ -1569,13 +1567,13 @@ wm_teardown_rx_buffer(struct wm_softc *sc)
 }
 
 static void
-wm_init_txdesc(struct wm_softc *sc)
+wm_init_txdescs(struct wm_softc *sc)
 {
 	KASSERT(WM_TX_LOCKED(sc));
 
 	/* Initialize the transmit descriptor ring. */
 	memset(sc->sc_txdescs, 0, WM_TXDESCSIZE(sc));
-	WM_CDTXSYNC(sc, 0, WM_NTXDESC(sc),
+	wm_cdtxsync(sc, 0, WM_NTXDESC(sc),
 	    BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
 	sc->sc_txfree = WM_NTXDESC(sc);
 	sc->sc_txnext = 0;
@@ -1614,7 +1612,7 @@ wm_init_txdesc(struct wm_softc *sc)
 }
 
 static void
-wm_init_rxdesc(struct wm_softc *sc)
+wm_init_rxdescs(struct wm_softc *sc)
 {
 	KASSERT(WM_RX_LOCKED(sc));
 
@@ -1697,7 +1695,7 @@ wm_init_rx_buffer(struct wm_softc *sc)
 			}
 		} else {
 			if ((sc->sc_flags & WM_F_NEWQUEUE) == 0)
-				WM_INIT_RXDESC(sc, i);
+				wm_init_rxdesc(sc, i);
 			/*
 			 * For 82575 and newer device, the RX descriptors
 			 * must be initialized after the setting of RCTL.EN in
@@ -4145,9 +4143,9 @@ wm_add_rxbuf(struct wm_softc *sc, int idx)
 
 	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
 		if ((sc->sc_rctl & RCTL_EN) != 0)
-			WM_INIT_RXDESC(sc, idx);
+			wm_init_rxdesc(sc, idx);
 	} else
-		WM_INIT_RXDESC(sc, idx);
+		wm_init_rxdesc(sc, idx);
 
 	return 0;
 }
@@ -4261,10 +4259,10 @@ wm_init_locked(struct ifnet *ifp)
 	    || (sc->sc_type == WM_T_PCH_LPT))
 		CSR_WRITE(sc, WMREG_CTRL_EXT, reg | CTRL_EXT_PHYPDEN);
 
-	wm_init_txdesc(sc);
+	wm_init_txdescs(sc);
 	wm_init_tx_buffer(sc);
 
-	wm_init_rxdesc(sc);
+	wm_init_rxdescs(sc);
 	error = wm_init_rx_buffer(sc);
 	if (error)
 		goto out;
@@ -4599,7 +4597,7 @@ wm_init_locked(struct ifnet *ifp)
 	/* On 575 and later set RDT only if RX enabled */
 	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		for (i = 0; i < WM_NRXDESC; i++)
-			WM_INIT_RXDESC(sc, i);
+			wm_init_rxdesc(sc, i);
 
 	sc->sc_stopping = false;
 
@@ -4891,7 +4889,7 @@ wm_tx_offload(struct wm_softc *sc, struct wm_txsoft *txs, uint32_t *cmdp,
 	t->tcpip_tucs = htole32(tucs);
 	t->tcpip_cmdlen = htole32(cmdlen);
 	t->tcpip_seg = htole32(seg);
-	WM_CDTXSYNC(sc, sc->sc_txnext, 1, BUS_DMASYNC_PREWRITE);
+	wm_cdtxsync(sc, sc->sc_txnext, 1, BUS_DMASYNC_PREWRITE);
 
 	sc->sc_txnext = WM_NEXTTX(sc, sc->sc_txnext);
 	txs->txs_ndesc++;
@@ -5294,7 +5292,7 @@ wm_start_locked(struct ifnet *ifp)
 		    lasttx, le32toh(sc->sc_txdescs[lasttx].wtx_cmdlen)));
 
 		/* Sync the descriptors we're using. */
-		WM_CDTXSYNC(sc, sc->sc_txnext, txs->txs_ndesc,
+		wm_cdtxsync(sc, sc->sc_txnext, txs->txs_ndesc,
 		    BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
 
 		/* Give the packet to the chip. */
@@ -5524,7 +5522,7 @@ wm_nq_tx_offload(struct wm_softc *sc, struct wm_txsoft *txs,
 	    htole32(cmdc);
 	sc->sc_nq_txdescs[sc->sc_txnext].nqrx_ctx.nqtxc_mssidx =
 	    htole32(mssidx);
-	WM_CDTXSYNC(sc, sc->sc_txnext, 1, BUS_DMASYNC_PREWRITE);
+	wm_cdtxsync(sc, sc->sc_txnext, 1, BUS_DMASYNC_PREWRITE);
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: TX: context desc %d 0x%08x%08x\n", device_xname(sc->sc_dev),
 	    sc->sc_txnext, 0, vl_len));
@@ -5781,7 +5779,7 @@ wm_nq_start_locked(struct ifnet *ifp)
 		    lasttx, le32toh(sc->sc_txdescs[lasttx].wtx_cmdlen)));
 
 		/* Sync the descriptors we're using. */
-		WM_CDTXSYNC(sc, sc->sc_txnext, txs->txs_ndesc,
+		wm_cdtxsync(sc, sc->sc_txnext, txs->txs_ndesc,
 		    BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
 
 		/* Give the packet to the chip. */
@@ -5855,13 +5853,13 @@ wm_txintr(struct wm_softc *sc)
 		DPRINTF(WM_DEBUG_TX,
 		    ("%s: TX: checking job %d\n", device_xname(sc->sc_dev), i));
 
-		WM_CDTXSYNC(sc, txs->txs_firstdesc, txs->txs_ndesc,
+		wm_cdtxsync(sc, txs->txs_firstdesc, txs->txs_ndesc,
 		    BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
 
 		status =
 		    sc->sc_txdescs[txs->txs_lastdesc].wtx_fields.wtxu_status;
 		if ((status & WTX_ST_DD) == 0) {
-			WM_CDTXSYNC(sc, txs->txs_lastdesc, 1,
+			wm_cdtxsync(sc, txs->txs_lastdesc, 1,
 			    BUS_DMASYNC_PREREAD);
 			break;
 		}
@@ -5938,7 +5936,7 @@ wm_rxintr(struct wm_softc *sc)
 		    ("%s: RX: checking descriptor %d\n",
 		    device_xname(sc->sc_dev), i));
 
-		WM_CDRXSYNC(sc, i, BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
+		wm_cdrxsync(sc, i, BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
 
 		status = sc->sc_rxdescs[i].wrx_status;
 		errors = sc->sc_rxdescs[i].wrx_errors;
@@ -5947,7 +5945,7 @@ wm_rxintr(struct wm_softc *sc)
 
 		if ((status & WRX_ST_DD) == 0) {
 			/* We have processed all of the receive descriptors. */
-			WM_CDRXSYNC(sc, i, BUS_DMASYNC_PREREAD);
+			wm_cdrxsync(sc, i, BUS_DMASYNC_PREREAD);
 			break;
 		}
 
@@ -5955,7 +5953,7 @@ wm_rxintr(struct wm_softc *sc)
 			DPRINTF(WM_DEBUG_RX,
 			    ("%s: RX: discarding contents of descriptor %d\n",
 			    device_xname(sc->sc_dev), i));
-			WM_INIT_RXDESC(sc, i);
+			wm_init_rxdesc(sc, i);
 			if (status & WRX_ST_EOP) {
 				/* Reset our state. */
 				DPRINTF(WM_DEBUG_RX,
@@ -5984,7 +5982,7 @@ wm_rxintr(struct wm_softc *sc)
 			ifp->if_ierrors++;
 			bus_dmamap_sync(sc->sc_dmat, rxs->rxs_dmamap, 0,
 			    rxs->rxs_dmamap->dm_mapsize, BUS_DMASYNC_PREREAD);
-			WM_INIT_RXDESC(sc, i);
+			wm_init_rxdesc(sc, i);
 			if ((status & WRX_ST_EOP) == 0)
 				sc->sc_rxdiscard = 1;
 			if (sc->sc_rxhead != NULL)
