@@ -1,4 +1,4 @@
-.\"	$NetBSD: arc4random.3,v 1.11 2014/11/16 20:37:35 wiz Exp $
+.\"	$NetBSD: arc4random.3,v 1.19 2014/11/17 18:41:29 riastradh Exp $
 .\"
 .\" Copyright (c) 2014 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -58,7 +58,12 @@ family of functions provides a cryptographic pseudorandom number
 generator automatically seeded from the system entropy pool and safe to
 use from multiple threads.
 .Nm
-is faster and more convenient than reading from
+is designed to prevent an adversary from guessing outputs,
+unlike
+.Xr rand 3
+and
+.Xr random 3 ,
+and is faster and more convenient than reading from
 .Pa /dev/urandom
 directly.
 .Pp
@@ -105,9 +110,9 @@ entropy pool.
 The
 .Nm
 functions provide the following security properties against three
-different classes of attackers, assuming that the state of the
-operating system's entropy pool is unknown to the attacker:
-.Bl -bullet -offset abcd -compact
+different classes of attackers, assuming enough entropy is provided by
+the operating system:
+.Bl -bullet -offset abcd
 .It
 An attacker who has seen some outputs of any of the
 .Nm
@@ -120,6 +125,12 @@ An attacker who has seen one process's PRNG state cannot predict past
 or future outputs in other processes, particularly its parent or
 siblings.
 .El
+.Pp
+One
+.Sq output
+means the result of any single request to an
+.Nm
+function, no matter how short it is.
 .Sh IMPLEMENTATION NOTES
 The
 .Nm
@@ -219,6 +230,7 @@ system fails to provide entropy.
 .Sh SEE ALSO
 .Xr rand 3 ,
 .Xr random 3 ,
+.Xr rnd 4 ,
 .Xr cprng 9
 .Rs
 .%A Daniel J. Bernstein
@@ -234,11 +246,23 @@ for testing purposes.
 .Pp
 The name
 .Sq arc4random
-was chosen for hysterical raisins, because it was originally
-implemented using the RC4 stream cipher, which is now known to be
-badly enough biased to admit practical attacks in the real world.
-Unfortunately, the library found widespread adoption and the name
-stuck before anyone recognized that it was silly.
+was chosen for hysterical raisins -- it was originally implemented
+using the RC4 stream cipher, which has been known since shortly after
+it was published in 1994 to have observable biases in the output, and
+is now known to be broken badly enough to admit practical attacks in
+the real world.
+.\" Bob Jenkins, sci.crypt post dated 1994-09-16, message-id
+.\" <359qjg$55v$1@mhadg.production.compuserve.com>,
+.\" https://groups.google.com/d/msg/sci.crypt/JsO3xEATGFA/-wO4ttv7BCYJ
+.\"
+.\" Andrew Roos, `A Class of Weak Keys in the RC4 Stream Cipher',
+.\" sci.crypt posts dated 1995-09-22, message-ids
+.\" <43u1eh$1j3@hermes.is.co.za> and <44ebge$llf@hermes.is.co.za>.
+.\"
+.\" Paul Crowley, `Small bias in RC4 experimentally verified', March
+.\" 1998, http://www.ciphergoth.org/crypto/rc4/
+Unfortunately, the library found widespread adoption and the name stuck
+before anyone recognized that it was silly.
 .Pp
 The signature of
 .Fn arc4random_addrandom
@@ -252,5 +276,42 @@ length.
 But it's too late to change that now.
 .Pp
 .Fn arc4random_uniform
-does not help to choose integers in [0, n) uniformly at random when n >
-2^32.
+does not help to choose integers in [0,
+.Fa n )
+uniformly at random when
+.Fa n
+> 2^32.
+.Pp
+The security model of
+.Nm
+is stronger than many applications need, and stronger than other
+operating systems provide.
+For example, applications encrypting messages with random, but not
+secret, initialization vectors need only prevent an adversary from
+guessing future outputs, since past outputs will have been published
+already.
+.Pp
+On the one hand,
+.Nm
+could be marginally faster if it were not necessary to prevent an
+adversary who sees the state from predicting past outputs.
+On the other hand, there are applications in the wild that use
+.Nm
+to generate key material, such as OpenSSH, so for the sake of
+.Nx
+users it would be imprudent to weaken the security model.
+On the third hand, relying on the security model of
+.Nm
+in
+.Nx
+may lead you to an unpleasant surprise on another operating system
+whose implementation of
+.Nm
+has a weaker security model.
+.Pp
+One may be tempted to create new APIs to accommodate different
+security models and performance constraints without unpleasant
+surprises on different operating systems.
+This should not be done lightly, though, because there are already too
+many different choices, and too many opportunities for programmers to
+reach for one and pick the wrong one.

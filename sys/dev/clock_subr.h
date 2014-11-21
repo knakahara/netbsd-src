@@ -1,4 +1,4 @@
-/*	$NetBSD: clock_subr.h,v 1.23 2014/11/17 02:15:49 christos Exp $	*/
+/*	$NetBSD: clock_subr.h,v 1.25 2014/11/20 16:26:34 christos Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -53,8 +53,17 @@ int	clock_secs_to_ymdhms(time_t, struct clock_ymdhms *);
 /*
  * BCD to binary and binary to BCD.
  */
-#define	FROMBCD(x)	bcdtobin((x))
-#define	TOBCD(x)	bintobcd((x))
+static inline unsigned int
+bcdtobin(unsigned int bcd)
+{
+        return ((bcd >> 4) & 0x0f) * 10 + (bcd & 0x0f);
+}
+
+static inline unsigned int
+bintobcd(unsigned int bin)
+{
+	return (((bin / 10) << 4) & 0xf0) | (bin % 10);
+}
 
 /*
  * Interface to time-of-day clock devices.
@@ -67,6 +76,7 @@ int	clock_secs_to_ymdhms(time_t, struct clock_ymdhms *);
  *		function which takes one boolean argument:
  *			1 to enable writes; 0 to disable writes.
  */
+struct timeval;
 struct todr_chip_handle {
 	void	*cookie;	/* Device specific data */
 	void	*bus_cookie;	/* Bus specific data */
@@ -89,8 +99,8 @@ typedef struct todr_chip_handle *todr_chip_handle_t;
 /*
  * Probably these should evolve into internal routines in kern_todr.c.
  */
-extern int todr_gettime(todr_chip_handle_t tch, struct timeval *);
-extern int todr_settime(todr_chip_handle_t tch, struct timeval *);
+extern int todr_gettime(todr_chip_handle_t, struct timeval *);
+extern int todr_settime(todr_chip_handle_t, struct timeval *);
 
 /*
  * Machine-dependent function that machine-independent RTC drivers can
