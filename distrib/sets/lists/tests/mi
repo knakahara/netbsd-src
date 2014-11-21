@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.596 2014/10/29 16:24:32 uebayasi Exp $
+# $NetBSD: mi,v 1.601 2014/11/21 01:39:09 ozaki-r Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -3463,6 +3463,12 @@
 ./usr/tests/usr.bin/jot/Kyuafile		tests-usr.bin-tests	atf,kyua
 ./usr/tests/usr.bin/jot/d_basic.out		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/jot/t_jot			tests-usr.bin-tests	atf
+./usr/tests/usr.bin/ld				tests-usr.bin-tests
+./usr/tests/usr.bin/ld/Atffile			tests-usr.bin-tests	atf
+./usr/tests/usr.bin/ld/Kyuafile			tests-usr.bin-tests	atf,kyua
+./usr/tests/usr.bin/ld/t_orphan			tests-obsolete	obsolete,atf
+./usr/tests/usr.bin/ld/t_script			tests-usr.bin-tests	atf
+./usr/tests/usr.bin/ld/t_section		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/m4				tests-usr.bin-tests
 ./usr/tests/usr.bin/m4/Atffile			tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/m4/Kyuafile			tests-usr.bin-tests	atf,kyua
@@ -3683,8 +3689,10 @@
 ./usr/tests/usr.bin/xlint/lint1/d_c99_decls_after_stmt.c	tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_decls_after_stmt2.c	tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_decls_after_stmt3.c	tests-usr.bin-tests	atf
+./usr/tests/usr.bin/xlint/lint1/d_c99_flex_array_packed.c	tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_for_loops.c		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_func.c			tests-usr.bin-tests	atf
+./usr/tests/usr.bin/xlint/lint1/d_c99_nested_struct.c		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_recursive_init.c		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_struct_init.c		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_c99_union_init1.c		tests-usr.bin-tests	atf

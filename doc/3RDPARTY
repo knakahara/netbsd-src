@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1171 2014/11/07 20:59:38 roy Exp $
+#	$NetBSD: 3RDPARTY,v 1.1175 2014/11/20 03:07:30 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.6.1
-Current Vers:	6.6.1
+Version:	6.6.2
+Current Vers:	6.6.2
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -718,8 +718,8 @@ We maintain our own version of libdevmapper ioctl protocol code, therefore we
 should test it before import. Talk to haad before importing new version.
 
 Package:	libpcap
-Version:	1.5.2
-Current Vers:	1.5.2
+Version:	1.6.2
+Current Vers:	1.6.2
 Maintainer:	tcpdump-workers@tcpdump.org
 Archive Site:	http://www.tcpdump.org/release/
 Home Page:	http://www.tcpdump.org/
@@ -1232,8 +1232,8 @@ Notes:
 Run cleantags before inporting because sqlite3.c has an RCSID
 
 Package:	tcpdump
-Version:	4.5.1
-Current Vers:	4.5.1
+Version:	4.6.2
+Current Vers:	4.6.2
 Maintainer:	tcpdump-workers@lists.tcpdump.org
 Archive Site:	http://www.tcpdump.org/release/
 Home Page:	http://www.tcpdump.org/
@@ -1311,8 +1311,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2014i / tzdata2014i
-Current Vers:	tzcode2014i / tzdata2014i
+Version:	tzcode2014j / tzdata2014j
+Current Vers:	tzcode2014j / tzdata2014j
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/

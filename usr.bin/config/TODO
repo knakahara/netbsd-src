@@ -158,17 +158,21 @@ o Support kernel constructor/destructor (.kctors/.kdtors)
   sequence of various subsystem initializations in init_main.c:main() will be
   replaced by an array of .kctors invocations, and #ifdef's there will be gone.
 
-o Replace linkset.
+o Hide link-set in the final kernel.
 
-  Don't allow kernel subsystems create random ELF sections (with potentially
-  long names) in the final kernel.  To collect some data in statically linked
-  modules, creating intermediate sections (e.g. .data.linkset.sysctl) and
-  exporting the start/end symbols (e.g. _data_linkset_sysctl_{start,end})
-  using linker script should be fine.
+  Link-set is used to collect references (pointers) at link time.  It relys on
+  the ld(1) behavior that it automatically generates `__start_X' and `__stop_X'
+  symbols for the section `X' to reduce coding.
 
-  Dynamically loaded modules have to register those entries via constructors
-  (functions).  This means that dynamically loaded modules are flexible but
-  come with overhead.
+  Don't allow kernel subsystems create random ELF sections.
+
+  Pre-define all the available link-set names and pre-generate a linker script
+  to merge them into .rodata.
+
+  (For modular(9) modules, `link_set_modules' is looked up by kernel loader.
+  Provide only it.)
+
+  Provide a way for 3rd party modules to declare extra link-set.
 
 o Shared kernel objects.
 
@@ -237,3 +241,24 @@ o Control ELF sections using linker script.
   Kernel and modular MI linkages may change behavior depending on existence
   of debug information.  In the future .symtab will be copied using linker
   during this stage.
+
+o Redesign swapnetbsd.c (root/swap device specification)
+
+  Don't build a whole kernel only to specify root/swap devices.
+
+  Make these parameter re-configurable afterwards.
+
+o Namespace.
+
+  Investigate namespace of attributes/modules/options.  Figure out the hidden
+  design about these, document it, then re-design it.
+
+  At this moment, all of them share the single "selecttab", which means their
+  namespaces are common, but they also have respective tables (attrtab,
+  opttab, etc.).
+
+  Selecting an option (addoption()), that is also a module name, works only if
+  the module doesn't depend on anything, because addoption() doesn't select
+  module and its dependencies (selectattr()).  In other words, an option is
+  only safely converted to a module (define), only if it doesn't depend on
+  anything.  (One example is DDB.)
