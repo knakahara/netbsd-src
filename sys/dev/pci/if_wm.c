@@ -554,7 +554,7 @@ static void	wm_nq_start(struct ifnet *);
 static void	wm_nq_start_locked(struct ifnet *);
 /* Interrupt */
 static void	wm_txintr(struct wm_softc *);
-static void	wm_rxintr(struct wm_softc *);
+static void	wm_rxintr(struct wm_rxqueue *);
 static void	wm_linkintr_gmii(struct wm_softc *, uint32_t);
 static void	wm_linkintr_tbi(struct wm_softc *, uint32_t);
 static void	wm_linkintr(struct wm_softc *, uint32_t);
@@ -2845,6 +2845,7 @@ wm_detach(device_t self, int flags __unused)
 #ifndef WM_MPSAFE
 	int s;
 #endif
+	int i;
 
 	if ((sc->sc_flags & WM_F_ATTACHED) == 0)
 		return 0;
@@ -3207,11 +3208,11 @@ wm_setup_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 	snprintf(xnamebuf, 32, "%s: rx", device_xname(sc->sc_dev));
 	if (sc->sc_type == WM_T_82574) {
 		vih = pci_msix_establish_xname(pc, sc->sc_intrs[WM_RX_INTR_INDEX],
-		    IPL_NET, wm_rxintr_msix_82574, sc, xnamebuf);
+		    IPL_NET, wm_rxintr_msix_82574, sc->sc_rxq, xnamebuf);
 	}
 	else {
 		vih = pci_msix_establish_xname(pc, sc->sc_intrs[WM_RX_INTR_INDEX],
-		    IPL_NET, wm_rxintr_msix, sc, xnamebuf);
+		    IPL_NET, wm_rxintr_msix, sc->sc_rxq, xnamebuf);
 	}
 	if (vih == NULL) {
 		aprint_error_dev(sc->sc_dev,
@@ -6008,10 +6009,10 @@ wm_txintr(struct wm_softc *sc)
  *	Helper; handle receive interrupts.
  */
 static void
-wm_rxintr(struct wm_softc *sc)
+wm_rxintr(struct wm_rxqueue *rxq)
 {
+	struct wm_softc *sc = rxq->rxq_sc;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-	struct wm_rxqueue *rxq = sc->sc_rxq;
 	struct wm_rxsoft *rxs;
 	struct mbuf *m;
 	int i, len;
@@ -6399,12 +6400,13 @@ out:
 static int
 wm_rxintr_msix(void *arg)
 {
-	struct wm_softc *sc = arg;
+	struct wm_rxqueue *rxq = arg;
+	struct wm_softc *sc = rxq->rxq_sc;
 
 	DPRINTF(WM_DEBUG_RX, ("%s: RX\n", device_xname(sc->sc_dev)));
 
 	CSR_WRITE(sc, WMREG_EIMC, 1 << WM_RX_INTR_INDEX);
-	WM_RX_LOCK(sc);
+	WM_RX_LOCK(rxq);
 
 	if (sc->sc_stopping)
 		goto out;
@@ -6412,10 +6414,10 @@ wm_rxintr_msix(void *arg)
 #if defined(WM_EVENT_COUNTERS)
 	WM_EVCNT_INCR(&sc->sc_ev_rxintr);
 #endif
-	wm_rxintr(sc);
+	wm_rxintr(rxq);
 
 out:
-	WM_RX_UNLOCK(sc);
+	WM_RX_UNLOCK(rxq);
 
 	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_RX_INTR_INDEX);
 
@@ -6504,13 +6506,14 @@ out:
 static int
 wm_rxintr_msix_82574(void *arg)
 {
-	struct wm_softc *sc = arg;
+	struct wm_rxqueue *rxq = arg;
+	struct wm_softc *sc = rxq->rxq_sc;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	int handled = 0;
 
 	DPRINTF(WM_DEBUG_RX, ("%s: RX\n", device_xname(sc->sc_dev)));
 
-	WM_RX_LOCK(sc);
+	WM_RX_LOCK(rxq);
 
 	if (sc->sc_stopping)
 		goto out;
@@ -6523,10 +6526,10 @@ wm_rxintr_msix_82574(void *arg)
 #if defined(WM_EVENT_COUNTERS)
 	WM_EVCNT_INCR(&sc->sc_ev_rxintr);
 #endif
-	wm_rxintr(sc);
+	wm_rxintr(rxq);
 
 out:
-	WM_RX_UNLOCK(sc);
+	WM_RX_UNLOCK(rxq);
 	/*
 	 * use only Rx0 queue. see FreeBSD's em_setup_msix()@if_em.c
 	 */
@@ -6652,7 +6655,7 @@ wm_intr(void *arg)
 			WM_EVCNT_INCR(&sc->sc_ev_rxintr);
 		}
 #endif
-		wm_rxintr(sc);
+		wm_rxintr(sc->sc_rxq);
 
 		WM_RX_UNLOCK(sc->sc_rxq);
 		WM_TX_LOCK(sc);
