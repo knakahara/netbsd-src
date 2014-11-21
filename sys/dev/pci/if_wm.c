@@ -194,11 +194,6 @@ typedef union _txdescs {
 	nq_txdesc_t      sctxu_nq_txdescs[WM_NTXDESC_82544];
 } txdescs_t;
 
-struct wm_control_data_82542 {
-	wiseman_rxdesc_t wcd_rxdescs[WM_NRXDESC];
-	wiseman_txdesc_t wcd_txdescs[WM_NTXDESC_82542];
-};
-
 #define	WM_CDTXOFF(x)	(sizeof(wiseman_txdesc_t) * x)
 #define	WM_CDRXOFF(x)	(sizeof(wiseman_rxdesc_t) * x)
 
