@@ -1630,7 +1630,8 @@ wm_free_rx_queue(struct wm_softc *sc)
 {
 	wm_free_rx_descs(sc, sc->sc_rxq);
 	wm_free_rx_buffer(sc, sc->sc_rxq);
-	mutex_obj_free(sc->sc_rxq->rxq_rx_lock);
+	if (sc->sc_rxq->rxq_rx_lock)
+		mutex_obj_free(sc->sc_rxq->rxq_rx_lock);
 	kmem_free(sc->sc_rxq, sizeof(struct wm_rxqueue));
 }
 
