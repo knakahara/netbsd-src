@@ -169,14 +169,9 @@ typedef struct wiseman_txdesc {
 #define	WTX_MAX_LEN	4096
 
 /* MSI-X interrupts vector index */
-#define WM_MAX_RX_QUEUES	8
-#define WM_MAX_TX_QUEUES	8
-#define WM_MAX_INTRS		(WM_MAX_RX_QUEUES + WM_MAX_TX_QUEUES + 1)
-
-#define WM_NINTR		3
-#define WM_RX_INTR_INDEX	0
-#define WM_TX_INTR_INDEX	1
-#define WM_LINK_INTR_INDEX	2
+#define WM_MAX_RXQUEUES		8
+#define WM_MAX_TXQUEUES		8
+#define WM_MAX_INTRS		(WM_MAX_RXQUEUES + WM_MAX_TXQUEUES + 1)
 
 #define WM_IT_LEGACY		0x1
 #define WM_IT_MSI		0x2
@@ -472,7 +467,7 @@ struct livengood_tcpip_ctxdesc {
 #define WMREG_IAM		0x00e0		/* Interrupt Acknowledge Auto–Mask */
 
 #define WMREG_IVAL	0x00e4	/* Interrupt Vector Allocation Register */
-#define WMREG_IVAR0	0x01700	/* Interrupt Vector Allocation */
+#define WMREG_IVAR(x)	(0x01700 + (x) * 4) /* Interrupt Vector Allocation */
 #define WMREG_IVAR_MISC	0x01740	/* IVAR for other causes */
 
 #define WMREG_GPIE	0x01514	/* General Purpose Interrupt Enable */
