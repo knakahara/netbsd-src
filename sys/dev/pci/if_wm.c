@@ -237,7 +237,8 @@ struct wm_rxqueue {
 
 	struct wm_softc *rxq_sc;
 
-	int rxq_intr_idx;
+	int rxq_id;			/* index of receive queues */
+	int rxq_intr_idx;		/* index of MSI-X tables */
 
 	struct wm_rxsoft rxq_rxsoft[WM_NRXDESC];
 	wiseman_rxdesc_t *rxq_rxdescs;
@@ -513,6 +514,7 @@ static void wm_init_tx_queue(struct wm_softc *);
 static void wm_init_rx_descs(struct wm_softc *, struct wm_rxqueue *);
 static int wm_init_rx_buffer(struct wm_softc *, struct wm_rxqueue *);
 static int wm_init_rx_queue(struct wm_softc *, struct wm_rxqueue *);
+static int wm_init_rx_queues(struct wm_softc *);
 
 /*
  * Device driver interface functions and commonly used functions.
@@ -538,6 +540,7 @@ static int	wm_setup_msi(struct wm_softc *, struct pci_attach_args *);
 static int	wm_setup_legacy(struct wm_softc *, struct pci_attach_args *);
 static int	wm_setup_intrs(struct wm_softc *, struct pci_attach_args *);
 static void	wm_teardown_intrs(struct wm_softc *);
+static void	wm_init_rss(struct wm_softc *);
 static void	wm_init_msix(struct wm_softc *);
 
 /* MAC address related */
@@ -1297,8 +1300,8 @@ wm_set_dma_addr(volatile wiseman_addr_t *wa, bus_addr_t v)
 		wa->wa_high = 0;
 }
 
-static inline
-void wm_cdtxsync(struct wm_softc *sc, int start, int num, int ops)
+static inline void
+wm_cdtxsync(struct wm_softc *sc, int start, int num, int ops)
 {
 	/* If it will wrap around, sync to the end of the ring. */
 	if (start + num > WM_NTXDESC(sc)) {
@@ -1314,15 +1317,15 @@ void wm_cdtxsync(struct wm_softc *sc, int start, int num, int ops)
 	    WM_CDTXOFF(start), sizeof(wiseman_txdesc_t) * num, ops);
 }
 
-static inline
-void wm_rxsync(struct wm_softc *sc, struct wm_rxqueue *rxq, int start, int ops)
+static inline void
+wm_rxsync(struct wm_softc *sc, struct wm_rxqueue *rxq, int start, int ops)
 {
 	bus_dmamap_sync(sc->sc_dmat, rxq->rxq_rxdesc_dmamap,
 	    WM_CDRXOFF(start), sizeof(wiseman_rxdesc_t), ops);
 }
 
-static inline
-void wm_init_rxdesc(struct wm_softc *sc, struct wm_rxqueue *rxq, int start)
+static inline void
+wm_init_rxdesc(struct wm_softc *sc, struct wm_rxqueue *rxq, int start)
 {
 	struct wm_rxsoft *rxs = &(rxq)->rxq_rxsoft[start];
 	wiseman_rxdesc_t *rxd = &(rxq)->rxq_rxdescs[start];
@@ -1716,8 +1719,6 @@ wm_init_tx_descs(struct wm_softc *sc)
 			CSR_WRITE(sc, WMREG_TDT, 0);
 			CSR_WRITE(sc, WMREG_TXDCTL, TXDCTL_PTHRESH(0) |
 			    TXDCTL_HTHRESH(0) | TXDCTL_WTHRESH(0));
-			CSR_WRITE(sc, WMREG_RXDCTL, RXDCTL_PTHRESH(0) |
-			    RXDCTL_HTHRESH(0) | RXDCTL_WTHRESH(1));
 		}
 	}
 }
@@ -1760,6 +1761,7 @@ wm_init_rx_descs(struct wm_softc *sc, struct wm_rxqueue *rxq)
 	 * descriptor rings.
 	 */
 	if (sc->sc_type < WM_T_82543) {
+		/* XXXX need to support multiqueue? */
 		CSR_WRITE(sc, WMREG_OLD_RDBAH0, WM_CDRXADDR_HI(rxq, 0));
 		CSR_WRITE(sc, WMREG_OLD_RDBAL0, WM_CDRXADDR_LO(rxq, 0));
 		CSR_WRITE(sc, WMREG_OLD_RDLEN0, rxq->rxq_rxdesc_size);
@@ -1774,23 +1776,32 @@ wm_init_rx_descs(struct wm_softc *sc, struct wm_rxqueue *rxq)
 		CSR_WRITE(sc, WMREG_OLD_RDT1, 0);
 		CSR_WRITE(sc, WMREG_OLD_RDTR1, 0);
 	} else {
-		CSR_WRITE(sc, WMREG_RDBAH, WM_CDRXADDR_HI(rxq, 0));
-		CSR_WRITE(sc, WMREG_RDBAL, WM_CDRXADDR_LO(rxq, 0));
-		CSR_WRITE(sc, WMREG_RDLEN, rxq->rxq_rxdesc_size);
+		int id = rxq->rxq_id;
+
+		CSR_WRITE(sc, WMREG_RDBAH(id), WM_CDRXADDR_HI(rxq, 0));
+		CSR_WRITE(sc, WMREG_RDBAL(id), WM_CDRXADDR_LO(rxq, 0));
+		CSR_WRITE(sc, WMREG_RDLEN(id), rxq->rxq_rxdesc_size);
 		if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
-			CSR_WRITE(sc, WMREG_EITR(0), 450);
+			CSR_WRITE(sc, WMREG_EITR(rxq->rxq_intr_idx), 450);
+
 			if (MCLBYTES & ((1 << SRRCTL_BSIZEPKT_SHIFT) - 1))
 				panic("%s: MCLBYTES %d unsupported for i2575 or higher\n", __func__, MCLBYTES);
-			CSR_WRITE(sc, WMREG_SRRCTL, SRRCTL_DESCTYPE_LEGACY
+			CSR_WRITE(sc, WMREG_SRRCTL(id), SRRCTL_DESCTYPE_LEGACY
 			    | (MCLBYTES >> SRRCTL_BSIZEPKT_SHIFT));
-			CSR_WRITE(sc, WMREG_RXDCTL, RXDCTL_QUEUE_ENABLE
+			CSR_WRITE(sc, WMREG_RXDCTL(id), RXDCTL_QUEUE_ENABLE
 			    | RXDCTL_PTHRESH(16) | RXDCTL_HTHRESH(8)
 			    | RXDCTL_WTHRESH(1));
+
+			CSR_WRITE(sc, WMREG_RDH(id), 0);
+			CSR_WRITE(sc, WMREG_RDT(id), 0);
 		} else {
-			CSR_WRITE(sc, WMREG_RDH, 0);
-			CSR_WRITE(sc, WMREG_RDT, 0);
+			/* XXXX need to support multiqueue? */
+			CSR_WRITE(sc, WMREG_RDH(0), 0);
+			CSR_WRITE(sc, WMREG_RDT(0), 0);
 			CSR_WRITE(sc, WMREG_RDTR, 375 | RDTR_FPD); /* ITR/4 */
 			CSR_WRITE(sc, WMREG_RADV, 375);	/* MUST be same */
+			CSR_WRITE(sc, WMREG_RXDCTL(0), RXDCTL_PTHRESH(0) |
+			    RXDCTL_HTHRESH(0) | RXDCTL_WTHRESH(1));
 		}
 	}
 }
@@ -1844,11 +1855,25 @@ wm_init_rx_queue(struct wm_softc *sc, struct wm_rxqueue *rxq)
 	if (sc->sc_type < WM_T_82543) {
 		rxq->rxq_rdt_reg = WMREG_OLD_RDT0;
 	} else {
-		rxq->rxq_rdt_reg = WMREG_RDT;
+		rxq->rxq_rdt_reg = WMREG_RDT(rxq->rxq_id);
 	}
 
 	wm_init_rx_descs(sc, rxq);
 	return wm_init_rx_buffer(sc, rxq);
+}
+
+static int
+wm_init_rx_queues(struct wm_softc *sc)
+{
+	int error, i;
+
+	for (i = 0; i < sc->sc_nrxqueues; i++) {
+		error = wm_init_rx_queue(sc, &sc->sc_rxq[i]);
+		if (error)
+			return error;
+	}
+
+	return 0;
 }
 
 /*
@@ -3376,6 +3401,8 @@ wm_setup_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 		}
 		aprint_normal_dev(sc->sc_dev, "for RX interrupting at %s\n",
 		    intrstr);
+
+		rxq->rxq_id = i; /* rx queue index, not hardware queue index */
 		rxq->rxq_intr_idx = intr_idx;
 	}
 
@@ -3433,6 +3460,8 @@ wm_setup_msi(struct wm_softc *sc, struct pci_attach_args *pa)
 	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 	sc->sc_nintrs = 1;
 	sc->sc_intr_type = WM_IT_MSI;
+	sc->sc_rxq->rxq_id = 0;
+	sc->sc_rxq->rxq_intr_idx = 0;
 	return 0;
 }
 
@@ -3461,6 +3490,8 @@ wm_setup_legacy(struct wm_softc *sc, struct pci_attach_args *pa)
 	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 	sc->sc_nintrs = 1;
 	sc->sc_intr_type = WM_IT_LEGACY;
+	sc->sc_rxq->rxq_id = 0;
+	sc->sc_rxq->rxq_intr_idx = 0;
 	return 0;
 }
 
@@ -3501,9 +3532,55 @@ wm_teardown_intrs(struct wm_softc *sc)
 }
 
 static void
+wm_init_rss(struct wm_softc *sc)
+{
+	uint32_t mrqc, reta;
+	uint32_t shift = 0;
+	int i, queue_id;
+
+	/* XXX copy from FreeBSD's igb */
+	if (sc->sc_type == WM_T_82575)
+		shift = 6;
+
+	reta = 0;
+	for (i = 0; i < RETA_NUM_ENTRIES; i++) {
+		queue_id = i % sc->sc_nrxqueues;
+
+		queue_id = queue_id << shift;
+
+		/*
+		 * The low 8 bits are for hash value (n+0);
+		 * The next 8 bits are for hash value (n+1), etc.
+		 */
+		reta = reta >> 8;
+		reta = reta | ( ((uint32_t) queue_id) << 24);
+		if ((i & 3) == 3) {
+			CSR_WRITE(sc, WMREG_RETA(i >> 2), reta);
+			reta = 0;
+		}
+	}
+
+	for (i = 0; i < RSSRK_NUM_REGS; i++)
+		CSR_WRITE(sc, WMREG_RSSRK(i), (uint32_t)random());
+
+	mrqc = MRQC_ENABLE_RSS_8Q;
+
+	/* XXXX
+	 * The same as FreeBSD igb.
+	 * Why doesn't use MRQC_RSS_FIELD_IPV6_EX?
+	 */
+	mrqc |= (MRQC_RSS_FIELD_IPV4 | MRQC_RSS_FIELD_IPV4_TCP);
+	mrqc |= (MRQC_RSS_FIELD_IPV6 | MRQC_RSS_FIELD_IPV6_TCP);
+	mrqc |= (MRQC_RSS_FIELD_IPV4_UDP | MRQC_RSS_FIELD_IPV6_UDP);
+	mrqc |= (MRQC_RSS_FIELD_IPV6_UDP_EX | MRQC_RSS_FIELD_IPV6_TCP_EX);
+
+	CSR_WRITE(sc, WMREG_MRQC, mrqc);
+}
+
+static void
 wm_init_msix(struct wm_softc *sc)
 {
-	uint32_t ivar, reg_idx;
+	uint32_t ivar, reg_idx, rxcsum;
 	uint32_t mask = 0;
 	struct wm_rxqueue *rxq;
 	int i;
@@ -3517,7 +3594,7 @@ wm_init_msix(struct wm_softc *sc)
 		ivar = CSR_READ(sc, WMREG_IVAR(reg_idx));
 
 		rxq = &sc->sc_rxq[i];
-		if (i & 1 ) {
+		if (i & 1) {
 			ivar &= 0xFF00FFFF;
 			ivar |= (rxq->rxq_intr_idx | WMREG_IVAR_VALID) << 16;
 		} else {
@@ -3533,7 +3610,7 @@ wm_init_msix(struct wm_softc *sc)
 	{
 		reg_idx = i >> 1;
 		ivar = CSR_READ(sc, WMREG_IVAR(reg_idx));
-		if (i & 1 ) {
+		if (i & 1) {
 			ivar &= 0x00FFFFFF;
 			ivar |= (sc->sc_txq_intr_idx | WMREG_IVAR_VALID) << 24;
 		} else {
@@ -3549,9 +3626,23 @@ wm_init_msix(struct wm_softc *sc)
 	CSR_WRITE(sc, WMREG_IVAR_MISC, ivar);
 	mask |= 1 << sc->sc_link_intr_idx;
 
+	wm_init_rss(sc);
+
+	/*
+	** FreeBSD igb's NOTE:
+	** NOTE: Receive Full-Packet Checksum Offload
+	** is mutually exclusive with Multiqueue. However
+	** this is not the same as TCP/IP checksums which
+	** still work.
+	*/
+	rxcsum = CSR_READ(sc, WMREG_RXCSUM);
+	rxcsum |= RXCSUM_PCSD;
+	CSR_WRITE(sc, WMREG_RXCSUM, rxcsum);
+
 	CSR_WRITE(sc, WMREG_EIAC, mask);
 	CSR_WRITE(sc, WMREG_EIAM, mask);
 	CSR_WRITE(sc, WMREG_EIMS, mask);
+	CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
 
 	if (sc->sc_type == WM_T_82574) {
 		/*
@@ -4598,7 +4689,7 @@ wm_init_locked(struct ifnet *ifp)
 
 	wm_init_tx_queue(sc);
 
-	error = wm_init_rx_queue(sc, sc->sc_rxq);
+	error = wm_init_rx_queues(sc);
 	if (error)
 		goto out;
 
@@ -4702,7 +4793,9 @@ wm_init_locked(struct ifnet *ifp)
 		reg |= RXCSUM_IPV6OFL | RXCSUM_TUOFL;
 	CSR_WRITE(sc, WMREG_RXCSUM, reg);
 
-	/* Set up MSI-X */
+	/* Set up the interrupt registers */
+        CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
+
 	if (sc->sc_intr_type == WM_IT_MSIX)
 		wm_init_msix(sc);
 	else {
@@ -4868,9 +4961,14 @@ wm_init_locked(struct ifnet *ifp)
 	}
 
 	/* On 575 and later set RDT only if RX enabled */
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
-		for (i = 0; i < WM_NRXDESC; i++)
-			wm_init_rxdesc(sc, sc->sc_rxq, i);
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
+		int qnum;
+		for (qnum = 0; qnum < sc->sc_nrxqueues; qnum++) {
+			struct wm_rxqueue *rxq = &sc->sc_rxq[qnum];
+			for (i = 0; i < WM_NRXDESC; i++)
+				wm_init_rxdesc(sc, rxq, i);
+		}
+	}
 
 	sc->sc_stopping = false;
 

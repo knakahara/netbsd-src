@@ -525,18 +525,22 @@ struct livengood_tcpip_ctxdesc {
 #define WMREG_LTRC	0x01a0	/* Latency Tolerance Reportiong Control */
 
 #define	WMREG_OLD_RDBAL0 0x0110	/* Receive Descriptor Base Low (ring 0) */
-#define	WMREG_RDBAL	0x2800
+#define	WMREG_RDBAL(x)	((x) < 4 ? (0x02800 + ((x) * 0x100)) : \
+			 (0x0C000 + ((x) * 0x40)))
 #define	WMREG_RDBAL_2	0x0c00	/* for 82576 ... */
 
 #define	WMREG_OLD_RDBAH0 0x0114	/* Receive Descriptor Base High (ring 0) */
-#define	WMREG_RDBAH	0x2804
+#define	WMREG_RDBAH(x)	((x) < 4 ? (0x02804 + ((x) * 0x100)) : \
+			 (0x0c004 + ((x) * 0x40)))
 #define	WMREG_RDBAH_2	0x0c04	/* for 82576 ... */
 
 #define	WMREG_OLD_RDLEN0 0x0118	/* Receive Descriptor Length (ring 0) */
-#define	WMREG_RDLEN	0x2808
+#define	WMREG_RDLEN(x)	((x) < 4 ? (0x02808 + ((x) * 0x100)) :	\
+			 (0x0c008 + ((x) * 0x40)))
 #define	WMREG_RDLEN_2	0x0c08	/* for 82576 ... */
 
-#define WMREG_SRRCTL	0x280c	/* additional recv control used in 82575 ... */
+#define WMREG_SRRCTL(x)	((x) < 4 ? (0x0280c + ((x) * 0x100)) :	\
+			 (0x0c00c + ((x) * 0x40))) /* additional recv control used in 82575 ... */
 #define WMREG_SRRCTL_2	0x0c0c	/* for 82576 ... */
 #define SRRCTL_BSIZEPKT_MASK		0x0000007f
 #define SRRCTL_BSIZEPKT_SHIFT		10	/* Shift _right_ */
@@ -552,14 +556,17 @@ struct livengood_tcpip_ctxdesc {
 #define SRRCTL_DROP_EN			0x80000000
 
 #define	WMREG_OLD_RDH0	0x0120	/* Receive Descriptor Head (ring 0) */
-#define	WMREG_RDH	0x2810
+#define	WMREG_RDH(x)	((x) < 4 ? (0x02810 + ((x) * 0x100)) :	\
+			 (0x0C010 + ((x) * 0x40)))
 #define	WMREG_RDH_2	0x0c10	/* for 82576 ... */
 
 #define	WMREG_OLD_RDT0	0x0128	/* Receive Descriptor Tail (ring 0) */
-#define	WMREG_RDT	0x2818
+#define	WMREG_RDT(x)	((x) < 4 ? (0x02818 + ((x) * 0x100)) : \
+			 (0x0C018 + ((x) * 0x40)))
 #define	WMREG_RDT_2	0x0c18	/* for 82576 ... */
 
-#define	WMREG_RXDCTL	0x2828	/* Receive Descriptor Control */
+#define	WMREG_RXDCTL(x)	((x) < 4 ? (0x02828 + ((x) * 0x100)) :	\
+			 (0x0c028 + ((x) * 0x40))) /* Receive Descriptor Control */
 #define	WMREG_RXDCTL_2	0x0c28	/* for 82576 ... */
 #define	RXDCTL_PTHRESH(x) ((x) << 0)	/* prefetch threshold */
 #define	RXDCTL_HTHRESH(x) ((x) << 8)	/* host threshold */
@@ -778,7 +785,11 @@ struct livengood_tcpip_ctxdesc {
 #define EITR_OTHER	0x80000000 /* Interrupt Cause Active */
 
 #define WMREG_EITR(x)	(0x01680 + (0x4 * (x)))
+#if 1
+#define EITR_ITR_INT_MASK	__BITS(14, 2)
+#else
 #define EITR_ITR_INT_MASK	0x0000ffff
+#endif
 
 #define WMREG_EITR_82574(x)	(0x000E8 + (0x4 * (x)))
 
@@ -840,6 +851,8 @@ struct livengood_tcpip_ctxdesc {
 #define	RXCSUM_IPOFL	(1U << 8)	/* IP checksum offload */
 #define	RXCSUM_TUOFL	(1U << 9)	/* TCP/UDP checksum offload */
 #define	RXCSUM_IPV6OFL	(1U << 10)	/* IPv6 checksum offload */
+#define RXCSUM_IPPCSE	(1U << 11)	/* IP payload checksum enable */
+#define RXCSUM_PCSD	(1U << 12)	/* packet checksum disabled */
 
 #define WMREG_RLPML	0x5004	/* Rx Long Packet Max Length */
 
@@ -858,6 +871,50 @@ struct livengood_tcpip_ctxdesc {
 #define WUFC_ARP		0x00000020 /* ARP Request Packet Wakeup En */
 #define WUFC_IPV4		0x00000040 /* Directed IPv4 Packet Wakeup En */
 #define WUFC_IPV6		0x00000080 /* Directed IPv6 Packet Wakeup En */
+
+#define WMREG_MRQC	0x5818	/* Multiple Receive Queues Command */
+#define MRQC_DISABLE_RSS	0x00000000
+#define MRQC_ENABLE_RSS_8Q	__BIT(1) /* enable RSS(max 8queues) without VMDq */
+#define MRQC_ENABLE_RSS_VMDQ	__BITS(1, 0) /* enable RSS(max 8queues) with VMDq */
+#define MRQC_DEFQ_MASK		__BITS(5, 3)
+				/*
+				 * Defines the default queue in non VMDq
+				 * mode according to value of the Multiple Receive
+				 * Queues Enable field.
+				 */
+#define MRQC_DEFQ_NOT_RSS_FLT	__SHFTIN(__BIT(1), MRQC_DEFQ_MASK)
+				/*
+				 * the destination of all packets
+				 * not forwarded by RSS or filters
+				 */
+#define MRQC_DEFQ_NOT_MAC_ETH	__SHFTIN(__BITS(1, 0), MRQC_DEFQ_MASK)
+				/*
+				 * Def_Q field is ignored. Queueing
+				 * decision of all packets not forwarded
+				 * by MAC address and Ether-type filters
+				 * is according to VT_CTL.DEF_PL field.
+				 */
+#define MRQC_DEFQ_IGNORED1	__SHFTIN(__BIT(2), MRQC_DEFQ_MASK)
+				/* Def_Q field is ignored */
+#define MRQC_DEFQ_IGNORED2	__SHFTIN(__BIT(2)|__BIT(0), MRQC_DEFQ_MASK)
+				/* Def_Q field is ignored */
+#define MRQC_DEFQ_VMDQ		__SHFTIN(__BITS(2, 1), MRQC_DEFQ_MASK)
+				/* for VMDq mode */
+#define MRQC_RSS_FIELD_IPV4_TCP	__BIT(16)
+#define MRQC_RSS_FIELD_IPV4	__BIT(17)
+#define MRQC_RSS_FIELD_IPV6_TCP_EX	__BIT(18)
+#define MRQC_RSS_FIELD_IPV6_EX	__BIT(19)
+#define MRQC_RSS_FIELD_IPV6	__BIT(20)
+#define MRQC_RSS_FIELD_IPV6_TCP	__BIT(21)
+#define MRQC_RSS_FIELD_IPV4_UDP	__BIT(22)
+#define MRQC_RSS_FIELD_IPV6_UDP	__BIT(23)
+#define MRQC_RSS_FIELD_IPV6_UDP_EX	__BIT(24)
+
+#define WMREG_RETA(x)	(0x5c00 + (x) * 4) /* Redirection Table */
+#define RETA_NUM_ENTRIES	128
+
+#define WMREG_RSSRK(x)	(0x5c80 + (x) * 4) /* RSS Random Key Register */
+#define RSSRK_NUM_REGS		10
 
 #define	WMREG_MANC	0x5820	/* Management Control */
 #define	MANC_SMBUS_EN		0x00000001
