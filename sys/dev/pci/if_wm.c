@@ -1379,7 +1379,7 @@ wm_alloc_tx_descs(struct wm_softc *sc)
 	    WM_NTXDESC_82542 : WM_NTXDESC_82544;
 	sc->sc_txdesc_size = sc->sc_type < WM_T_82544 ?
 	    sizeof(wiseman_txdesc_t) * WM_NTXDESC(sc) :
-	    sizeof(txdescs_t) * WM_NTXDESC(sc);
+	    sizeof(txdescs_t);
 	if ((error = bus_dmamem_alloc(sc->sc_dmat, sc->sc_txdesc_size, PAGE_SIZE,
 		    (bus_size_t) 0x100000000ULL, &sc->sc_txdesc_seg, 1,
 		    &sc->sc_txdesc_rseg, 0)) != 0) {
