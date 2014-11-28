@@ -718,6 +718,9 @@ static void	wm_reset_init_script_82575(struct wm_softc *);
 CFATTACH_DECL3_NEW(wm, sizeof(struct wm_softc),
     wm_match, wm_attach, wm_detach, NULL, NULL, NULL, DVF_DETACH_SHUTDOWN);
 
+static int wm_disable_msix; /* TODO: can be changed by sysctl */
+static int wm_disable_msi; /* TODO: can be changed by sysctl */
+
 /*
  * Devices supported by this driver.
  */
@@ -3250,6 +3253,9 @@ wm_alloc_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 	int want_msix_count = ncpu < sc->sc_max_nrxqueues ? ncpu * 2 + 1 : WM_MAX_INTRS;
 	int error;
 
+	if (wm_disable_msix)
+		return EINVAL;
+
 	msix_count = pci_msix_count(pa);
 	if (msix_count == 0) {
 		aprint_error_dev(sc->sc_dev, "device does not support MSI-X\n");
@@ -3289,19 +3295,23 @@ wm_alloc_msi(struct wm_softc *sc, struct pci_attach_args *pa)
 	int wm_msi_num = 1; /* use only one MSI vector */
 	int error;
 
+	if (wm_disable_msi)
+		return EINVAL;
+
 	if (pci_msi_count(pa) < wm_msi_num) {
 		aprint_error_dev(sc->sc_dev,
 		    "device does not have enough MSI vectors.\n");
 		return ENOMEM;
 	}
 
-	sc->sc_nintrs = wm_msi_num;
-	error = pci_msi_alloc_exact(pa, &sc->sc_intrs, sc->sc_nintrs);
+	error = pci_msi_alloc_exact(pa, &sc->sc_intrs, wm_msi_num);
 	if (error) {
-		sc->sc_nintrs = 0;
 		return error;
 	}
 
+	sc->sc_nintrs = wm_msi_num;
+	sc->sc_ntxqueues = wm_msi_num;
+	sc->sc_nrxqueues = wm_msi_num;
 	sc->sc_intr_type = WM_IT_MSI;
 	return 0;
 }
@@ -3317,6 +3327,9 @@ wm_alloc_legacy(struct wm_softc *sc, struct pci_attach_args *pa)
 		return error;
 	}
 
+	sc->sc_nintrs = 1;
+	sc->sc_ntxqueues = 1;
+	sc->sc_nrxqueues = 1;
 	sc->sc_intr_type = WM_IT_LEGACY;
 	return 0;
 }
