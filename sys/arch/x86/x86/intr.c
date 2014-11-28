@@ -507,8 +507,11 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 
 	SIMPLEQ_REMOVE(&io_interrupt_sources, isp, intrsource, is_list);
 
-	evcnt_detach(&isp->is_evcnt);
-	kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
+	/* Is this interrupt established? */
+	if (isp->is_xname != NULL) {
+		evcnt_detach(&isp->is_evcnt);
+		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
+	}
 	kmem_free(isp->is_saved_evcnt,
 	    sizeof(*(isp->is_saved_evcnt)) * ncpuonline);
 	kmem_free(isp, sizeof(*isp));
