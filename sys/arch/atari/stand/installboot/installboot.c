@@ -1,4 +1,4 @@
-/*	$NetBSD: installboot.c,v 1.32 2014/11/16 13:47:52 tsutsui Exp $	*/
+/*	$NetBSD: installboot.c,v 1.34 2014/11/24 08:08:23 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1995 Waldi Ravens
@@ -54,7 +54,9 @@
 #include "installboot.h"
 
 static void	usage(void);
+#ifdef CHECK_OS_BOOTVERSION
 static void	oscheck(void);
+#endif
 static u_int	abcksum(void *);
 static void	setNVpref(void);
 static void	setIDEpar(u_int8_t *, size_t);
@@ -99,8 +101,10 @@ main(int argc, char *argv[])
 	char		 *devchr;
 	int		 fd, c;
 
+#ifdef CHECK_OS_BOOTVERSION
 	/* check OS bootversion */
 	oscheck();
+#endif
 
 	/* parse options */
 	while ((c = getopt(argc, argv, "Nmt:u:v")) != -1) {
@@ -177,6 +181,7 @@ main(int argc, char *argv[])
 	return(EXIT_SUCCESS);
 }
 
+#ifdef CHECK_OS_BOOTVERSION
 static void
 oscheck(void)
 {
@@ -208,6 +213,7 @@ oscheck(void)
 		errx(EXIT_FAILURE, "Kern bootversion: %d, expected: %d",
 		    kvers, BOOTVERSION);
 }
+#endif
 
 static void
 install_fd(char *devnm, struct disklabel *label)
@@ -467,10 +473,6 @@ mkbootblock(struct bootblock *bb, char *xxb, char *bxx,
     struct disklabel *label, u_int magic)
 {
 	int		 fd;
-	union {
-		struct bootblock *bbp;
-		uint16_t *word;		/* to fill cksum word */
-	} bbsec;
 
 	memset(bb, 0, sizeof(*bb));
 
@@ -502,9 +504,8 @@ mkbootblock(struct bootblock *bb, char *xxb, char *bxx,
 	setIDEpar(bb->bb_xxboot, sizeof(bb->bb_xxboot));
 
 	/* set AHDI checksum */
-	bbsec.bbp = bb;
-	bbsec.word[255] = 0;
-	bbsec.word[255] = 0x1234 - abcksum(bb->bb_xxboot);
+	*((u_int16_t *)bb->bb_xxboot + 255) = 0;
+	*((u_int16_t *)bb->bb_xxboot + 255) = 0x1234 - abcksum(bb->bb_xxboot);
 
 	if (verbose) {
 		printf("Primary   boot loader: %s\n", xxb);
