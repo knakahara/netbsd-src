@@ -1,4 +1,4 @@
-/*	$NetBSD: pcidevs.h,v 1.1204 2014/12/31 21:21:41 veego Exp $	*/
+/*	$NetBSD$	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
