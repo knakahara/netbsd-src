@@ -1,4 +1,4 @@
-/* $NetBSD: ipv6.h,v 1.4 2014/10/29 01:08:31 roy Exp $ */
+/* $NetBSD: ipv6.h,v 1.8 2014/12/17 20:50:08 roy Exp $ */
 
 /*
  * dhcpcd - DHCP client daemon
@@ -30,7 +30,6 @@
 #ifndef IPV6_H
 #define IPV6_H
 
-#include <sys/queue.h>
 #include <sys/uio.h>
 
 #include <netinet/in.h>
@@ -40,6 +39,7 @@
 #  include <linux/ipv6.h>
 #endif
 
+#include "config.h"
 #include "dhcpcd.h"
 
 #define ALLROUTERS "ff02::2"
@@ -85,6 +85,7 @@ struct ipv6_addr {
 	uint8_t prefix_len;
 	uint32_t prefix_vltime;
 	uint32_t prefix_pltime;
+	struct timeval acquired;
 	struct in6_addr addr;
 	int addr_flags;
 	short flags;
@@ -182,7 +183,7 @@ uint8_t ipv6_prefixlen(const struct in6_addr *);
 int ipv6_userprefix( const struct in6_addr *, short prefix_len,
     uint64_t user_number, struct in6_addr *result, short result_len);
 void ipv6_checkaddrflags(void *);
-int ipv6_addaddr(struct ipv6_addr *);
+int ipv6_addaddr(struct ipv6_addr *, const struct timeval *);
 ssize_t ipv6_addaddrs(struct ipv6_addrhead *addrs);
 void ipv6_freedrop_addrs(struct ipv6_addrhead *, int,
     const struct interface *);

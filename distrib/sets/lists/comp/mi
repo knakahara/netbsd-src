@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1919 2014/10/24 02:39:34 christos Exp $
+#	$NetBSD: mi,v 1.1929 2014/11/24 12:51:23 pettai Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -3130,6 +3130,7 @@
 ./usr/include/sys/cdio.h			comp-c-include
 ./usr/include/sys/chio.h			comp-c-include
 ./usr/include/sys/clist.h			comp-obsolete		obsolete
+./usr/include/sys/clock.h			comp-c-include
 ./usr/include/sys/clockctl.h			comp-c-include
 ./usr/include/sys/common_ansi.h			comp-c-include
 ./usr/include/sys/common_int_const.h		comp-c-include
@@ -3749,6 +3750,8 @@
 ./usr/lib/librumpdev.a				comp-c-lib		rump
 ./usr/lib/librumpdev_audio.a			comp-c-lib		rump
 ./usr/lib/librumpdev_audio_p.a			comp-c-proflib		profile,rump
+./usr/lib/librumpdev_audio_ac97.a			comp-obsolete	obsolete
+./usr/lib/librumpdev_audio_ac97_p.a			comp-obsolete	obsolete
 ./usr/lib/librumpdev_bpf.a			comp-c-lib		rump
 ./usr/lib/librumpdev_bpf_p.a			comp-c-proflib		profile,rump
 ./usr/lib/librumpdev_cgd.a			comp-c-lib		rump
@@ -6375,7 +6378,9 @@
 ./usr/share/man/cat3/erf.0			comp-c-catman		.cat
 ./usr/share/man/cat3/erfc.0			comp-c-catman		.cat
 ./usr/share/man/cat3/erfcf.0			comp-c-catman		.cat
+./usr/share/man/cat3/erfcl.0			comp-c-catman		.cat
 ./usr/share/man/cat3/erff.0			comp-c-catman		.cat
+./usr/share/man/cat3/erfl.0			comp-c-catman		.cat
 ./usr/share/man/cat3/err.0			comp-c-catman		.cat
 ./usr/share/man/cat3/errc.0			comp-c-catman		.cat
 ./usr/share/man/cat3/error_message.0		comp-krb5-catman	kerberos,.cat
@@ -7098,7 +7103,10 @@
 ./usr/share/man/cat3/jn.0			comp-c-catman		.cat
 ./usr/share/man/cat3/jnf.0			comp-c-catman		.cat
 ./usr/share/man/cat3/jrand48.0			comp-c-catman		.cat
+./usr/share/man/cat3/kadm5_add_passwd_quality_verifier.0	comp-krb5-catman	kerberos,.cat
+./usr/share/man/cat3/kadm5_check_password_quality.0	comp-krb5-catman	kerberos,.cat
 ./usr/share/man/cat3/kadm5_pwcheck.0		comp-krb5-catman	kerberos,.cat
+./usr/share/man/cat3/kadm5_setup_passwd_quality_check.0	comp-krb5-catman	kerberos,.cat
 ./usr/share/man/cat3/kafs.0			comp-krb5-catman	kerberos,.cat
 ./usr/share/man/cat3/kerberos.0			comp-obsolete		obsolete
 ./usr/share/man/cat3/keyname.0			comp-c-catman		.cat
@@ -7516,6 +7524,7 @@
 ./usr/share/man/cat3/krb5_print_address.0	comp-obsolete		obsolete
 ./usr/share/man/cat3/krb5_prompt.0		comp-krb5-catman	kerberos,.cat
 ./usr/share/man/cat3/krb5_prompter_posix.0	comp-krb5-catman	kerberos,.cat
+./usr/share/man/cat3/krb5_pwcheck.0		comp-krb5-catman	kerberos,.cat
 ./usr/share/man/cat3/krb5_random_to_key.0	comp-obsolete		obsolete
 ./usr/share/man/cat3/krb5_rc_close.0		comp-krb5-catman	kerberos,.cat
 ./usr/share/man/cat3/krb5_rc_default.0		comp-krb5-catman	kerberos,.cat
@@ -8221,6 +8230,7 @@
 ./usr/share/man/cat3/pcap_freealldevs.0		comp-obsolete		obsolete
 ./usr/share/man/cat3/pcap_freecode.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_get_selectable_fd.0	comp-c-catman		.cat
+./usr/share/man/cat3/pcap_get_tstamp_precision.0	comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_geterr.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_inject.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_is_swapped.0		comp-c-catman		.cat
@@ -8238,11 +8248,13 @@
 ./usr/share/man/cat3/pcap_open_offline.0	comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_set_buffer_size.0	comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_set_datalink.0	comp-c-catman		.cat
+./usr/share/man/cat3/pcap_set_immediate_mode.0	comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_set_promisc.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_set_rfmon.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_set_snaplen.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_set_timeout.0		comp-c-catman		.cat
-./usr/share/man/cat3/pcap_set_tstamp_type.0		comp-c-catman		.cat
+./usr/share/man/cat3/pcap_set_tstamp_precision.0	comp-c-catman		.cat
+./usr/share/man/cat3/pcap_set_tstamp_type.0	comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_setdirection.0	comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_setfilter.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pcap_setnonblock.0		comp-c-catman		.cat
@@ -13231,7 +13243,9 @@
 ./usr/share/man/html3/erf.html			comp-c-htmlman		html
 ./usr/share/man/html3/erfc.html			comp-c-htmlman		html
 ./usr/share/man/html3/erfcf.html		comp-c-htmlman		html
+./usr/share/man/html3/erfcl.html		comp-c-htmlman		html
 ./usr/share/man/html3/erff.html			comp-c-htmlman		html
+./usr/share/man/html3/erfl.html			comp-c-htmlman		html
 ./usr/share/man/html3/err.html			comp-c-htmlman		html
 ./usr/share/man/html3/errc.html			comp-c-htmlman		html
 ./usr/share/man/html3/error_message.html	comp-krb5-htmlman	kerberos,html
@@ -13951,7 +13965,10 @@
 ./usr/share/man/html3/jn.html			comp-c-htmlman		html
 ./usr/share/man/html3/jnf.html			comp-c-htmlman		html
 ./usr/share/man/html3/jrand48.html		comp-c-htmlman		html
+./usr/share/man/html3/kadm5_add_passwd_quality_verifier.html	comp-krb5-htmlman	kerberos,html
+./usr/share/man/html3/kadm5_check_password_quality.html	comp-krb5-htmlman	kerberos,html
 ./usr/share/man/html3/kadm5_pwcheck.html	comp-krb5-htmlman	kerberos,html
+./usr/share/man/html3/kadm5_setup_passwd_quality_check.html	comp-krb5-htmlman	kerberos,html
 ./usr/share/man/html3/kafs.html			comp-krb5-htmlman	kerberos,html
 ./usr/share/man/html3/keyname.html		comp-c-htmlman		html
 ./usr/share/man/html3/keypad.html		comp-c-htmlman		html
@@ -14367,6 +14384,7 @@
 ./usr/share/man/html3/krb5_print_address.html	comp-obsolete		obsolete
 ./usr/share/man/html3/krb5_prompt.html		comp-krb5-htmlman	kerberos,html
 ./usr/share/man/html3/krb5_prompter_posix.html	comp-krb5-htmlman	kerberos,html
+./usr/share/man/html3/krb5_pwcheck.html		comp-krb5-htmlman	kerberos,html
 ./usr/share/man/html3/krb5_random_to_key.html	comp-obsolete		obsolete
 ./usr/share/man/html3/krb5_rc_close.html	comp-krb5-htmlman	kerberos,html
 ./usr/share/man/html3/krb5_rc_default.html	comp-krb5-htmlman	kerberos,html
@@ -15037,6 +15055,7 @@
 ./usr/share/man/html3/pcap_freealldevs.html	comp-obsolete		obsolete
 ./usr/share/man/html3/pcap_freecode.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_get_selectable_fd.html comp-c-htmlman	html
+./usr/share/man/html3/pcap_get_tstamp_precision.html comp-c-htmlman	html
 ./usr/share/man/html3/pcap_geterr.html		comp-c-htmlman		html
 ./usr/share/man/html3/pcap_inject.html		comp-c-htmlman		html
 ./usr/share/man/html3/pcap_is_swapped.html	comp-c-htmlman		html
@@ -15054,10 +15073,12 @@
 ./usr/share/man/html3/pcap_open_offline.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_buffer_size.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_datalink.html	comp-c-htmlman		html
+./usr/share/man/html3/pcap_set_immediate_mode.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_promisc.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_rfmon.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_snaplen.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_timeout.html	comp-c-htmlman		html
+./usr/share/man/html3/pcap_set_tstamp_precision.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_set_tstamp_type.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_setdirection.html	comp-c-htmlman		html
 ./usr/share/man/html3/pcap_setfilter.html	comp-c-htmlman		html
@@ -19999,7 +20020,9 @@
 ./usr/share/man/man3/erf.3			comp-c-man		.man
 ./usr/share/man/man3/erfc.3			comp-c-man		.man
 ./usr/share/man/man3/erfcf.3			comp-c-man		.man
+./usr/share/man/man3/erfcl.3			comp-c-man		.man
 ./usr/share/man/man3/erff.3			comp-c-man		.man
+./usr/share/man/man3/erfl.3			comp-c-man		.man
 ./usr/share/man/man3/err.3			comp-c-man		.man
 ./usr/share/man/man3/errc.3			comp-c-man		.man
 ./usr/share/man/man3/error_message.3		comp-krb5-man		kerberos,.man
@@ -20722,7 +20745,10 @@
 ./usr/share/man/man3/jn.3			comp-c-man		.man
 ./usr/share/man/man3/jnf.3			comp-c-man		.man
 ./usr/share/man/man3/jrand48.3			comp-c-man		.man
+./usr/share/man/man3/kadm5_add_passwd_quality_verifier.3	comp-krb5-man		kerberos,.man
+./usr/share/man/man3/kadm5_check_password_quality.3	comp-krb5-man		kerberos,.man
 ./usr/share/man/man3/kadm5_pwcheck.3		comp-krb5-man		kerberos,.man
+./usr/share/man/man3/kadm5_setup_passwd_quality_check.3	comp-krb5-man		kerberos,.man
 ./usr/share/man/man3/kafs.3			comp-krb5-man		kerberos,.man
 ./usr/share/man/man3/kerberos.3			comp-obsolete		obsolete
 ./usr/share/man/man3/keyname.3			comp-c-man		.man
@@ -21140,6 +21166,7 @@
 ./usr/share/man/man3/krb5_print_address.3	comp-obsolete		obsolete
 ./usr/share/man/man3/krb5_prompt.3		comp-krb5-man		kerberos,.man
 ./usr/share/man/man3/krb5_prompter_posix.3	comp-krb5-man		kerberos,.man
+./usr/share/man/man3/krb5_pwcheck.3		comp-krb5-man		kerberos,.man
 ./usr/share/man/man3/krb5_random_to_key.3	comp-obsolete		obsolete
 ./usr/share/man/man3/krb5_rc_close.3		comp-krb5-man		kerberos,.man
 ./usr/share/man/man3/krb5_rc_default.3		comp-krb5-man		kerberos,.man
@@ -21845,6 +21872,7 @@
 ./usr/share/man/man3/pcap_freealldevs.3		comp-obsolete		obsolete
 ./usr/share/man/man3/pcap_freecode.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_get_selectable_fd.3	comp-c-man		.man
+./usr/share/man/man3/pcap_get_tstamp_precision.3	comp-c-man		.man
 ./usr/share/man/man3/pcap_geterr.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_inject.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_is_swapped.3		comp-c-man		.man
@@ -21862,11 +21890,13 @@
 ./usr/share/man/man3/pcap_open_offline.3	comp-c-man		.man
 ./usr/share/man/man3/pcap_set_buffer_size.3	comp-c-man		.man
 ./usr/share/man/man3/pcap_set_datalink.3	comp-c-man		.man
+./usr/share/man/man3/pcap_set_immediate_mode.3	comp-c-man		.man
 ./usr/share/man/man3/pcap_set_promisc.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_set_rfmon.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_set_snaplen.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_set_timeout.3		comp-c-man		.man
-./usr/share/man/man3/pcap_set_tstamp_type.3		comp-c-man		.man
+./usr/share/man/man3/pcap_set_tstamp_precision.3	comp-c-man		.man
+./usr/share/man/man3/pcap_set_tstamp_type.3	comp-c-man		.man
 ./usr/share/man/man3/pcap_setdirection.3	comp-c-man		.man
 ./usr/share/man/man3/pcap_setfilter.3		comp-c-man		.man
 ./usr/share/man/man3/pcap_setnonblock.3		comp-c-man		.man

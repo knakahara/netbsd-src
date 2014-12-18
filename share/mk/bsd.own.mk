@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.836 2014/10/05 17:08:46 apb Exp $
+#	$NetBSD: bsd.own.mk,v 1.838 2014/12/16 06:04:10 mrg Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -576,6 +576,7 @@ OBJCOPY_ELF2AOUT_FLAGS?=	\
 	-R .debug_loc		\
 	-R .debug_pubnames	\
 	-R .debug_pubtypes	\
+	-R .debug_ranges	\
 	-R .debug_str		\
 	-R .eh_frame		\
 	-R .note.netbsd.ident
@@ -1267,8 +1268,9 @@ X11SRCDIR.${_proto}proto?=		${X11SRCDIRMIT}/${_proto}proto/dist
 	xtrans fontconfig expat freetype evieext mkfontscale bdftopcf \
 	xkbcomp xorg-cf-files imake xorg-server xbiff xkbdata xkeyboard-config \
 	xbitmaps appres xeyes xev xedit sessreg pixman \
-	beforelight bitmap editres makedepend fonttosfnt fslsfonts \
-	fstobdf MesaDemos MesaGLUT MesaLib ico iceauth lbxproxy listres lndir \
+	beforelight bitmap editres makedepend fonttosfnt fslsfonts fstobdf \
+	glu glw mesa-demos MesaDemos MesaGLUT MesaLib \
+	ico iceauth lbxproxy listres lndir \
 	luit xproxymanagementprotocol mkfontdir oclock proxymngr rgb \
 	setxkbmap smproxy twm viewres x11perf xauth xcalc xclipboard \
 	xclock xcmsdb xconsole xcutsel xditview xdpyinfo xdriinfo xdm \

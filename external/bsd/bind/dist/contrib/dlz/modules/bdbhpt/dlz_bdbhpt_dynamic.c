@@ -1,4 +1,4 @@
-/*	$NetBSD: dlz_bdbhpt_dynamic.c,v 1.1.1.2 2014/02/28 17:40:09 christos Exp $	*/
+/*	$NetBSD: dlz_bdbhpt_dynamic.c,v 1.1.1.4 2014/12/10 03:34:31 christos Exp $	*/
 
 /*
  * Copyright (C) 2002 Stichting NLnet, Netherlands, stichting@nlnet.nl.

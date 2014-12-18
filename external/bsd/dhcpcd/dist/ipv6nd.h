@@ -1,4 +1,4 @@
-/* $NetBSD: ipv6nd.h,v 1.4 2014/10/29 01:08:31 roy Exp $ */
+/* $NetBSD: ipv6nd.h,v 1.8 2014/12/17 20:50:08 roy Exp $ */
 
 /*
  * dhcpcd - DHCP client daemon
@@ -30,10 +30,9 @@
 #ifndef IPV6ND_H
 #define IPV6ND_H
 
-#include <sys/queue.h>
-
 #include <time.h>
 
+#include "config.h"
 #include "dhcpcd.h"
 #include "ipv6.h"
 
@@ -100,10 +99,7 @@ void ipv6nd_handleifa(struct dhcpcd_ctx *, int,
     const char *, const struct in6_addr *, int);
 int ipv6nd_dadcompleted(const struct interface *);
 void ipv6nd_drop(struct interface *);
-
-#ifdef HAVE_RTM_GETNEIGH
 void ipv6nd_neighbour(struct dhcpcd_ctx *, struct in6_addr *, int);
-#endif
 #else
 #define ipv6nd_startrs(a) {}
 #define ipv6nd_findaddr(a, b, c) (0)

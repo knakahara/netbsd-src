@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: ipv4.c,v 1.4 2014/10/29 01:08:31 roy Exp $");
+ __RCSID("$NetBSD: ipv4.c,v 1.10 2014/12/17 20:50:08 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -28,18 +28,12 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/route.h>
-
-#ifdef __linux__
-#  include <asm/types.h> /* for systems with broken headers */
-#  include <linux/rtnetlink.h>
-#endif
 
 #include <ctype.h>
 #include <errno.h>
@@ -233,6 +227,11 @@ ipv4_ifcmp(const struct interface *si, const struct interface *ti)
 	if (sis->new && !tis->new)
 		return -1;
 	if (!sis->new && tis->new)
+		return 1;
+	/* Always prefer proper leases */
+	if (!(sis->added & STATE_FAKE) && (sis->added & STATE_FAKE))
+		return -1;
+	if ((sis->added & STATE_FAKE) && !(sis->added & STATE_FAKE))
 		return 1;
 	/* If we are either, they neither have a lease, or they both have.
 	 * We need to check for IPv4LL and make it non-preferred. */
@@ -627,7 +626,10 @@ ipv4_buildroutes(struct dhcpcd_ctx *ctx)
 			rt->src.s_addr = state->addr.s_addr;
 			/* Do we already manage it? */
 			if ((or = find_route(ctx->ipv4_routes, rt, NULL))) {
-				if (or->iface != ifp ||
+				if (state->added & STATE_FAKE)
+					continue;
+				if (or->flags & STATE_FAKE ||
+				    or->iface != ifp ||
 				    or->src.s_addr != state->addr.s_addr ||
 				    rt->gate.s_addr != or->gate.s_addr ||
 				    rt->metric != or->metric)
@@ -638,9 +640,13 @@ ipv4_buildroutes(struct dhcpcd_ctx *ctx)
 				TAILQ_REMOVE(ctx->ipv4_routes, or, next);
 				free(or);
 			} else {
-				if (n_route(rt) != 0)
+				if (!(state->added & STATE_FAKE) &&
+				    n_route(rt) != 0)
 					continue;
 			}
+			rt->flags = STATE_ADDED;
+			if (state->added & STATE_FAKE)
+				rt->flags |= STATE_FAKE;
 			TAILQ_REMOVE(dnr, rt, next);
 			TAILQ_INSERT_TAIL(nrs, rt, next);
 		}
@@ -726,19 +732,25 @@ ipv4_getstate(struct interface *ifp)
 }
 
 static int
-ipv4_addaddr(const struct interface *ifp, const struct dhcp_lease *lease)
+ipv4_addaddr(struct interface *ifp, const struct dhcp_lease *lease)
 {
 	int r;
+
+	if (ifp->options->options & DHCPCD_NOALIAS) {
+		struct ipv4_state *state;
+		struct ipv4_addr *ap, *apn;
+
+		state = IPV4_STATE(ifp);
+		TAILQ_FOREACH_SAFE(ap, &state->addrs, next, apn) {
+			if (ap->addr.s_addr != lease->addr.s_addr)
+				delete_address1(ifp, &ap->addr, &ap->net);
+		}
+	}
 
 	syslog(LOG_DEBUG, "%s: adding IP address %s/%d",
 	    ifp->name, inet_ntoa(lease->addr),
 	    inet_ntocidr(lease->net));
-	if (ifp->options->options & DHCPCD_NOALIAS)
-		r = if_setaddress(ifp,
-		    &lease->addr, &lease->net, &lease->brd);
-	else
-		r = if_addaddress(ifp,
-		    &lease->addr, &lease->net, &lease->brd);
+	r = if_addaddress(ifp, &lease->addr, &lease->net, &lease->brd);
 	if (r == -1 && errno != EEXIST)
 		syslog(LOG_ERR, "%s: if_addaddress: %m", __func__);
 	return r;
@@ -790,7 +802,8 @@ ipv4_applyaddr(void *arg)
 						} else {
 							ipv4_addaddr(ifn,
 							    &nstate->lease);
-							nstate->added = 1;
+							nstate->added =
+							    STATE_ADDED;
 						}
 						break;
 					}
@@ -864,10 +877,11 @@ ipv4_applyaddr(void *arg)
 
 	/* Now delete the old address if different */
 	if (state->addr.s_addr != lease->addr.s_addr &&
-	    state->addr.s_addr != 0)
+	    state->addr.s_addr != 0 &&
+	    ipv4_iffindaddr(ifp, &lease->addr, NULL))
 		delete_address(ifp);
 
-	state->added = 1;
+	state->added = STATE_ADDED;
 	state->defend = 0;
 	state->addr.s_addr = lease->addr.s_addr;
 	state->net.s_addr = lease->net.s_addr;

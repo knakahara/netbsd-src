@@ -80,6 +80,9 @@ FILES
      x11/           ``Reachover'' build structure for X11R6; the source is in
                     X11SRCDIR.
 
+     extsrc/        ``Reachover'' build structure for externally added
+                    programs and libraries; the source is in EXTSRCSRCDIR.
+
    Build tree layout
      The NetBSD build tree is described in hier(7), and the release layout is
      described in release(7).
@@ -197,6 +200,13 @@ CONFIGURATION
                  Note: build.sh will provide a default of destdir.MACHINE (in
                  the top-level .OBJDIR) unless run in `expert' mode.
 
+     EXTSRCSRCDIR
+                 Directory containing sources of externally added programs and
+                 libraries.  If specified, must be an absolute path.
+
+                 Default: NETBSDRCDIR/../extsrc, if that exists; otherwise
+                 /usr/extsrc.
+
      MAKECONF    The name of the make(1) configuration file.  Only settable in
                  the process environment.
 
@@ -263,6 +273,11 @@ CONFIGURATION
                  installed during a build.
 
                  Default: ``yes''
+
+     MKEXTSRC    Can be set to ``yes'' or ``no''.  Indicates whether extsrc is
+                 built from EXTSRCSRCDIR.
+
+                 Default: ``no''
 
      MKHTML      Can be set to ``yes'' or ``no''.  Indicates whether
                  preformatted HTML manual pages will be built and installed
@@ -632,8 +647,8 @@ BUILDING
                    set (see above).
 
      iso-image     Create a NetBSD installation CD-ROM image in the
-                   RELEASEDIR/iso directory.  The CD-ROM file system will have
-                   a layout as described in release(7).
+                   RELEASEDIR/images directory.  The CD-ROM file system will
+                   have a layout as described in release(7).
 
                    For most machine types, the CD-ROM will be bootable, and
                    will automatically run the sysinst(8) menu-based
@@ -649,8 +664,8 @@ BUILDING
                    the RELEASEDIR/RELEASEMACHINEDIR/installation/cdrom
                    directory by ``make release''.  These smaller images
                    usually contain the same tools as the larger images in
-                   RELEASEDIR/iso, but do not contain additional content such
-                   as the distribution sets.
+                   RELEASEDIR/images, but do not contain additional content
+                   such as the distribution sets.
 
                    Note that the mac68k port still uses an older method of
                    creating CD-ROM images.  This requires the mkisofs(1)
@@ -659,8 +674,8 @@ BUILDING
 
      iso-image-source
                    Create a NetBSD installation CD-ROM image in the
-                   RELEASEDIR/iso directory.  The CD-ROM file system will have
-                   a layout as described in release(7).  It will have top
+                   RELEASEDIR/images directory.  The CD-ROM file system will
+                   have a layout as described in release(7).  It will have top
                    level directories for the machine type and source.
 
                    For most machine types, the CD-ROM will be bootable, and
@@ -678,8 +693,8 @@ BUILDING
                    the RELEASEDIR/RELEASEMACHINEDIR/installation/cdrom
                    directory by ``make release''.  These smaller images
                    usually contain the same tools as the larger images in
-                   RELEASEDIR/iso, but do not contain additional content such
-                   as the distribution sets.
+                   RELEASEDIR/images, but do not contain additional content
+                   such as the distribution sets.
 
                    Note that the mac68k port still uses an older method of
                    creating CD-ROM images.  This requires the mkisofs(1)
@@ -1021,6 +1036,13 @@ BUILDING
                being used.
 
      -x        Set MKX11=yes.
+
+     -Y extsrcdir
+               Set the value of EXTSRCSRCDIR to extsrcdir.  If a relative path
+               is specified, it will be converted to an absolute path before
+               being used.
+
+     -y        Set MKEXTSRC=yes.
 
      -Z var    Unset ("zap") the environment variable var.  This is propagated
                to the nbmake wrapper.

@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: if.c,v 1.4 2014/10/29 01:08:31 roy Exp $");
+ __RCSID("$NetBSD: if.c,v 1.10 2014/12/17 20:50:08 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -50,12 +50,7 @@
 #ifdef SIOCGIFMEDIA
 #  include <net/if_media.h>
 #endif
-
 #include <net/route.h>
-#ifdef __linux__
-#  include <asm/types.h> /* for systems with broken headers */
-#  include <linux/rtnetlink.h>
-#endif
 
 #include <ctype.h>
 #include <errno.h>
@@ -169,13 +164,24 @@ if_setflag(struct interface *ifp, short flag)
 	return r;
 }
 
+static int
+if_hasconf(struct dhcpcd_ctx *ctx, const char *ifname)
+{
+	int i;
+
+	for (i = 0; i < ctx->ifcc; i++) {
+		if (strcmp(ctx->ifcv[i], ifname) == 0)
+			return 1;
+	}
+	return 0;
+}
+
 struct if_head *
 if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 {
 	struct ifaddrs *ifaddrs, *ifa;
 	char *p;
 	int i;
-	sa_family_t sdl_type;
 	struct if_head *ifs;
 	struct interface *ifp;
 #ifdef __linux__
@@ -286,6 +292,13 @@ if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 		if (!dev_initialized(ctx, p))
 			continue;
 
+		/* Don't allow loopback or pointopoint unless explicit */
+		if (ifa->ifa_flags & (IFF_LOOPBACK | IFF_POINTOPOINT)) {
+			if ((argc == 0 || argc == -1) &&
+			    ctx->ifac == 0 && !if_hasconf(ctx, p))
+				continue;
+		}
+
 		if (if_vimaster(p) == 1) {
 			syslog(argc ? LOG_ERR : LOG_DEBUG,
 			    "%s: is a Virtual Interface Master, skipping", p);
@@ -302,14 +315,7 @@ if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 		ifp->flags = ifa->ifa_flags;
 		ifp->carrier = if_carrier(ifp);
 
-		sdl_type = 0;
-		/* Don't allow loopback unless explicit */
-		if (ifp->flags & IFF_LOOPBACK) {
-			if ((argc == 0 || argc == -1) && ctx->ifac == 0) {
-				if_free(ifp);
-				continue;
-			}
-		} else if (ifa->ifa_addr != NULL) {
+		if (ifa->ifa_addr != NULL) {
 #ifdef AF_LINK
 			sdl = (const struct sockaddr_dl *)(void *)ifa->ifa_addr;
 
@@ -333,13 +339,13 @@ if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 			memcpy(&ifp->linkaddr, sdl, sdl->sdl_len);
 #endif
 			ifp->index = sdl->sdl_index;
-			sdl_type = sdl->sdl_type;
 			switch(sdl->sdl_type) {
 #ifdef IFT_BRIDGE
 			case IFT_BRIDGE:
 				/* Don't allow bridge unless explicit */
-				if ((argc == 0 || argc == -1)
-				    && ctx->ifac == 0)
+				if ((argc == 0 || argc == -1) &&
+				    ctx->ifac == 0 &&
+				    !if_hasconf(ctx, ifp->name))
 				{
 					if_free(ifp);
 					continue;
@@ -365,6 +371,21 @@ if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 				ifp->family = ARPHRD_INFINIBAND;
 				break;
 #endif
+			default:
+				/* Don't allow unless explicit */
+				if ((argc == 0 || argc == -1) &&
+				    ctx->ifac == 0 &&
+				    !if_hasconf(ctx, ifp->name))
+				{
+					if_free(ifp);
+					continue;
+				}
+				syslog(LOG_WARNING,
+				    "%s: unsupported interface type %.2x",
+				    ifp->name, ifp->family);
+				/* Pretend it's ethernet */
+				ifp->family = ARPHRD_ETHER;
+				break;
 			}
 			ifp->hwlen = sdl->sdl_alen;
 #ifndef CLLADDR
@@ -374,7 +395,7 @@ if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 #elif AF_PACKET
 			sll = (const struct sockaddr_ll *)(void *)ifa->ifa_addr;
 			ifp->index = (unsigned int)sll->sll_ifindex;
-			ifp->family = sdl_type = sll->sll_hatype;
+			ifp->family = sll->sll_hatype;
 			ifp->hwlen = sll->sll_halen;
 			if (ifp->hwlen != 0)
 				memcpy(ifp->hwaddr, sll->sll_addr, ifp->hwlen);
@@ -387,25 +408,33 @@ if_discover(struct dhcpcd_ctx *ctx, int argc, char * const *argv)
 #endif
 
 		/* We only work on ethernet by default */
-		if (!(ifp->flags & IFF_POINTOPOINT) &&
-		    ifp->family != ARPHRD_ETHER)
-		{
-			if ((argc == 0 || argc == -1) && ctx->ifac == 0) {
+		if (ifp->family != ARPHRD_ETHER) {
+			if ((argc == 0 || argc == -1) &&
+			    ctx->ifac == 0 && !if_hasconf(ctx, ifp->name))
+			{
 				if_free(ifp);
 				continue;
 			}
 			switch (ifp->family) {
-			case ARPHRD_IEEE1394: /* FALLTHROUGH */
+			case ARPHRD_IEEE1394:
 			case ARPHRD_INFINIBAND:
+#ifdef ARPHRD_LOOPBACK
+			case ARPHRD_LOOPBACK:
+#endif
+#ifdef ARPHRD_PPP
+			case ARPHRD_PPP:
+#endif
 				/* We don't warn for supported families */
 				break;
+
+/* IFT already checked */
+#ifndef AF_LINK
 			default:
 				syslog(LOG_WARNING,
-				    "%s: unsupported interface type %.2x"
-				    ", falling back to ethernet",
-				    ifp->name, sdl_type);
-				ifp->family = ARPHRD_ETHER;
+				    "%s: unsupported interface family %.2x",
+				    ifp->name, ifp->family);
 				break;
+#endif
 			}
 		}
 

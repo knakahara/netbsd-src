@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1488 2014/10/26 18:48:09 tls Exp $
+# $NetBSD: mi,v 1.1491 2014/12/02 03:51:48 msaitoh Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -2238,10 +2238,12 @@
 ./usr/share/man/cat7/release.0			man-reference-catman	.cat
 ./usr/share/man/cat7/rfc6056.0			man-reference-catman	.cat
 ./usr/share/man/cat7/rump_sp.0			man-reference-catman	.cat,rump
+./usr/share/man/cat7/rumpkernel.0			man-reference-catman	.cat,rump
 ./usr/share/man/cat7/script.0			man-reference-catman	.cat
 ./usr/share/man/cat7/security.0			man-reference-catman	.cat
 ./usr/share/man/cat7/setuid.0			man-reference-catman	.cat
 ./usr/share/man/cat7/signal.0			man-reference-catman	.cat
+./usr/share/man/cat7/src.0			man-reference-catman	.cat
 ./usr/share/man/cat7/sticky.0			man-reference-catman	.cat
 ./usr/share/man/cat7/symlink.0			man-reference-catman	.cat
 ./usr/share/man/cat7/sysctl.0			man-reference-catman	.cat
@@ -2568,6 +2570,7 @@
 ./usr/share/man/cat8/kadmind.0			man-krb5-catman		kerberos,.cat
 ./usr/share/man/cat8/kcm.0			man-krb5-catman		kerberos,.cat
 ./usr/share/man/cat8/kdc.0			man-krb5-catman		kerberos,.cat
+./usr/share/man/cat8/kdigest.0			man-krb5-catman		kerberos,.cat
 ./usr/share/man/cat8/kerberos.0			man-krb5-catman		kerberos,.cat
 ./usr/share/man/cat8/kfd.0			man-obsolete		obsolete
 ./usr/share/man/cat8/kimpersonate.0		man-krb5-catman		kerberos,.cat
@@ -5186,10 +5189,12 @@
 ./usr/share/man/html7/release.html		man-reference-htmlman	html
 ./usr/share/man/html7/rfc6056.html		man-reference-htmlman	html
 ./usr/share/man/html7/rump_sp.html		man-reference-htmlman	html,rump
+./usr/share/man/html7/rumpkernel.html		man-reference-htmlman	html,rump
 ./usr/share/man/html7/script.html		man-reference-htmlman	html
 ./usr/share/man/html7/security.html		man-reference-htmlman	html
 ./usr/share/man/html7/setuid.html		man-reference-htmlman	html
 ./usr/share/man/html7/signal.html		man-reference-htmlman	html
+./usr/share/man/html7/src.html			man-reference-htmlman	html
 ./usr/share/man/html7/sticky.html		man-reference-htmlman	html
 ./usr/share/man/html7/symlink.html		man-reference-htmlman	html
 ./usr/share/man/html7/sysctl.html		man-reference-htmlman	html
@@ -5431,6 +5436,7 @@
 ./usr/share/man/html8/kadmind.html		man-krb5-htmlman	kerberos,html
 ./usr/share/man/html8/kcm.html			man-krb5-htmlman	kerberos,html
 ./usr/share/man/html8/kdc.html			man-krb5-htmlman	kerberos,html
+./usr/share/man/html8/kdigest.html		man-krb5-htmlman	kerberos,html
 ./usr/share/man/html8/kerberos.html		man-krb5-htmlman	kerberos,html
 ./usr/share/man/html8/kimpersonate.html		man-krb5-htmlman	kerberos,html
 ./usr/share/man/html8/kpasswdd.html		man-krb5-htmlman	kerberos,html
@@ -8109,10 +8115,12 @@
 ./usr/share/man/man7/release.7			man-reference-man	.man
 ./usr/share/man/man7/rfc6056.7			man-reference-man	.man
 ./usr/share/man/man7/rump_sp.7		man-reference-man	.man,rump
+./usr/share/man/man7/rumpkernel.7		man-reference-man	.man,rump
 ./usr/share/man/man7/script.7			man-reference-man	.man
 ./usr/share/man/man7/security.7			man-reference-man	.man
 ./usr/share/man/man7/setuid.7			man-reference-man	.man
 ./usr/share/man/man7/signal.7			man-reference-man	.man
+./usr/share/man/man7/src.7			man-reference-man	.man
 ./usr/share/man/man7/sticky.7			man-reference-man	.man
 ./usr/share/man/man7/symlink.7			man-reference-man	.man
 ./usr/share/man/man7/sysctl.7			man-reference-man	.man
@@ -8440,6 +8448,7 @@
 ./usr/share/man/man8/kadmind.8			man-krb5-man		kerberos,.man
 ./usr/share/man/man8/kcm.8			man-krb5-man		kerberos,.man
 ./usr/share/man/man8/kdc.8			man-krb5-man		kerberos,.man
+./usr/share/man/man8/kdigest.8			man-krb5-man		kerberos,.man
 ./usr/share/man/man8/kerberos.8			man-krb5-man		kerberos,.man
 ./usr/share/man/man8/kfd.8			man-obsolete		obsolete
 ./usr/share/man/man8/kimpersonate.8		man-krb5-man		kerberos,.man

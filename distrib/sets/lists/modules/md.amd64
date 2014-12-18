@@ -1,4 +1,4 @@
-# $NetBSD: md.amd64,v 1.45 2014/09/19 17:33:47 christos Exp $
+# $NetBSD: md.amd64,v 1.50 2014/12/11 22:14:13 riastradh Exp $
 #
 # NOTE that there are two sets of files here:
 # @MODULEDIR@ and amd64-xen
@@ -61,6 +61,12 @@
 ./@MODULEDIR@/cxdtv/cxdtv.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/drm				base-kernel-modules	kmod
 ./@MODULEDIR@/drm/drm.kmod			base-kernel-modules	kmod
+./@MODULEDIR@/drmkms				base-kernel-modules	kmod
+./@MODULEDIR@/drmkms/drmkms.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/drmkms_linux			base-kernel-modules	kmod
+./@MODULEDIR@/drmkms_linux/drmkms_linux.kmod	base-kernel-modules	kmod
+./@MODULEDIR@/drmkms_pci			base-kernel-modules	kmod
+./@MODULEDIR@/drmkms_pci/drmkms_pci.kmod	base-kernel-modules	kmod
 ./@MODULEDIR@/emdtv				base-kernel-modules	kmod
 ./@MODULEDIR@/emdtv/emdtv.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/est				base-kernel-modules	kmod
@@ -89,6 +95,8 @@
 ./@MODULEDIR@/hpqlb/hpqlb.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/i915drm				base-kernel-modules	kmod
 ./@MODULEDIR@/i915drm/i915drm.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/i915drmkms			base-kernel-modules	kmod
+./@MODULEDIR@/i915drmkms/i915drmkms.kmod	base-kernel-modules	kmod
 ./@MODULEDIR@/itesio				base-kernel-modules	kmod
 ./@MODULEDIR@/itesio/itesio.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/lg3303				base-kernel-modules	kmod
@@ -248,10 +256,16 @@
 ./stand/amd64-xen/@OSRELEASE@/modules/des/des.kmod			base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/dk_subr				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/dk_subr/dk_subr.kmod		base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/dm				base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/dm/dm.kmod			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/dm				base-kernel-modules	kmod,compatmodules,lvm
+./stand/amd64-xen/@OSRELEASE@/modules/dm/dm.kmod			base-kernel-modules	kmod,compatmodules,lvm
 ./stand/amd64-xen/@OSRELEASE@/modules/drm				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/drm/drm.kmod			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/drmkms				base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/drmkms/drmkms.kmod		base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/drmkms_linux			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/drmkms_linux/drmkms_linux.kmod	base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/drmkms_pci			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/drmkms_pci/drmkms_pci.kmod	base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/dtrace				base-kernel-modules	kmod,dtrace,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/dtrace/dtrace.kmod		base-kernel-modules	kmod,dtrace,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/dtrace_fbt			base-kernel-modules	kmod,dtrace,compatmodules
@@ -324,6 +338,8 @@
 ./stand/amd64-xen/@OSRELEASE@/modules/hythygtemp/hythygtemp.kmod	base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/i915drm				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/i915drm/i915drm.kmod		base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/i915drmkms			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/i915drmkms/i915drmkms.kmod	base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/if_axe				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/if_axe/if_axe.kmod		base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/if_axen				base-kernel-modules	kmod,compatmodules
@@ -334,8 +350,8 @@
 ./stand/amd64-xen/@OSRELEASE@/modules/if_smsc/if_smsc.kmod		base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/iic				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/iic/iic.kmod			base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/iscsi				base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/iscsi/iscsi.kmod			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/iscsi				base-kernel-modules	kmod,compatmodules,iscsi
+./stand/amd64-xen/@OSRELEASE@/modules/iscsi/iscsi.kmod			base-kernel-modules	kmod,compatmodules,iscsi
 ./stand/amd64-xen/@OSRELEASE@/modules/itesio				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/itesio/itesio.kmod		base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/kernfs				base-kernel-modules	kmod,compatmodules
@@ -450,8 +466,8 @@
 ./stand/amd64-xen/@OSRELEASE@/modules/sljit/sljit.kmod			base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/smbfs				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/smbfs/smbfs.kmod			base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/solaris				base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/solaris/solaris.kmod		base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/solaris				base-kernel-modules	kmod,compatmodules,solaris
+./stand/amd64-xen/@OSRELEASE@/modules/solaris/solaris.kmod		base-kernel-modules	kmod,compatmodules,solaris
 ./stand/amd64-xen/@OSRELEASE@/modules/spdmem				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/spdmem/spdmem.kmod		base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/suser				base-kernel-modules	kmod,compatmodules
@@ -510,8 +526,8 @@
 ./stand/amd64-xen/@OSRELEASE@/modules/xc3028/xc3028.kmod		base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/xc5k				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/xc5k/xc5k.kmod			base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/zfs				base-kernel-modules	kmod,compatmodules
-./stand/amd64-xen/@OSRELEASE@/modules/zfs/zfs.kmod			base-kernel-modules	kmod,compatmodules
+./stand/amd64-xen/@OSRELEASE@/modules/zfs				base-kernel-modules	kmod,compatmodules,zfs
+./stand/amd64-xen/@OSRELEASE@/modules/zfs/zfs.kmod			base-kernel-modules	kmod,compatmodules,zfs
 ./stand/amd64-xen/@OSRELEASE@/modules/zl10353				base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/zl10353/zl10353.kmod		base-kernel-modules	kmod,compatmodules
 ./stand/amd64-xen/@OSRELEASE@/modules/zlib				base-kernel-modules	kmod,compatmodules

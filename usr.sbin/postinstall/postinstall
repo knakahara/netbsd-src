@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $NetBSD: postinstall,v 1.180 2014/09/11 13:10:04 roy Exp $
+# $NetBSD: postinstall,v 1.187 2014/12/16 05:30:40 jnemeth Exp $
 #
 # Copyright (c) 2002-2008 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -223,18 +223,24 @@ check_dir()
 	return 0
 }
 
-# check_ids op type file start id [...]
-#	Check if file of type "users" or "groups" contains the relevant IDs
+# check_ids op type file srcfile start id [...]
+#	Check if file of type "users" or "groups" contains the relevant IDs.
+#	Use srcfile as a reference for the expected contents.
+#	The specified "id" names should be given in numerical order,
+#	with the first name corresponding to numerical value "start",
+#	and with the special name "SKIP" being used to mark gaps in the
+#	sequence.
 #	Returns 0 if ok, 1 otherwise.
 #	
 check_ids()
 {
-	[ $# -ge 5 ] || err 3 "USAGE: checks_ids op type file start id [...]"
+	[ $# -ge 6 ] || err 3 "USAGE: checks_ids op type file start srcfile id [...]"
 	_op="$1"
 	_type="$2"
 	_file="$3"
-	_start="$4"
-	shift 4
+	_srcfile="$4"
+	_start="$5"
+	shift 5
 	#_ids="$@"
 
 	if [ ! -f "${_file}" ]; then
@@ -276,6 +282,14 @@ check_ids()
 	' "$@" < "${_file}")"	|| return 1
 	if [ -n "${_missing}" ]; then
 		msg "Error ${_type}${_notfixed}:" $(echo ${_missing})
+		msg "Use the following as a template:"
+		set -- ${_missing}
+		while [ $# -gt 0 ]
+		do
+			${GREP} -E "^${1}:" ${_srcfile}
+			shift 2
+		done
+		msg "and adjust if necessary."
 		return 1
 	fi
 	return 0
@@ -627,7 +641,7 @@ obsolete_stand()
 	local dir="$1"
 	local subdir
 
-	if ! [ -d "${DEST_DIR}/${dir}" ]; then
+	if ! [ -d "${DEST_DIR}${dir}" ]; then
 		msg "${DEST_DIR}${dir} doesn't exist; can't check for obsolete files"
 		return 1
 	fi
@@ -638,7 +652,7 @@ obsolete_stand()
 	| tail -n +2 \
 	| while read subdir ; do
 		subdir="${subdir%/.}"
-		find "${DEST_DIR}/${dir#/}/${subdir}" -depth -print
+		find "${DEST_DIR}${dir}/${subdir}" -depth -print
 	done \
 	| unprefix "${DEST_DIR}"
 }
@@ -1018,7 +1032,8 @@ do_gid()
 {
 	[ -n "$1" ] || err 3 "USAGE: do_gid  fix|check"
 
-	check_ids "$1" groups "${DEST_DIR}/etc/group" 14 \
+	check_ids "$1" groups "${DEST_DIR}/etc/group" \
+	    "${SRC_DIR}/etc/group" 14 \
 	    named ntpd sshd SKIP _pflogd _rwhod staff _proxy _timedc \
 	    _sdpd _httpd _mdnsd _tests _tcpdump _tss _gpio _rtadvd
 }
@@ -1290,6 +1305,174 @@ do_pwd_mkdb()
 #
 #	rc
 #
+
+# XXX Generate these from ../../distrib/sets/lists
+rc_644_files="
+rc
+rc.subr
+rc.shutdown
+"
+rc_555_files="
+DAEMON
+DISKS
+LOGIN
+NETWORKING
+SERVERS
+accounting
+altqd
+amd
+apmd
+bluetooth
+bootconf.sh
+bootparams
+ccd
+cgd
+cleartmp
+cron
+devpubd
+dhclient
+dhcpcd
+dhcpd
+dhcrelay
+dmesg
+downinterfaces
+envsys
+fsck
+fsck_root
+ftp_proxy
+ftpd
+gpio
+hostapd
+httpd
+identd
+ifwatchd
+inetd
+ipfilter
+ipfs
+ipmon
+ipnat
+ipsec
+irdaattach
+iscsi_target
+isdnd
+isibootd
+kdc
+ldconfig
+ldpd
+local
+lpd
+lvm
+makemandb
+mdnsd
+mixerctl
+mopd
+motd
+mountall
+mountcritlocal
+mountcritremote
+mountd
+moused
+mrouted
+named
+ndbootd
+network
+newsyslog
+nfsd
+nfslocking
+npf
+ntpd
+ntpdate
+perusertmp
+pf
+pf_boot
+pflogd
+postfix
+powerd
+ppp
+pwcheck
+quota
+racoon
+raidframe
+raidframeparity
+random_seed
+rarpd
+rbootd
+rndctl
+root
+route6d
+routed
+rpcbind
+rtadvd
+rtclocaltime
+rwho
+savecore
+screenblank
+securelevel
+sshd
+staticroute
+swap1
+swap2
+sysctl
+sysdb
+syslogd
+timed
+tpctl
+ttys
+veriexec
+virecover
+wdogctl
+wpa_supplicant
+wscons
+wsmoused
+ypbind
+yppasswdd
+ypserv
+"
+rc_obsolete_files="
+NETWORK
+btattach
+btconfig
+btcontrol
+btdevctl
+bthcid
+btuartd
+daemon
+fsck.sh
+gated
+kerberos
+login
+nfsiod
+poffd
+portmap
+sdpd
+servers
+sunndd
+systemfs
+xntpd
+"
+rc_obsolete_vars="
+amd
+amd_master
+btcontrol
+btcontrol_devices
+critical_filesystems
+critical_filesystems_beforenet
+mountcritlocal
+mountcritremote
+network
+ip6forwarding
+network
+nfsiod_flags
+sdpd
+sdpd_control
+sdpd
+sdpd_groupname
+sdpd
+sdpd_username
+sysctl
+defcorename
+"
+
 additem rc "/etc/rc* and /etc/rc.d/ being up to date"
 do_rc()
 {
@@ -1302,7 +1485,7 @@ do_rc()
 	fi
 
 	compare_dir "${op}" "${SRC_DIR}/etc" "${DEST_DIR}/etc" 644 \
-		rc rc.subr rc.shutdown
+		${rc_644_files}
 	failed=$(( ${failed} + $? ))
 
 	if ! $SOURCEMODE; then
@@ -1312,32 +1495,7 @@ do_rc()
 	fi
 
 	compare_dir "${op}" "${SRC_DIR}/etc/rc.d" "${DEST_DIR}/etc/rc.d" 555 \
-		DAEMON DISKS LOGIN NETWORKING SERVERS \
-		accounting altqd amd apmd \
-		bluetooth bootconf.sh bootparams \
-		ccd cgd cleartmp cron devpubd \
-		dhclient dhcpcd dhcpd dhcrelay dmesg downinterfaces envsys \
-		fsck fsck_root ftp_proxy ftpd \
-		gpio \
-		hostapd httpd \
-		identd ifwatchd inetd ipfilter ipfs ipmon ipnat ipsec \
-		irdaattach iscsi_target isdnd isibootd \
-		kdc \
-		ldconfig ldpd local lpd lvm \
-		makemandb mdnsd mixerctl mopd motd mountall mountcritlocal \
-		mountcritremote mountd moused mrouted \
-		named ndbootd network newsyslog nfsd nfslocking npf ntpd \
-		ntpdate \
-		perusertmp pf pf_boot pflogd postfix powerd ppp pwcheck \
-		quota \
-		racoon rpcbind raidframe raidframeparity random_seed rarpd \
-		rbootd rndctl root route6d routed rtadvd rtclocaltime \
-		rwho \
-		savecore screenblank securelevel sshd \
-		staticroute swap1 swap2 sysctl sysdb syslogd \
-		timed tpctl ttys \
-		veriexec virecover wdogctl wpa_supplicant wscons wsmoused \
-		ypbind yppasswdd ypserv \
+		${rc_555_files} \
 		${extra_scripts}
 	failed=$(( ${failed} + $? ))
 
@@ -1356,25 +1514,14 @@ do_rc()
 	fi
 
 		# check for obsolete rc.d files
-	for f in NETWORK btattach btconfig btcontrol btdevctl bthcid btuartd \
-	    fsck.sh kerberos nfsiod sdpd servers \
-	    systemfs daemon gated login poffd portmap sunndd xntpd; do
+	for f in ${rc_obsolete_files}; do
 		fd="/etc/rc.d/${f}"
 		[ -e "${DEST_DIR}${fd}" ] && echo "${fd}"
 	done | obsolete_paths "${op}"
 	failed=$(( ${failed} + $? ))
 
 		# check for obsolete rc.conf(5) variables
-	set --	amd amd_master \
-		btcontrol btcontrol_devices \
-		critical_filesystems critical_filesystems_beforenet \
-		mountcritlocal mountcritremote \
-		network ip6forwarding \
-		network nfsiod_flags \
-		sdpd sdpd_control \
-		sdpd sdpd_groupname \
-		sdpd sdpd_username \
-		sysctl defcorename
+	set -- ${rc_obsolete_vars}
 	while [ $# -gt 1 ]; do
 		if rcconf_is_set "${op}" "$1" "$2" 1; then
 			failed=1
@@ -1696,7 +1843,8 @@ do_uid()
 {
 	[ -n "$1" ] || err 3 "USAGE: do_uid  fix|check"
 
-	check_ids "$1" users "${DEST_DIR}/etc/master.passwd" 12 \
+	check_ids "$1" users "${DEST_DIR}/etc/master.passwd" \
+	    "${SRC_DIR}/etc/master.passwd" 12 \
 	    postfix SKIP named ntpd sshd SKIP _pflogd _rwhod SKIP _proxy \
 	    _timedc _sdpd _httpd _mdnsd _tests _tcpdump _tss SKIP _rtadvd
 }
@@ -1992,7 +2140,15 @@ do_obsolete_stand()
 	op="$1"
 	failed=0
 
-	obsolete_stand "/stand/${MACHINE}" | obsolete_paths "${op}"
+	for dir in \
+	    /stand/${MACHINE} \
+	    /stand/${MACHINE}-4xx \
+	    /stand/${MACHINE}-booke \
+	    /stand/${MACHINE}-xen \
+	    /stand/${MACHINE}pae-xen
+	do
+		[ -d "${DESTDIR}${dir}" ] && obsolete_stand "${dir}"
+	done | obsolete_paths "${op}"
 	failed=$(( ${failed} + $? ))
 
 	return ${failed}

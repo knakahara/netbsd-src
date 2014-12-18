@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: dhcp.c,v 1.20 2014/10/29 01:08:31 roy Exp $");
+ __RCSID("$NetBSD: dhcp.c,v 1.26 2014/12/17 20:50:08 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -31,11 +31,6 @@
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-
-#ifdef __linux__
-#  include <asm/types.h> /* for systems with broken headers */
-#  include <linux/rtnetlink.h>
-#endif
 
 #include <arpa/inet.h>
 #include <net/if.h>
@@ -1599,7 +1594,8 @@ send_message(struct interface *iface, uint8_t type,
 	if (dhcp_open(iface) == -1)
 		return;
 
-	if (state->added && state->addr.s_addr != INADDR_ANY &&
+	if (state->added && !(state->added & STATE_FAKE) &&
+	    state->addr.s_addr != INADDR_ANY &&
 	    state->new != NULL &&
 	    (state->new->cookie == htonl(MAGIC_COOKIE) ||
 	    iface->options->options & DHCPCD_INFORM))
@@ -1731,27 +1727,17 @@ dhcp_discover(void *arg)
 	struct interface *ifp = arg;
 	struct dhcp_state *state = D_STATE(ifp);
 	struct if_options *ifo = ifp->options;
-	time_t timeout = ifo->timeout;
-
-	/* If we're rebooting then we need to shorten the normal timeout
-	 * to ensure we try for a fallback or IPv4LL address. */
-	if (state->state == DHS_REBOOT) {
-		if (ifo->reboot >= timeout)
-			timeout = 2;
-		else
-			timeout = ifo->reboot;
-	}
 
 	state->state = DHS_DISCOVER;
 	state->xid = dhcp_xid(ifp);
 	eloop_timeout_delete(ifp->ctx->eloop, NULL, ifp);
 	if (ifo->fallback)
 		eloop_timeout_add_sec(ifp->ctx->eloop,
-		    timeout, dhcp_fallback, ifp);
+		    ifo->reboot, dhcp_fallback, ifp);
 	else if (ifo->options & DHCPCD_IPV4LL &&
 	    !IN_LINKLOCAL(htonl(state->addr.s_addr)))
 		eloop_timeout_add_sec(ifp->ctx->eloop,
-		    timeout, ipv4ll_start, ifp);
+		    ifo->reboot, ipv4ll_start, ifp);
 	if (ifo->options & DHCPCD_REQUEST)
 		syslog(LOG_INFO, "%s: soliciting a DHCP lease (requesting %s)",
 		    ifp->name, inet_ntoa(ifo->req_addr));
@@ -1967,15 +1953,15 @@ applyaddr:
 	if (ifo->options & DHCPCD_ARP) {
 		if (state->added) {
 			if (astate == NULL) {
-				/* We don't care about what happens
-				 * to the ARP announcement */
 				astate = arp_new(ifp);
+				astate->addr = state->addr;
 				astate->announced_cb =
 				    dhcp_arp_announced;
 			}
 			if (astate) {
 				arp_announce(astate);
-				arp_free_but(astate);
+				if (!ipv4ll)
+					arp_free_but(astate);
 			}
 		} else if (!ipv4ll)
 			arp_close(ifp);
@@ -2118,46 +2104,41 @@ dhcp_reboot(struct interface *ifp)
 		dhcp_static(ifp);
 		return;
 	}
+	if (ifo->options & DHCPCD_INFORM) {
+		syslog(LOG_INFO, "%s: informing address of %s",
+		    ifp->name, inet_ntoa(state->lease.addr));
+		dhcp_inform(ifp);
+		return;
+	}
 	if (ifo->reboot == 0 || state->offer == NULL) {
 		dhcp_discover(ifp);
 		return;
 	}
-	if (ifo->options & DHCPCD_INFORM) {
-		syslog(LOG_INFO, "%s: informing address of %s",
-		    ifp->name, inet_ntoa(state->lease.addr));
-	} else if (state->offer->cookie == 0) {
+	if (state->offer->cookie == 0)
 		return;
-	} else {
-		syslog(LOG_INFO, "%s: rebinding lease of %s",
-		    ifp->name, inet_ntoa(state->lease.addr));
-	}
+
+	syslog(LOG_INFO, "%s: rebinding lease of %s",
+	    ifp->name, inet_ntoa(state->lease.addr));
 	state->xid = dhcp_xid(ifp);
 	state->lease.server.s_addr = 0;
 	eloop_timeout_delete(ifp->ctx->eloop, NULL, ifp);
 
 	/* Need to add this before dhcp_expire and friends. */
-	if (!ifo->fallback && ifo->reboot && ifo->options & DHCPCD_IPV4LL &&
+	if (!ifo->fallback && ifo->options & DHCPCD_IPV4LL &&
 	    !IN_LINKLOCAL(htonl(state->addr.s_addr)))
 		eloop_timeout_add_sec(ifp->ctx->eloop,
 		    ifo->reboot, ipv4ll_start, ifp);
 
-	if (ifo->fallback)
-		eloop_timeout_add_sec(ifp->ctx->eloop,
-		    ifo->reboot, dhcp_fallback, ifp);
-	else if (ifo->options & DHCPCD_LASTLEASE && state->lease.frominfo)
+	if (ifo->options & DHCPCD_LASTLEASE && state->lease.frominfo)
 		eloop_timeout_add_sec(ifp->ctx->eloop,
 		    ifo->reboot, dhcp_timeout, ifp);
-	else if (!(ifo->options & DHCPCD_INFORM &&
-	    ifp->ctx->options & (DHCPCD_MASTER | DHCPCD_DAEMONISED)))
+	else if (!(ifo->options & DHCPCD_INFORM))
 		eloop_timeout_add_sec(ifp->ctx->eloop,
 		    ifo->reboot, dhcp_expire, ifp);
-	/* Don't bother ARP checking as the server could NAK us first. */
-	if (ifo->options & DHCPCD_INFORM)
-		dhcp_inform(ifp);
-	else {
-		/* Don't call dhcp_request as that would change the state */
-		send_request(ifp);
-	}
+
+	/* Don't bother ARP checking as the server could NAK us first.
+	 * Don't call dhcp_request as that would change the state */
+	send_request(ifp);
 }
 
 void
@@ -2175,12 +2156,17 @@ dhcp_drop(struct interface *ifp, const char *reason)
 		eloop_timeout_delete(ifp->ctx->eloop, NULL, ifp);
 		return;
 	}
-	/* Don't reset DHCP state if we have an IPv4LL address and link is up */
-	if (state->state != DHS_IPV4LL_BOUND || ifp->carrier != LINK_UP) {
+	/* Don't reset DHCP state if we have an IPv4LL address and link is up,
+	 * unless the interface is departing. */
+	if (state->state != DHS_IPV4LL_BOUND ||
+	    ifp->carrier != LINK_UP ||
+	    ifp->options->options & DHCPCD_DEPARTED)
+	{
 		eloop_timeout_delete(ifp->ctx->eloop, NULL, ifp);
 		dhcp_auth_reset(&state->auth);
 		dhcp_close(ifp);
 	}
+
 	if (ifp->options->options & DHCPCD_RELEASE) {
 		unlink(state->leasefile);
 		if (ifp->carrier != LINK_DOWN &&
@@ -2199,6 +2185,7 @@ dhcp_drop(struct interface *ifp, const char *reason)
 #endif
 		}
 	}
+
 	free(state->old);
 	state->old = state->new;
 	state->new = NULL;
@@ -2518,6 +2505,8 @@ dhcp_handledhcp(struct interface *iface, struct dhcp_message **dhcpp,
 			    iface->name, msg);
 			free(msg);
 		}
+		if (state->state == DHS_INFORM) /* INFORM should not be NAKed */
+			return;
 		if (!(iface->ctx->options & DHCPCD_TEST)) {
 			dhcp_drop(iface, "NAK");
 			unlink(state->leasefile);
@@ -2781,7 +2770,7 @@ dhcp_handlepacket(void *arg)
 	while (!(flags & RAW_EOF)) {
 		bytes = (size_t)if_readrawpacket(ifp, ETHERTYPE_IP,
 		    ifp->ctx->packet, udp_dhcp_len, &flags);
-		if (bytes == 0 || (ssize_t)bytes == -1) {
+		if ((ssize_t)bytes == -1) {
 			syslog(LOG_ERR, "%s: dhcp if_readrawpacket: %m",
 			    ifp->name);
 			dhcp_close(ifp);
@@ -2789,7 +2778,7 @@ dhcp_handlepacket(void *arg)
 			break;
 		}
 		if (valid_udp_packet(ifp->ctx->packet, bytes,
-			&from, flags & RAW_PARTIALCSUM) == -1)
+		    &from, flags & RAW_PARTIALCSUM) == -1)
 		{
 			syslog(LOG_ERR, "%s: invalid UDP packet from %s",
 			    ifp->name, inet_ntoa(from));
@@ -3070,11 +3059,14 @@ dhcp_start1(void *arg)
 	if (ifp->ctx->udp_fd == -1) {
 		ifp->ctx->udp_fd = dhcp_openudp(NULL);
 		if (ifp->ctx->udp_fd == -1) {
-			syslog(LOG_ERR, "dhcp_openudp: %m");
-			return;
-		}
-		eloop_event_add(ifp->ctx->eloop,
-		    ifp->ctx->udp_fd, dhcp_handleudp, ifp->ctx, NULL, NULL);
+			/* Don't log an error if some other process
+			 * is handling this. */
+			if (errno != EADDRINUSE)
+				syslog(LOG_ERR, "dhcp_openudp: %m");
+		} else
+			eloop_event_add(ifp->ctx->eloop,
+			    ifp->ctx->udp_fd, dhcp_handleudp,
+			    ifp->ctx, NULL, NULL);
 	}
 
 	if (dhcp_init(ifp) == -1) {
@@ -3125,6 +3117,24 @@ dhcp_start1(void *arg)
 	if (state->offer) {
 		get_lease(ifp->ctx, &state->lease, state->offer);
 		state->lease.frominfo = 1;
+		if (state->new == NULL &&
+		    ipv4_iffindaddr(ifp, &state->lease.addr, &state->lease.net))
+		{
+			/* We still have the IP address from the last lease.
+			 * Fake add the address and routes from it so the lease
+			 * can be cleaned up. */
+			state->new = malloc(sizeof(*state->new));
+			if (state->new) {
+				memcpy(state->new, state->offer,
+				    sizeof(*state->new));
+				state->addr = state->lease.addr;
+				state->net = state->lease.net;
+				state->added |= STATE_ADDED | STATE_FAKE;
+				ipv4_sortinterfaces(ifp->ctx);
+				ipv4_buildroutes(ifp->ctx);
+			} else
+				syslog(LOG_ERR, "%s: %m", __func__);
+		}
 		if (state->offer->cookie == 0) {
 			if (state->offer->yiaddr == state->addr.s_addr) {
 				free(state->offer);
@@ -3144,6 +3154,22 @@ dhcp_start1(void *arg)
 				free(state->offer);
 				state->offer = NULL;
 				state->lease.addr.s_addr = 0;
+				/* Technically we should discard the lease
+				 * as it's expired, just as DHCPv6 addresses
+				 * would be by the kernel.
+				 * However, this may violate POLA so
+				 * we currently leave it be.
+				 * If we get a totally different lease from
+				 * the DHCP server we'll drop it anyway, as
+				 * we will on any other event which would
+				 * trigger a lease drop.
+				 * This should only happen if dhcpcd stops
+				 * running and the lease expires before
+				 * dhcpcd starts again. */
+#if 0
+				if (state->new)
+					dhcp_drop(ifp, "EXPIRE");
+#endif
 			} else {
 				l = (uint32_t)(now.tv_sec - st.st_mtime);
 				state->lease.leasetime -= l;
@@ -3167,7 +3193,8 @@ dhcp_start1(void *arg)
 	if (state->offer == NULL || state->offer->cookie == 0) {
 		/* If we don't have an address yet, enter the reboot
 		 * state to ensure at least fallback in short order. */
-		if (state->addr.s_addr == INADDR_ANY)
+		if (state->addr.s_addr == INADDR_ANY ||
+		    state->added & STATE_FAKE)
 			state->state = DHS_REBOOT;
 		dhcp_discover(ifp);
 	} else

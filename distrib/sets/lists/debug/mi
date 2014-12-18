@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.91 2014/10/24 02:39:34 christos Exp $
+# $NetBSD: mi,v 1.96 2014/12/08 04:23:03 ozaki-r Exp $
 
 ./etc/mtree/set.debug                           comp-sys-root
 ./usr/lib/i18n/libBIG5_g.a			comp-c-debuglib		debuglib
@@ -138,6 +138,7 @@
 ./usr/lib/librumpclient_g.a			comp-c-debuglib		debuglib,rump
 ./usr/lib/librumpcrypto_g.a			comp-obsolete		obsolete
 ./usr/lib/librumpdev_audio_g.a			comp-c-debuglib		debuglib,rump
+./usr/lib/librumpdev_audio_ac97_g.a			comp-obsolete	obsolete
 ./usr/lib/librumpdev_bpf_g.a			comp-c-debuglib		debuglib,rump
 ./usr/lib/librumpdev_cgd_g.a			comp-c-debuglib		debuglib,rump
 ./usr/lib/librumpdev_disk_g.a			comp-c-debuglib		debuglib,rump
@@ -2154,6 +2155,7 @@
 ./usr/libdata/debug/usr/tests/net/fdpass/fdpass64.debug		tests-net-debug		debug,atf
 ./usr/libdata/debug/usr/tests/net/icmp/t_forward.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/icmp/t_ping.debug		tests-net-debug		debug,atf,rump
+./usr/libdata/debug/usr/tests/net/if/ifconf.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/if/t_compat.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/if_loop/t_pr.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/mcast/t_mcast.debug		tests-net-debug		debug,atf
@@ -2186,6 +2188,15 @@
 ./usr/libdata/debug/usr/tests/rump/rumpvfs/t_basic.debug		tests-syscall-debug	debug,atf,rump
 ./usr/libdata/debug/usr/tests/rump/rumpvfs/t_etfs.debug		tests-syscall-debug	debug,atf,rump
 ./usr/libdata/debug/usr/tests/rump/rumpvfs/t_p2kifs.debug		tests-syscall-debug	debug,atf,rump
+./usr/libdata/debug/usr/tests/sys					tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/net					tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/net/t_print.debug			tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/netatalk				tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/netatalk/t_print.debug		tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/netinet				tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/netinet/t_print.debug		tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/netinet6				tests-syys-debug	debug,atf
+./usr/libdata/debug/usr/tests/sys/netinet6/t_print.debug		tests-syys-debug	debug,atf
 ./usr/libdata/debug/usr/tests/syscall/t_access.debug			tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/syscall/t_chroot.debug			tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/syscall/t_cmsg.debug			tests-obsolete		obsolete

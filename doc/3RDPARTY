@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1169 2014/10/30 08:31:27 wiz Exp $
+#	$NetBSD: 3RDPARTY,v 1.1183 2014/12/17 20:53:08 roy Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -113,8 +113,8 @@ Notes:
 bc includes dc, both of which are in the NetBSD tree.
 
 Package:	bind [named and utils]
-Version:	9.10.0-P2
-Current Vers:	9.10.0-P2
+Version:	9.10.1-P1
+Current Vers:	9.10.1-P1
 Maintainer:	Paul Vixie <vixie@vix.com>
 Archive Site:	ftp://ftp.isc.org/isc/bind9/
 Home Page:	http://www.isc.org/software/bind/
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.6.0
-Current Vers:	6.6.0
+Version:	6.6.6
+Current Vers:	6.6.6
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -471,7 +471,7 @@ we use BSD-licensed implementation from Citrus project (see entry for
 
 Package:	grep
 Version:	2.5.1
-Current Vers:	2.19
+Current Vers:	2.21
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/grep/
 Home Page:	http://www.gnu.org/software/grep/
@@ -491,7 +491,7 @@ in src/usr.bin/grep, replacing FreeGrep
 
 Package:	groff
 Version:	1.19.2
-Current Vers:	1.22.2
+Current Vers:	1.22.3
 Maintainer:	Werner Lemberg/FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/groff/
 Home Page:	http://www.gnu.org/software/groff/
@@ -704,7 +704,7 @@ All changes should come via import from upstream SVN.
 
 Package:	lvm2tools
 Version:	2.02.56
-Current Vers:	2.02.56
+Current Vers:	2.02.114
 Maintainer:	lvm-devel@redhat.com
 Archive Site:	ftp://sources.redhat.com/pub/lvm2/
 Home Page:	http://sources.redhat.com/lvm2/
@@ -712,14 +712,15 @@ Responsible:	haad
 License:	GPLv2
 Location:	external/gpl2/lvm2/dist
 Notes:
-Use the src/external/gpl2/lvm2tools/dist/lvm2netbsd script to prepare source tree
-for import. Keep eye on dist/include/configure.h it migh change over the releases.
-We maintain our own version of libdevmapper ioctl protocol code, therefore we
-should test it before import. Talk to haad before importing new version.
+Use the src/external/gpl2/lvm2tools/dist/lvm2netbsd script to
+prepare source tree for import. Keep eye on dist/include/configure.h
+it migh change over the releases.  We maintain our own version of
+libdevmapper ioctl protocol code, therefore we should test it before
+import. Talk to haad before importing new version.
 
 Package:	libpcap
-Version:	1.5.2
-Current Vers:	1.5.2
+Version:	1.6.2
+Current Vers:	1.6.2
 Maintainer:	tcpdump-workers@tcpdump.org
 Archive Site:	http://www.tcpdump.org/release/
 Home Page:	http://www.tcpdump.org/
@@ -801,7 +802,7 @@ Notes:
 
 Package:	mdocml
 Version:	1.12.1
-Current Vers:	1.13.1
+Current Vers:	1.13.2
 Maintainer:	Kristaps Džonsons
 Archive Site:	http://mdocml.bsd.lv/snapshots/
 Home Page:	http://mdocml.bsd.lv/
@@ -1232,8 +1233,8 @@ Notes:
 Run cleantags before inporting because sqlite3.c has an RCSID
 
 Package:	tcpdump
-Version:	4.5.1
-Current Vers:	4.5.1
+Version:	4.6.2
+Current Vers:	4.6.2
 Maintainer:	tcpdump-workers@lists.tcpdump.org
 Archive Site:	http://www.tcpdump.org/release/
 Home Page:	http://www.tcpdump.org/
@@ -1311,8 +1312,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2014i / tzdata2014i
-Current Vers:	tzcode2014i / tzdata2014i
+Version:	tzcode2014j / tzdata2014j
+Current Vers:	tzcode2014j / tzdata2014j
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/

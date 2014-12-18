@@ -1,4 +1,4 @@
-/*	$NetBSD: route.c,v 1.145 2014/11/06 21:29:32 christos Exp $	*/
+/*	$NetBSD: route.c,v 1.148 2014/12/17 10:56:09 roy Exp $	*/
 
 /*
  * Copyright (c) 1983, 1989, 1991, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1989, 1991, 1993\
 #if 0
 static char sccsid[] = "@(#)route.c	8.6 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: route.c,v 1.145 2014/11/06 21:29:32 christos Exp $");
+__RCSID("$NetBSD: route.c,v 1.148 2014/12/17 10:56:09 roy Exp $");
 #endif
 #endif /* not lint */
 
@@ -126,14 +126,16 @@ static void sockaddr(const char *, struct sockaddr *);
 
 int	pid, rtm_addrs;
 int	sock;
-int	forcehost, forcenet, doflush, nflag, af, qflag, tflag, Sflag;
-int	iflag, verbose, aflen = sizeof(struct sockaddr_in), rtag;
+int	forcehost, forcenet, doflush, af;
+int	iflag, Lflag, nflag, qflag, tflag, Sflag, Tflag;
+int	verbose, aflen = sizeof(struct sockaddr_in), rtag;
 int	locking, lockrest, debugonly, shortoutput;
 struct	rt_metrics rt_metrics;
 int	rtm_inits;
 short ns_nullh[] = {0,0,0};
 short ns_bh[] = {-1,-1,-1};
 
+static const char opts[] = "dfLnqSsTtv";
 
 void
 usage(const char *cp)
@@ -142,8 +144,7 @@ usage(const char *cp)
 	if (cp)
 		warnx("botched keyword: %s", cp);
 	(void)fprintf(stderr,
-	    "Usage: %s [ -fnqSsv ] cmd [[ -<qualifers> ] args ]\n",
-	    getprogname());
+	    "Usage: %s [-%s] cmd [[-<qualifers>] args]\n", getprogname(), opts);
 	exit(1);
 	/* NOTREACHED */
 }
@@ -160,13 +161,16 @@ main(int argc, char * const *argv)
 	if (argc < 2)
 		usage(NULL);
 
-	while ((ch = getopt(argc, argv, "dfnqSstv")) != -1)
+	while ((ch = getopt(argc, argv, opts)) != -1)
 		switch (ch) {
 		case 'd':
 			debugonly = 1;
 			break;
 		case 'f':
 			doflush = 1;
+			break;
+		case 'L':
+			Lflag = RT_LFLAG;
 			break;
 		case 'n':
 			nflag = RT_NFLAG;
@@ -180,11 +184,14 @@ main(int argc, char * const *argv)
 		case 's':
 			shortoutput = 1;
 			break;
+		case 'T':
+			Tflag = RT_TFLAG;
+			break;
 		case 't':
 			tflag = 1;
 			break;
 		case 'v':
-			verbose = 1;
+			verbose = RT_VFLAG;
 			break;
 		case '?':
 		default:
@@ -225,7 +232,7 @@ main(int argc, char * const *argv)
 		return newroute(argc, argv);
 
 	case K_SHOW:
-		show(argc, argv, nflag);
+		show(argc, argv, Lflag|nflag|Tflag|verbose);
 		return 0;
 
 #ifndef SMALL
@@ -1259,7 +1266,7 @@ mask_addr(struct sou *soup)
 const char * const msgtypes[] = {
 	[RTM_ADD] = "RTM_ADD: Add Route",
 	[RTM_DELETE] = "RTM_DELETE: Delete Route",
-	[RTM_CHANGE] = "RTM_CHANGE: Change Metrics or flags",
+	[RTM_CHANGE] = "RTM_CHANGE: Change Metrics, Flags or Gateway",
 	[RTM_GET] = "RTM_GET: Report Metrics",
 	[RTM_LOSING] = "RTM_LOSING: Kernel Suspects Partitioning",
 	[RTM_REDIRECT] = "RTM_REDIRECT: Told to use different route",

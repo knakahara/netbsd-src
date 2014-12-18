@@ -1,4 +1,4 @@
-#	$NetBSD: NetBSD.dist.tests,v 1.111 2014/10/12 12:32:15 uebayasi Exp $
+#	$NetBSD: NetBSD.dist.tests,v 1.114 2014/12/03 01:29:33 christos Exp $
 
 ./usr/libdata/debug/usr/tests
 ./usr/libdata/debug/usr/tests/atf
@@ -145,6 +145,11 @@
 ./usr/libdata/debug/usr/tests/rump/rumpvfs
 ./usr/libdata/debug/usr/tests/sbin
 ./usr/libdata/debug/usr/tests/sbin/resize_ffs
+./usr/libdata/debug/usr/tests/sys
+./usr/libdata/debug/usr/tests/sys/net
+./usr/libdata/debug/usr/tests/sys/netatalk
+./usr/libdata/debug/usr/tests/sys/netinet
+./usr/libdata/debug/usr/tests/sys/netinet6
 ./usr/libdata/debug/usr/tests/usr.bin
 ./usr/libdata/debug/usr/tests/usr.bin/id
 ./usr/libdata/debug/usr/tests/usr.bin/netpgpverify
@@ -336,6 +341,10 @@
 ./usr/tests/share/examples/lutok
 ./usr/tests/share/mk
 ./usr/tests/sys
+./usr/tests/sys/net
+./usr/tests/sys/netatalk
+./usr/tests/sys/netinet
+./usr/tests/sys/netinet6
 ./usr/tests/sys/rc
 ./usr/tests/usr.bin
 ./usr/tests/usr.bin/awk
@@ -359,6 +368,7 @@
 ./usr/tests/usr.bin/netpgpverify
 ./usr/tests/usr.bin/infocmp
 ./usr/tests/usr.bin/jot
+./usr/tests/usr.bin/ld
 ./usr/tests/usr.bin/m4
 ./usr/tests/usr.bin/make
 ./usr/tests/usr.bin/make/unit-tests

@@ -1,4 +1,4 @@
-/*	$NetBSD: dlz_sqlite3_dynamic.c,v 1.1.1.1 2014/07/08 04:46:55 spz Exp $	*/
+/*	$NetBSD: dlz_sqlite3_dynamic.c,v 1.1.1.3 2014/12/10 03:34:31 christos Exp $	*/
 
 /*
  * Copyright (C) 2002 Stichting NLnet, Netherlands, stichting@nlnet.nl.

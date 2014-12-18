@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: dhcpcd.c,v 1.14 2014/10/29 01:08:31 roy Exp $");
+ __RCSID("$NetBSD: dhcpcd.c,v 1.19 2014/12/09 20:21:05 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -33,7 +33,6 @@ const char dhcpcd_copyright[] = "Copyright (c) 2006-2014 Roy Marples";
 #define _WITH_DPRINTF /* Stop FreeBSD bitching */
 
 #include <sys/file.h>
-#include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -152,6 +151,12 @@ free_globals(struct dhcpcd_ctx *ctx)
 			free(ctx->ifdv[ctx->ifdc - 1]);
 		free(ctx->ifdv);
 		ctx->ifdv = NULL;
+	}
+	if (ctx->ifcc) {
+		for (; ctx->ifcc > 0; ctx->ifcc--)
+			free(ctx->ifcv[ctx->ifcc - 1]);
+		free(ctx->ifcv);
+		ctx->ifcv = NULL;
 	}
 
 #ifdef INET
@@ -317,13 +322,15 @@ stop_interface(struct interface *ifp)
 	ipv6nd_drop(ifp);
 	dhcp_drop(ifp, "STOP");
 	arp_close(ifp);
-	eloop_timeout_delete(ctx->eloop, NULL, ifp);
 	if (ifp->options->options & DHCPCD_DEPARTED)
 		script_runreason(ifp, "DEPARTED");
 	else
 		script_runreason(ifp, "STOPPED");
 
-	// Remove the interface from our list
+	/* Delete all timeouts for the interfaces */
+	eloop_q_timeout_delete(ctx->eloop, 0, NULL, ifp);
+
+	/* Remove the interface from our list */
 	TAILQ_REMOVE(ifp->ctx->ifaces, ifp, next);
 	if_free(ifp);
 
@@ -353,7 +360,8 @@ configure_interface1(struct interface *ifp)
 	if (ifp->flags & IFF_NOARP ||
 	    ifo->options & (DHCPCD_INFORM | DHCPCD_STATIC))
 		ifo->options &= ~(DHCPCD_ARP | DHCPCD_IPV4LL);
-	if (!(ifp->flags & (IFF_POINTOPOINT | IFF_LOOPBACK | IFF_MULTICAST)))
+	if (ifp->flags & (IFF_POINTOPOINT | IFF_LOOPBACK) ||
+	    !(ifp->flags & IFF_MULTICAST))
 		ifo->options &= ~DHCPCD_IPV6RS;
 
 	if (ifo->metric != -1)
@@ -385,9 +393,13 @@ configure_interface1(struct interface *ifp)
 
 	/* If we haven't specified a ClientID and our hardware address
 	 * length is greater than DHCP_CHADDR_LEN then we enforce a ClientID
-	 * of the hardware address family and the hardware address. */
+	 * of the hardware address family and the hardware address.
+	 * If there is no hardware address and no ClientID set,
+	 * force a DUID based ClientID. */
 	if (ifp->hwlen > DHCP_CHADDR_LEN)
 		ifo->options |= DHCPCD_CLIENTID;
+	else if (ifp->hwlen == 0 && !(ifo->options & DHCPCD_CLIENTID))
+		ifo->options |= DHCPCD_CLIENTID | DHCPCD_DUID;
 
 	/* Firewire and InfiniBand interfaces require ClientID and
 	 * the broadcast option being set. */
@@ -434,19 +446,25 @@ configure_interface1(struct interface *ifp)
 		 * dhcpcd-6.1.0 and earlier used the interface name,
 		 * falling back to interface index if name > 4.
 		 */
-		memcpy(ifo->iaid, ifp->hwaddr + ifp->hwlen - sizeof(ifo->iaid),
-		    sizeof(ifo->iaid));
-#if 0
-		len = strlen(ifp->name);
-		if (len <= sizeof(ifo->iaid)) {
-			memcpy(ifo->iaid, ifp->name, len);
-			memset(ifo->iaid + len, 0, sizeof(ifo->iaid) - len);
-		} else {
-			/* IAID is the same size as a uint32_t */
-			len = htonl(ifp->index);
-			memcpy(ifo->iaid, &len, sizeof(len));
+		if (ifp->hwlen >= sizeof(ifo->iaid))
+			memcpy(ifo->iaid,
+			    ifp->hwaddr + ifp->hwlen - sizeof(ifo->iaid),
+			    sizeof(ifo->iaid));
+		else {
+			uint32_t len;
+
+			len = (uint32_t)strlen(ifp->name);
+			if (len <= sizeof(ifo->iaid)) {
+				memcpy(ifo->iaid, ifp->name, len);
+				if (len < sizeof(ifo->iaid))
+					memset(ifo->iaid + len, 0,
+					    sizeof(ifo->iaid) - len);
+			} else {
+				/* IAID is the same size as a uint32_t */
+				len = htonl(ifp->index);
+				memcpy(ifo->iaid, &len, sizeof(len));
+			}
 		}
-#endif
 		ifo->options |= DHCPCD_IAID;
 	}
 
@@ -523,6 +541,25 @@ configure_interface(struct interface *ifp, int argc, char **argv)
 	configure_interface1(ifp);
 }
 
+static void
+dhcpcd_pollup(void *arg)
+{
+	struct interface *ifp = arg;
+	int carrier;
+
+	carrier = if_carrier(ifp); /* will set ifp->flags */
+	if (carrier == LINK_UP && !(ifp->flags & IFF_UP)) {
+		struct timeval tv;
+
+		tv.tv_sec = 0;
+		tv.tv_usec = IF_POLL_UP * 1000;
+		eloop_timeout_add_tv(ifp->ctx->eloop, &tv, dhcpcd_pollup, ifp);
+		return;
+	}
+
+	dhcpcd_handlecarrier(ifp->ctx, carrier, ifp->flags, ifp->name);
+}
+
 void
 dhcpcd_handlecarrier(struct dhcpcd_ctx *ctx, int carrier, unsigned int flags,
     const char *ifname)
@@ -538,18 +575,23 @@ dhcpcd_handlecarrier(struct dhcpcd_ctx *ctx, int carrier, unsigned int flags,
 		carrier = if_carrier(ifp); /* will set ifp->flags */
 		break;
 	case LINK_UP:
-		/* we have a carrier! however, we need to ignore the flags
-		 * set in the kernel message as sometimes this message is
-		 * reported before IFF_UP is set by the kernel even though
-		 * dhcpcd has already set it.
-		 *
-		 * So we check the flags now. If IFF_UP is still not set
-		 * then we should expect an accompanying link_down message */
-		if_setflag(ifp, 0); /* will set ifp->flags */
+		/* we have a carrier! Still need to check for IFF_UP */
+		if (flags & IFF_UP)
+			ifp->flags = flags;
+		else {
+			/* So we need to poll for IFF_UP as there is no
+			 * kernel notification when it's set. */
+			dhcpcd_pollup(ifp);
+			return;
+		}
 		break;
 	default:
 		ifp->flags = flags;
 	}
+
+	/* If we here, we don't need to poll for IFF_UP any longer
+	 * if generated by a kernel event. */
+	eloop_timeout_delete(ifp->ctx->eloop, dhcpcd_pollup, ifp);
 
 	if (carrier == LINK_UNKNOWN) {
 		if (errno != ENOTTY) /* For example a PPP link on BSD */
@@ -627,7 +669,7 @@ pre_start(struct interface *ifp)
 	 * from under us. */
 	if (ifp->options->options & DHCPCD_IPV6 && ipv6_start(ifp) == -1) {
 		syslog(LOG_ERR, "%s: ipv6_start: %m", ifp->name);
-		ifp->options->options &= DHCPCD_IPV6;
+		ifp->options->options &= ~DHCPCD_IPV6;
 	}
 }
 
@@ -804,7 +846,7 @@ dhcpcd_initstate1(struct interface *ifp, int argc, char **argv)
 	 * inadvertently ups the interface. */
 	if (ifo->options & DHCPCD_IPV6 && ipv6_start(ifp) == -1) {
 		syslog(LOG_ERR, "%s: ipv6_start: %m", ifp->name);
-		ifo->options &= DHCPCD_IPV6;
+		ifo->options &= ~DHCPCD_IPV6;
 	}
 }
 
@@ -940,6 +982,23 @@ if_reboot(struct interface *ifp, int argc, char **argv)
 }
 
 static void
+reload_config(struct dhcpcd_ctx *ctx)
+{
+	struct if_options *ifo;
+
+	free_globals(ctx);
+	ifo = read_config(ctx, NULL, NULL, NULL);
+	add_options(ctx, NULL, ifo, ctx->argc, ctx->argv);
+	/* We need to preserve these two options. */
+	if (ctx->options & DHCPCD_MASTER)
+		ifo->options |= DHCPCD_MASTER;
+	if (ctx->options & DHCPCD_DAEMONISED)
+		ifo->options |= DHCPCD_DAEMONISED;
+	ctx->options = ifo->options;
+	free_options(ifo);
+}
+
+static void
 reconf_reboot(struct dhcpcd_ctx *ctx, int action, int argc, char **argv, int oi)
 {
 	struct if_head *ifs;
@@ -973,18 +1032,18 @@ reconf_reboot(struct dhcpcd_ctx *ctx, int action, int argc, char **argv, int oi)
 static void
 stop_all_interfaces(struct dhcpcd_ctx *ctx, int do_release)
 {
-	struct interface *ifp, *ifpm;
+	struct interface *ifp;
 
 	/* drop_dhcp could change the order, so we do it like this. */
 	for (;;) {
-		/* Be sane and drop the last config first */
-		ifp = TAILQ_LAST(ctx->ifaces, if_head);
+		/* Be sane and drop the last config first,
+		 * skipping any pseudo interfaces */
+		TAILQ_FOREACH_REVERSE(ifp, ctx->ifaces, if_head, next) {
+			if (!(ifp->options->options & DHCPCD_PFXDLGONLY))
+				break;
+		}
 		if (ifp == NULL)
 			break;
-		/* Stop the master interface only */
-		ifpm = if_find(ifp->ctx, ifp->name);
-		if (ifpm)
-			ifp = ifpm;
 		if (do_release) {
 			ifp->options->options |= DHCPCD_RELEASE;
 			ifp->options->options &= ~DHCPCD_PERSISTENT;
@@ -1007,7 +1066,6 @@ handle_signal1(void *arg)
 	struct dhcpcd_ctx *ctx;
 	struct dhcpcd_siginfo *si;
 	struct interface *ifp;
-	struct if_options *ifo;
 	int do_release;
 
 	ctx = dhcpcd_ctx;
@@ -1026,16 +1084,7 @@ handle_signal1(void *arg)
 		break;
 	case SIGHUP:
 		syslog(LOG_INFO, sigmsg, "HUP", (int)si->pid, "rebinding");
-		free_globals(ctx);
-		ifo = read_config(ctx, NULL, NULL, NULL);
-		add_options(ctx, NULL, ifo, ctx->argc, ctx->argv);
-		/* We need to preserve these two options. */
-		if (ctx->options & DHCPCD_MASTER)
-		    ifo->options |= DHCPCD_MASTER;
-		if (ctx->options & DHCPCD_DAEMONISED)
-		    ifo->options |= DHCPCD_DAEMONISED;
-		ctx->options = ifo->options;
-		free_options(ifo);
+		reload_config(ctx);
 		/* Preserve any options passed on the commandline
 		 * when we were started. */
 		reconf_reboot(ctx, 1, ctx->argc, ctx->argv,
@@ -1218,6 +1267,7 @@ dhcpcd_handleargs(struct dhcpcd_ctx *ctx, struct fd_list *fd,
 		return 0;
 	}
 
+	reload_config(ctx);
 	/* XXX: Respect initial commandline options? */
 	reconf_reboot(ctx, do_reboot, argc, argv, optind);
 	return 0;
@@ -1700,7 +1750,7 @@ main(int argc, char **argv)
 			syslog(LOG_WARNING, "no interfaces have a carrier");
 			if (dhcpcd_daemonise(&ctx))
 				goto exit_success;
-		} else if (t > 0) {
+		} else if (t > 0 && ctx.options & DHCPCD_DAEMONISE) {
 			eloop_timeout_add_sec(ctx.eloop, t,
 			    handle_exit_timeout, &ctx);
 		}

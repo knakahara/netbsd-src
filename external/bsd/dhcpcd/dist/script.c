@@ -1,5 +1,5 @@
 #include <sys/cdefs.h>
- __RCSID("$NetBSD: script.c,v 1.12 2014/10/29 01:08:31 roy Exp $");
+ __RCSID("$NetBSD: script.c,v 1.16 2014/12/09 20:21:05 roy Exp $");
 
 /*
  * dhcpcd - DHCP client daemon
@@ -291,8 +291,8 @@ make_env(const struct interface *ifp, const char *reason, char ***argv)
 		elen = 13;
 
 #define EMALLOC(i, l) if ((env[(i)] = malloc((l))) == NULL) goto eexit;
-	/* Make our env */
-	env = calloc(1, sizeof(char *) * (elen + 1));
+	/* Make our env + space for profile, wireless and debug */
+	env = calloc(1, sizeof(char *) * (elen + 3 + 1));
 	if (env == NULL)
 		goto eexit;
 	e = strlen("interface") + strlen(ifp->name) + 2;
@@ -338,7 +338,13 @@ make_env(const struct interface *ifp, const char *reason, char ***argv)
 		}
 	}
 	*--p = '\0';
-	if (strcmp(reason, "TEST") == 0 ||
+	if (strcmp(reason, "STOPPED") == 0) {
+		env[9] = strdup("if_up=false");
+		if (ifo->options & DHCPCD_RELEASE)
+			env[10] = strdup("if_down=true");
+		else
+			env[10] = strdup("if_down=false");
+	} else if (strcmp(reason, "TEST") == 0 ||
 	    strcmp(reason, "PREINIT") == 0 ||
 	    strcmp(reason, "CARRIER") == 0 ||
 	    strcmp(reason, "UNKNOWN") == 0)
@@ -375,8 +381,13 @@ make_env(const struct interface *ifp, const char *reason, char ***argv)
 		env[12] = strdup("if_ipwaited=false");
 	if (env[12] == NULL)
 		goto eexit;
+	if (ifo->options & DHCPCD_DEBUG) {
+		e = strlen("syslog_debug=true") + 1;
+		EMALLOC(elen, e);
+		snprintf(env[elen++], e, "syslog_debug=true");
+	}
 	if (*ifp->profile) {
-		e = strlen("profile=") + strlen(ifp->profile) + 2;
+		e = strlen("profile=") + strlen(ifp->profile) + 1;
 		EMALLOC(elen, e);
 		snprintf(env[elen++], e, "profile=%s", ifp->profile);
 	}
