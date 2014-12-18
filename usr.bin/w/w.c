@@ -1,4 +1,4 @@
-/*	$NetBSD: w.c,v 1.79 2014/02/27 00:49:46 joerg Exp $	*/
+/*	$NetBSD: w.c,v 1.81 2014/12/03 06:12:19 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1980, 1991, 1993, 1994
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1991, 1993, 1994\
 #if 0
 static char sccsid[] = "@(#)w.c	8.6 (Berkeley) 6/30/94";
 #else
-__RCSID("$NetBSD: w.c,v 1.79 2014/02/27 00:49:46 joerg Exp $");
+__RCSID("$NetBSD: w.c,v 1.81 2014/12/03 06:12:19 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -221,6 +221,10 @@ main(int argc, char **argv)
 		if (utx->ut_type != USER_PROCESS)
 			continue;
 		++nusers;
+
+		if (wcmd == 0)
+			continue;
+
 		if (sel_user &&
 		    strncmp(utx->ut_name, sel_user, sizeof(utx->ut_name)) != 0)
 			continue;
@@ -267,6 +271,10 @@ main(int argc, char **argv)
 			continue;
 
 		++nusers;
+
+		if (wcmd == 0)
+			continue;
+
 		if ((ep = calloc(1, sizeof(struct entry))) == NULL)
 			err(1, NULL);
 		(void)memcpy(ep->name, ut->ut_name, sizeof(ut->ut_name));
@@ -279,8 +287,7 @@ main(int argc, char **argv)
 		ep->tv.tv_sec = ut->ut_time;
 		*nextp = ep;
 		nextp = &(ep->next);
-		if (wcmd != 0)
-			process(ep);
+		process(ep);
 	}
 #endif
 

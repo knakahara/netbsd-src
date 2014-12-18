@@ -1,4 +1,4 @@
-/*	$NetBSD: platform.h,v 1.1.1.1 2014/07/08 04:49:26 spz Exp $	*/
+/*	$NetBSD: platform.h,v 1.1.1.3 2014/12/10 03:34:43 christos Exp $	*/
 
 /*
  * Copyright (C) 2014  Internet Systems Consortium, Inc. ("ISC")
