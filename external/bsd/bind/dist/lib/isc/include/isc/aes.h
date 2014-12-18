@@ -1,4 +1,4 @@
-/*	$NetBSD: aes.h,v 1.1.1.2 2014/07/08 04:49:36 spz Exp $	*/
+/*	$NetBSD: aes.h,v 1.1.1.4 2014/12/10 03:34:44 christos Exp $	*/
 
 /*
  * Copyright (C) 2014  Internet Systems Consortium, Inc. ("ISC")

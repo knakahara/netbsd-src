@@ -1,4 +1,4 @@
-#	$NetBSD: NetBSD.dist.base,v 1.139 2014/08/10 17:32:54 joerg Exp $
+#	$NetBSD: NetBSD.dist.base,v 1.141 2014/12/13 19:23:35 christos Exp $
 #	@(#)4.4BSD.dist	8.1 (Berkeley) 6/13/93
 
 # Do not customize this file as it may be overwritten on upgrades.
@@ -131,7 +131,16 @@
 ./usr/include/event2
 ./usr/include/filecorefs
 ./usr/include/fs
+./usr/include/fs/efs
+./usr/include/fs/hfs
+./usr/include/fs/nilfs
+./usr/include/fs/ptyfs
+./usr/include/fs/puffs
 ./usr/include/fs/smbfs
+./usr/include/fs/sysvbfs
+./usr/include/fs/tmpfs
+./usr/include/fs/udf
+./usr/include/fs/v7fs
 ./usr/include/g++
 ./usr/include/g++/backward
 ./usr/include/g++/bits
@@ -197,6 +206,7 @@
 ./usr/include/netatalk
 ./usr/include/netbt
 ./usr/include/netinet
+./usr/include/net80211
 ./usr/include/netinet6
 ./usr/include/netipsec
 ./usr/include/netisdn

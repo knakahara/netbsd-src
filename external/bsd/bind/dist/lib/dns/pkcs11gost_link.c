@@ -1,4 +1,4 @@
-/*	$NetBSD: pkcs11gost_link.c,v 1.1.1.2 2014/07/08 04:48:46 spz Exp $	*/
+/*	$NetBSD: pkcs11gost_link.c,v 1.1.1.4 2014/12/10 03:34:40 christos Exp $	*/
 
 /*
  * Copyright (C) 2014  Internet Systems Consortium, Inc. ("ISC")
