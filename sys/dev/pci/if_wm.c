@@ -557,6 +557,7 @@ static void	wm_lan_init_done(struct wm_softc *);
 static void	wm_get_cfg_done(struct wm_softc *);
 static void	wm_reset(struct wm_softc *);
 static int	wm_add_rxbuf(struct wm_softc *, struct wm_rxqueue *, int);
+static void	wm_rxdrain_all(struct wm_softc *);
 static void	wm_rxdrain(struct wm_softc *, struct wm_rxqueue *);
 static int	wm_init(struct ifnet *);
 static int	wm_init_locked(struct ifnet *);
@@ -1868,10 +1869,14 @@ wm_init_rx_queue(struct wm_softc *sc, struct wm_rxqueue *rxq)
 static int
 wm_init_rx_queues(struct wm_softc *sc)
 {
+	struct wm_rxqueue *rxq;
 	int error, i;
 
 	for (i = 0; i < sc->sc_nrxqueues; i++) {
-		error = wm_init_rx_queue(sc, &sc->sc_rxq[i]);
+		rxq = &sc->sc_rxq[i];
+		WM_RX_LOCK(rxq);
+		error = wm_init_rx_queue(sc, rxq);
+		WM_RX_UNLOCK(rxq);
 		if (error)
 			return error;
 	}
@@ -2951,9 +2956,7 @@ wm_detach(device_t self, int flags __unused)
 
 
 	/* Unload RX dmamaps and free mbufs */
-	WM_RX_LOCK(sc->sc_rxq);
-	wm_rxdrain(sc, sc->sc_rxq);
-	WM_RX_UNLOCK(sc->sc_rxq);
+	wm_rxdrain_all(sc);
 	/* Must unlock here */
 
 	/* Free dmamap. It's the same as the end of the wm_attach() function */
@@ -4591,6 +4594,19 @@ wm_add_rxbuf(struct wm_softc *sc, struct wm_rxqueue *rxq, int idx)
 	return 0;
 }
 
+static void
+wm_rxdrain_all(struct wm_softc *sc)
+{
+	struct wm_rxqueue *rxq;
+	int i;
+
+	for (i = 0; i < sc->sc_nrxqueues; i++) {
+		rxq = &sc->sc_rxq[i];
+		WM_RX_LOCK(rxq);
+		wm_rxdrain(sc, rxq);
+		WM_RX_UNLOCK(rxq);
+	}
+}
 /*
  * wm_rxdrain:
  *
@@ -6933,6 +6949,10 @@ wm_intr(void *arg)
 			break;
 		rnd_add_uint32(&sc->rnd_source, icr);
 
+		/*
+		 * wm_intr() is handler for INTx and MSI,
+		 * so rx queue num is always 1.
+		 */
 		WM_RX_LOCK(sc->sc_rxq);
 
 		if (sc->sc_stopping) {
