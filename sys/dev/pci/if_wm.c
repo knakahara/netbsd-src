@@ -5097,7 +5097,7 @@ wm_stop_locked(struct ifnet *ifp, int disable)
 	ifp->if_timer = 0;
 
 	if (disable)
-		wm_rxdrain(sc, sc->sc_rxq);
+		wm_rxdrain_all(sc);
 
 #if 0 /* notyet */
 	if (sc->sc_type >= WM_T_82544)
