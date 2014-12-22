@@ -648,19 +648,24 @@ struct livengood_tcpip_ctxdesc {
     (TIPG_IPGT(0x09) | TIPG_IPGR1(0x02) | TIPG_IPGR2(0x07))
 
 #define	WMREG_OLD_TDBAL	0x0420	/* Transmit Descriptor Base Lo */
-#define	WMREG_TDBAL	0x3800
+#define WMREG_TDBAL(x)((x) < 4 ? (0x03800 + ((x) * 0x100)) :	\
+	    (0x0E000 + ((x) * 0x40)))
 
 #define	WMREG_OLD_TDBAH	0x0424	/* Transmit Descriptor Base Hi */
-#define	WMREG_TDBAH	0x3804
+#define WMREG_TDBAH(x)((x) < 4 ? (0x03804 + ((x) * 0x100)) : \
+	    (0x0E004 + ((x) * 0x40)))
 
 #define	WMREG_OLD_TDLEN	0x0428	/* Transmit Descriptor Length */
-#define	WMREG_TDLEN	0x3808
+#define WMREG_TDLEN(x)((x) < 4 ? (0x03808 + ((x) * 0x100)) : \
+	    (0x0E008 + ((x) * 0x40)))
 
 #define	WMREG_OLD_TDH	0x0430	/* Transmit Descriptor Head */
-#define	WMREG_TDH	0x3810
+#define WMREG_TDH(x)((x) < 4 ? (0x03810 + ((x) * 0x100)) : \
+	    (0x0E010 + ((x) * 0x40)))
 
 #define	WMREG_OLD_TDT	0x0438	/* Transmit Descriptor Tail */
-#define	WMREG_TDT	0x3818
+#define WMREG_TDT(x)((x) < 4 ? (0x03818 + ((x) * 0x100)) : \
+	    (0x0E018 + ((x) * 0x40)))
 
 #define	WMREG_OLD_TIDV	0x0440	/* Transmit Delay Interrupt Value */
 #define	WMREG_TIDV	0x3820
@@ -811,7 +816,9 @@ struct livengood_tcpip_ctxdesc {
 #define	WMREG_TDFTS	0x3428	/* Transmit Data FIFO Tail Saved */
 #define	WMREG_TDFPC	0x3430	/* Transmit Data FIFO Packet Count */
 
-#define	WMREG_TXDCTL	0x3828	/* Trandmit Descriptor Control */
+#define WMREG_TXDCTL(x)((x) < 4 ? (0x03828 + ((x) * 0x100)) : \
+	    (0x0E028 + ((x) * 0x40)))
+
 #define	TXDCTL_PTHRESH(x) ((x) << 0)	/* prefetch threshold */
 #define	TXDCTL_HTHRESH(x) ((x) << 8)	/* host threshold */
 #define	TXDCTL_WTHRESH(x) ((x) << 16)	/* write back threshold */
