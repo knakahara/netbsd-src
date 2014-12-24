@@ -70,18 +70,11 @@ intrctlattach(int dummy)
 }
 
 static int
-intrctl_list(void *data, int length)
+intrctl_intrids(void *data, int length)
 {
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-	kcpuset_t *avail, *assigned;
-	void *ich;
-	char *buf, *buf_end;
+	char *buf, *cur, *end;
 	char **ids;
-	uint64_t intr_count;
-	u_int cpu_idx;
-	int intr_idx, nids;
-	int ret;
+	int nids, i, ret;
 
 	buf = data;
 	if (buf == NULL)
@@ -94,24 +87,43 @@ intrctl_list(void *data, int length)
 	if (ret != 0)
 		return ret;
 
+	cur = buf;
+	end = buf + length;
+	for (i = 0; i < nids; i++) {
+		if (strnlen(ids[i], length) > end - cur)
+			return ENOBUFS;
+
+		ret = snprintf(cur, end - cur, "%s", ids[i]);
+		cur += ret;
+		*(cur++) = '\n';
+	}
+
+	intr_destruct_intrids(ids, nids);
+	return 0;
+}
+
+static int
+intrctl_list_header(void *data, int length)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+	kcpuset_t *avail;
+	char *buf, *cur, *end;
+	int ret;
+
+	buf = data;
+	if (buf == NULL)
+		return EINVAL;
+
+	if (length < 0)
+		return EINVAL;
+
+	cur = buf;
+	end = buf + length;
+	ret = snprintf(cur, end - cur, " interrupt name");
+	cur += ret;
+
 	kcpuset_create(&avail, true);
-	kcpuset_create(&assigned, true);
-
-	buf_end = buf + length;
-
-#define FILL_BUF(cur, end, fmt, ...) do{				\
-		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
-		if (ret < 0) {						\
-			goto out;					\
-		}							\
-		cur += ret;						\
-		if (cur > end) {					\
-			ret = ENOBUFS;					\
-			goto out;					\
-		}							\
-	}while(0)
-
-	FILL_BUF(buf, buf_end, " interrupt name");
 	intr_get_available(avail);
 	for (CPU_INFO_FOREACH(cii, ci)) {
 		char intr_enable;
@@ -120,42 +132,77 @@ intrctl_list(void *data, int length)
 		else
 			intr_enable = '-';
 
-		FILL_BUF(buf, buf_end, "\tCPU#%02u(%c)", cpu_index(ci),
+		ret = snprintf(cur, end - cur, "\tCPU#%02u(%c)", cpu_index(ci),
 		    intr_enable);
-	}
-	*(buf++) = '\n';
+		if (ret < 0)
+			goto out;
 
-	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
-		FILL_BUF(buf, buf_end, " %s", ids[intr_idx]);
-
-		mutex_enter(&cpu_lock);
-		ich = intr_get_handler(ids[intr_idx]);
-		KASSERT(ich != NULL);
-		mutex_exit(&cpu_lock);
-
-		intr_get_assigned(ich, assigned);
-		for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
-			intr_count = intr_get_count(ich, cpu_idx);
-			if (kcpuset_isset(assigned, cpu_idx)) {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", intr_count);
-			} else {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64, intr_count);
-			}
-
-		}
-		FILL_BUF(buf, buf_end, "\t%s", intr_get_devname(ich));
-		*(buf++) = '\n';
+		cur += ret;
 	}
 
-	*(buf++) = '\0';
+	*(cur++) = '\n';
+	*cur = '\0';
 	ret = 0;
-out:
-	kcpuset_destroy(assigned);
+ out:
 	kcpuset_destroy(avail);
-	intr_destruct_intrids(ids, nids);
 	return ret;
+}
 
-#undef FILL_BUF
+static int
+intrctl_list_data(void *data, int length)
+{
+	char intrid[INTRID_LEN + 1];
+	kcpuset_t *assigned;
+	void *ich;
+	char *buf, *cur, *end;
+	uint64_t intr_count;
+	u_int cpu_idx;
+	int ret;
+
+	buf = data;
+	if (buf == NULL)
+		return EINVAL;
+
+	if (length < 0)
+		return EINVAL;
+
+	memset(intrid, '\0', INTRID_LEN + 1);
+	strncpy(intrid, buf, INTRID_LEN);
+	mutex_enter(&cpu_lock);
+	ich = intr_get_handler(intrid);
+	mutex_exit(&cpu_lock);
+	if (ich == NULL)
+		return EINVAL;
+
+	memset(buf, '\0', length);
+	cur = buf;
+	end = buf + length;
+	ret = snprintf(cur, end - cur, " %s", intrid);
+	cur += ret;
+
+	kcpuset_create(&assigned, true);
+	intr_get_assigned(ich, assigned);
+	for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
+		intr_count = intr_get_count(ich, cpu_idx);
+		if (kcpuset_isset(assigned, cpu_idx))
+			ret = snprintf(cur, end - cur, "\t%8" PRIu64 "*", intr_count);
+		else
+			ret = snprintf(cur, end - cur, "\t%8" PRIu64, intr_count);
+
+		if (ret < 0)
+			goto out;
+
+		cur += ret;
+	}
+
+	ret = snprintf(cur, end - cur, "\t%s", intr_get_devname(ich));
+	cur += ret;
+	*(cur++) = '\n';
+	*cur = '\0';
+	ret = 0;
+ out:
+	kcpuset_destroy(assigned);
+	return ret;
 }
 
 static int
@@ -344,8 +391,14 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 	int error;
 
 	switch (cmd) {
-	case IOC_INTR_LIST:
-		error = intrctl_list(data, INTR_LIST_BUFSIZE);
+	case IOC_INTR_INTRIDS:
+		error = intrctl_intrids(data, INTR_LIST_BUFSIZE);
+		break;
+	case IOC_INTR_LIST_HEADER:
+		error = intrctl_list_header(data, INTR_LIST_BUFSIZE);
+		break;
+	case IOC_INTR_LIST_DATA:
+		error = intrctl_list_data(data, INTR_LIST_BUFSIZE);
 		break;
 	case IOC_INTR_AFFINITY:
 		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
