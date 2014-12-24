@@ -549,7 +549,7 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		slot = -1;
 
 		/* avoid reserved slots for legacy interrupts. */
-		if (is_msi_pic(pic))
+		if (CPU_IS_PRIMARY(ci) && is_msi_pic(pic))
 			start = NUM_LEGACY_IRQS;
 
 		/*
