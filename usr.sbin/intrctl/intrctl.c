@@ -110,18 +110,45 @@ usage(void)
 static void
 intr_list(int argc, char **argv)
 {
-	char *buf;
+	char *buf, *line, *cur, *end;
 	int error;
 
 	buf = malloc(INTR_LIST_BUFSIZE);
 	if (buf == NULL)
-		err(EXIT_FAILURE, "malloc");
+		err(EXIT_FAILURE, "malloc(buf)");
 
-	error = ioctl(fd, IOC_INTR_LIST, buf);
+	error = ioctl(fd, IOC_INTR_LIST_HEADER, buf);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_LIST");
-
+		err(EXIT_FAILURE, "IOC_INTR_LIST_HEADER");
 	printf("%s", buf);
+
+	memset(buf, '\0', INTR_LIST_BUFSIZE);
+	error = ioctl(fd, IOC_INTR_INTRIDS, buf);
+	if (error < 0)
+		err(EXIT_FAILURE, "IOC_INTR_INTRIDS");
+
+	line = malloc(INTR_LIST_BUFSIZE);
+	if (line == NULL)
+		err(EXIT_FAILURE, "malloc(line)");
+
+	cur = buf;
+	for (;;) {
+		end = strchr(cur, '\n');
+		if (end == NULL)
+			break;
+		*(end++) = '\0';
+
+		memset(line, '\0', INTR_LIST_BUFSIZE);
+		strncpy(line, cur, INTRID_LEN);
+		error = ioctl(fd, IOC_INTR_LIST_DATA, line);
+		if (error < 0)
+			err(EXIT_FAILURE, "IOC_INTR_LIST_DATA");
+
+		printf("%s", line);
+		cur = end;
+	}
+
+	free(line);
 	free(buf);
 }
 
