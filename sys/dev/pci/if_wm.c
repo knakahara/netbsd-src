@@ -2282,9 +2282,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 		sc->sc_link_handler = wm_link_msix;
 	}
 
-	/* XXXX */
-	sc->sc_ntxqueues = 1;
-
 	error = wm_alloc_intrs(sc, pa);
 	if (error)
 		return;
@@ -3344,14 +3341,9 @@ wm_alloc_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 		sc->sc_ntxqueues = (msix_count - 1) / 2;
 		sc->sc_nrxqueues = (msix_count - 1) / 2;
 	} else {
-		sc->sc_ntxqueues = WM_MAX_RXQUEUES;
-		sc->sc_nrxqueues = WM_MAX_TXQUEUES;
+		sc->sc_ntxqueues = WM_MAX_TXQUEUES;
+		sc->sc_nrxqueues = WM_MAX_RXQUEUES;
 	}
-	/* XXXX
-	 * Currently, TX multiqueue is not supported.
-	 * To support polling mode, TX queue num must be the same as RX queue num.
-	 */
-	sc->sc_ntxqueues = 1;
 
 	sc->sc_nintrs = sc->sc_ntxqueues + sc->sc_nrxqueues + 1;
 	error = pci_msix_alloc_exact(pa, &sc->sc_intrs, sc->sc_nintrs);
@@ -3458,7 +3450,7 @@ wm_setup_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 		pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
 #endif
 		*ihs = pci_msix_establish_xname(pc, *intr, IPL_NET,
-		    sc->sc_txqueue_handler, sc, xnamebuf);
+		    sc->sc_txqueue_handler, txq, xnamebuf);
 		if (*ihs == NULL) {
 			aprint_error_dev(sc->sc_dev,
 			    "unable to establish MSI-X(for TX)%s%s\n",
@@ -6775,10 +6767,10 @@ wm_linkintr(struct wm_softc *sc, uint32_t icr)
 }
 
 static int
-wm_txintr_msix(void *arg) /* XXXX */
+wm_txintr_msix(void *arg)
 {
-	struct wm_softc *sc = arg;
-	struct wm_txqueue *txq = &sc->sc_txq[0]; /* XXXX */
+	struct wm_txqueue *txq = arg;
+	struct wm_softc *sc = txq->txq_sc;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 
 	DPRINTF(WM_DEBUG_TX, ("%s: TX\n", device_xname(sc->sc_dev)));
