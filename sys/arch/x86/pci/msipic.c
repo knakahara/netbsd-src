@@ -637,7 +637,10 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 	uint64_t pci_msix_table_offset;
 	pcireg_t pci_msix_table_reg;
 	int off;
-	int newseq, rewrite_idx, rewrite_count, new_mp_veccnt;
+	int oldseq, newseq; /* vecid */
+	int rewrite_idx; /* MSI-X table index */
+	int rewrite_count;
+	int new_mp_veccnt;
 	int *new_mp_msixtablei;
 	struct pci_msix_table_entry *rewrite;
 
@@ -663,6 +666,17 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 		else
 			new_mp_msixtablei[MSI_INT_VEC(pihs[newseq])] = newseq;
 	}
+#ifdef MSIX_REMAP_DEBUG
+	{
+		int i;
+		for (i = 0; i < new_mp_veccnt; i++) {
+			printf("new_mp_msixtablei[%d] = %d\n",
+			    i, new_mp_msixtablei[i]);
+			printf("IOW vecid = %d MSI-X table index = %d\n",
+			    i, new_mp_msixtablei[i]);
+		}
+	}
+#endif
 
 	rewrite_count = max(count, msipic->mp_veccnt);
 	rewrite = kmem_zalloc(sizeof(struct pci_msix_table_entry) * rewrite_count,
@@ -675,23 +689,31 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 
 	mutex_enter(&msipic->mp_lock);
 
-	/* make ready to rewrite MSI-X table. */
+	/*
+	 * make ready to rewrite MSI-X table.
+	 * If MSI-X table entry is already set values, back up to rewite[].
+	 */
 	for (rewrite_idx = 0; rewrite_idx < rewrite_count; rewrite_idx++) {
 		uint32_t addr_lo, addr_hi, data, vecctl;
-		int oldseq;
-		bool is_used_entry = false;
+		int old_msix_table_index;
 
-		/* Is "rewrite_idx"th MSI-X table entry used? */
+		/* find old MSI-X table index binding with pihs[rewrite_idx] */
+		old_msix_table_index = -1;
 		for (oldseq = 0; oldseq < msipic->mp_veccnt; oldseq++) {
-			if (msipic->mp_msixtablei[oldseq] == rewrite_idx) {
-				is_used_entry = true;
+			if (oldseq == MSI_INT_VEC(pihs[rewrite_idx])) {
+				old_msix_table_index = msipic->mp_msixtablei[oldseq];
 				break;
 			}
 		}
 
-		if (is_used_entry) {
+		if (old_msix_table_index != -1) {
+			/*
+			 * The pci_intr_handle_t is already established.
+			 * To avoid overwrite, backup current value to
+			 * rewite[rewrite_index].
+			 */
 			uint64_t entry_base = pci_msix_table_offset +
-				PCI_MSIX_TABLE_ENTRY_SIZE * rewrite_idx;
+				PCI_MSIX_TABLE_ENTRY_SIZE * old_msix_table_index;
 			addr_lo = bus_space_read_4(bstag, bshandle,
 			    entry_base + PCI_MSIX_TABLE_ENTRY_ADDR_LO);
 			addr_hi = bus_space_read_4(bstag, bshandle,
@@ -700,7 +722,23 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 			    entry_base + PCI_MSIX_TABLE_ENTRY_DATA);
 			vecctl = bus_space_read_4(bstag, bshandle,
 			    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL);
+		} else if (rewrite_idx <= count &&
+		    pihs[rewrite_idx] != MSI_INT_MSIX_INVALID) {
+			/*
+			 * The pci_intr_handle_t will use MSI-X table index,
+			 * which is not used.
+			 */
+			addr_lo = 0;
+			addr_hi = 0;
+			data = 0;
+			vecctl = 0; /* unmask Vector Control Mask Bit */
 		} else {
+			/*
+			 * Either below 2 case
+			 *     - The pci_intr_handle_t will be disable.
+			 *     - The MSI-X table entry is not binding with
+			 *       pci_intr_handle_t
+			 */
 			addr_lo = 0;
 			addr_hi = 0;
 			data = 0;
@@ -716,6 +754,12 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 	for (rewrite_idx = 0; rewrite_idx < rewrite_count; rewrite_idx++) {
 		uint64_t entry_base;
 
+#ifdef MSIX_REMAP_DEBUG
+		/* msix_vector_control 0th is Mask Bit. 1 means the entry is masked. */
+		printf("table_idx %d msix_value 0x%08x msix_vector_control 0x%08x\n", table_idx,
+			newtable[table_idx].pci_msix_value,
+			newtable[table_idx].pci_msix_vector_control);
+#endif
 		entry_base = pci_msix_table_offset +
 			PCI_MSIX_TABLE_ENTRY_SIZE * rewrite_idx;
 		bus_space_write_4(bstag, bshandle,
