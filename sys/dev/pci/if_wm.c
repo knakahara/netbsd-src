@@ -96,6 +96,10 @@ __KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.308 2014/11/16 09:47:35 msaitoh Exp $");
 #include <sys/device.h>
 #include <sys/queue.h>
 #include <sys/syslog.h>
+#include <sys/cpu.h>
+#ifdef NOTYET
+#include <sys/pcq.h>
+#endif
 
 #include <sys/rnd.h>
 
@@ -177,6 +181,10 @@ int	wm_debug = WM_DEBUG_TX | WM_DEBUG_RX | WM_DEBUG_LINK | WM_DEBUG_GMII
 #define	WM_NEXTTX(txq, x)	(((x) + 1) & WM_NTXDESC_MASK(txq))
 #define	WM_NEXTTXS(txq, x)	(((x) + 1) & WM_TXQUEUELEN_MASK(txq))
 
+#ifdef NOTYET
+#define WM_TXPCQSIZE		4096
+#endif
+
 #define	WM_MAXTXDMA		 (2 * round_page(IP_MAXPACKET)) /* for TSO */
 
 /*
@@ -237,11 +245,17 @@ struct wm_txqueue {
 
 	struct wm_softc *txq_sc;
 
+	struct ifaltq txq_snd;		/* output queue for this transmit queue */
+
 	int txq_id;			/* index of transmit queues */
 	int txq_intr_idx;		/* index of MSI-X tables */
 
+#ifdef NOTYET
+	pcq_t *txq_pcq;
+#endif
+
 	/* Software state for the transmit and receive descriptors. */
-	int txq_txnum;			/* must be a power of two */ /* ???? */
+	int txq_txnum;			/* must be a power of two */
 
 	struct wm_txsoft txq_txsoft[WM_TXQUEUELEN_MAX];
 
@@ -588,7 +602,9 @@ static void	wm_start_locked(struct ifnet *);
 static int	wm_nq_tx_offload(struct wm_softc *, struct wm_txqueue *,
     struct wm_txsoft *, uint32_t *, uint32_t *, bool *);
 static void	wm_nq_start(struct ifnet *);
-static void	wm_nq_start_locked(struct ifnet *);
+static void	wm_nq_start_locked(struct ifnet *, struct wm_txqueue *);
+static int	wm_mq_transmit(struct ifnet *, struct mbuf *);
+static void	wm_mq_transmit_locked(struct ifnet *, struct wm_txqueue *);
 /* Interrupt */
 static void	wm_txintr(struct wm_txqueue *);
 static void	wm_rxintr(struct wm_rxqueue *);
@@ -1670,12 +1686,26 @@ wm_alloc_rxtx_queues(struct wm_softc *sc)
 		txq->txq_sc = sc;
 #ifdef WM_MPSAFE
 		txq->txq_tx_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
+
+		IFQ_SET_MAXLEN(&txq->txq_snd, max(WM_IFQUEUELEN, IFQ_MAXLEN));
+		IFQ_SET_READY(&txq->txq_snd);
 #else
 		txq->txq_tx_lock = NULL;
 #endif
-		error = wm_alloc_tx_descs(sc, txq);
-		if (error)
+
+#ifdef NOTYET
+		txq->txq_pcq = pcq_create(WM_TXPCQSIZE, KM_SLEEP);
+		if (txq->txq_pcq == NULL)
 			break;
+#endif
+
+		error = wm_alloc_tx_descs(sc, txq);
+		if (error) {
+#ifdef NOTYET
+			pcq_destroy(txq->txq_pcq);
+#endif
+			break;
+		}
 
 		error = wm_alloc_tx_buffer(sc, txq);
 		if (error) {
@@ -1732,6 +1762,9 @@ wm_free_rxtx_queues(struct wm_softc *sc)
 		txq = &sc->sc_txq[i];
 		wm_free_tx_descs(sc, txq);
 		wm_free_tx_buffer(sc, txq);
+#ifdef NOTYET
+		pcq_destroy(txq->txq_pcq);
+#endif
 		if (txq->txq_tx_lock)
 			mutex_obj_free(txq->txq_tx_lock);
 	}
@@ -2281,6 +2314,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 		sc->sc_rxqueue_handler = wm_rxintr_msix;
 		sc->sc_link_handler = wm_link_msix;
 	}
+#ifndef WM_MPSAFE
+	sc->sc_max_ntxqueues = 1;
+#endif
 
 	error = wm_alloc_intrs(sc, pa);
 	if (error)
@@ -2798,6 +2834,10 @@ wm_attach(device_t parent, device_t self, void *aux)
 		ifp->if_start = wm_nq_start;
 	else
 		ifp->if_start = wm_start;
+#ifdef WM_MPSAFE
+	ifp->if_transmit = wm_mq_transmit;
+#endif
+
 	ifp->if_watchdog = wm_watchdog;
 	ifp->if_init = wm_init;
 	ifp->if_stop = wm_stop;
@@ -3344,6 +3384,9 @@ wm_alloc_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 		sc->sc_ntxqueues = WM_MAX_TXQUEUES;
 		sc->sc_nrxqueues = WM_MAX_RXQUEUES;
 	}
+#ifndef WM_MPSAFE
+	sc->sc_ntxqueues = 1;
+#endif
 
 	sc->sc_nintrs = sc->sc_ntxqueues + sc->sc_nrxqueues + 1;
 	error = pci_msix_alloc_exact(pa, &sc->sc_intrs, sc->sc_nintrs);
@@ -6024,19 +6067,18 @@ static void
 wm_nq_start(struct ifnet *ifp)
 {
 	struct wm_softc *sc = ifp->if_softc;
-	struct wm_txqueue *txq = &sc->sc_txq[0];  /* XXXX */
+	struct wm_txqueue *txq = &sc->sc_txq[0];
 
 	WM_TX_LOCK(txq);
 	if (!sc->sc_stopping)
-		wm_nq_start_locked(ifp);
+		wm_nq_start_locked(ifp, txq);
 	WM_TX_UNLOCK(txq);
 }
 
 static void
-wm_nq_start_locked(struct ifnet *ifp)
+wm_nq_start_locked(struct ifnet *ifp, struct wm_txqueue *txq)
 {
 	struct wm_softc *sc = ifp->if_softc;
-	struct wm_txqueue *txq = &sc->sc_txq[0]; /* XXXX */
 	struct mbuf *m0;
 	struct m_tag *mtag;
 	struct wm_txsoft *txs;
@@ -6073,6 +6115,342 @@ wm_nq_start_locked(struct ifnet *ifp)
 
 		/* Grab a packet off the queue. */
 		IFQ_DEQUEUE(&ifp->if_snd, m0);
+		if (m0 == NULL)
+			break;
+
+		DPRINTF(WM_DEBUG_TX,
+		    ("%s: TX: have packet to transmit: %p\n",
+		    device_xname(sc->sc_dev), m0));
+
+		txs = &txq->txq_txsoft[txq->txq_txsnext];
+		dmamap = txs->txs_dmamap;
+
+		/*
+		 * Load the DMA map.  If this fails, the packet either
+		 * didn't fit in the allotted number of segments, or we
+		 * were short on resources.  For the too-many-segments
+		 * case, we simply report an error and drop the packet,
+		 * since we can't sanely copy a jumbo packet to a single
+		 * buffer.
+		 */
+		error = bus_dmamap_load_mbuf(sc->sc_dmat, dmamap, m0,
+		    BUS_DMA_WRITE|BUS_DMA_NOWAIT);
+		if (error) {
+			if (error == EFBIG) {
+				WM_EVCNT_INCR(&sc->sc_ev_txdrop);
+				log(LOG_ERR, "%s: Tx packet consumes too many "
+				    "DMA segments, dropping...\n",
+				    device_xname(sc->sc_dev));
+				wm_dump_mbuf_chain(sc, m0);
+				m_freem(m0);
+				continue;
+			}
+			/* Short on resources, just stop for now. */
+			DPRINTF(WM_DEBUG_TX,
+			    ("%s: TX: dmamap load failed: %d\n",
+			    device_xname(sc->sc_dev), error));
+			break;
+		}
+
+		segs_needed = dmamap->dm_nsegs;
+
+		/*
+		 * Ensure we have enough descriptors free to describe
+		 * the packet.  Note, we always reserve one descriptor
+		 * at the end of the ring due to the semantics of the
+		 * TDT register, plus one more in the event we need
+		 * to load offload context.
+		 */
+		if (segs_needed > txq->txq_txfree - 2) {
+			/*
+			 * Not enough free descriptors to transmit this
+			 * packet.  We haven't committed anything yet,
+			 * so just unload the DMA map, put the packet
+			 * pack on the queue, and punt.  Notify the upper
+			 * layer that there are no more slots left.
+			 */
+			DPRINTF(WM_DEBUG_TX,
+			    ("%s: TX: need %d (%d) descriptors, have %d\n",
+			    device_xname(sc->sc_dev), dmamap->dm_nsegs,
+			    segs_needed, sc->sc_txfree - 1));
+			ifp->if_flags |= IFF_OACTIVE;
+			bus_dmamap_unload(sc->sc_dmat, dmamap);
+			WM_EVCNT_INCR(&sc->sc_ev_txdstall);
+			break;
+		}
+
+		/* WE ARE NOW COMMITTED TO TRANSMITTING THE PACKET. */
+
+		DPRINTF(WM_DEBUG_TX,
+		    ("%s: TX: packet has %d (%d) DMA segments\n",
+		    device_xname(sc->sc_dev), dmamap->dm_nsegs, segs_needed));
+
+		WM_EVCNT_INCR(&sc->sc_ev_txseg[dmamap->dm_nsegs - 1]);
+
+		/*
+		 * Store a pointer to the packet so that we can free it
+		 * later.
+		 *
+		 * Initially, we consider the number of descriptors the
+		 * packet uses the number of DMA segments.  This may be
+		 * incremented by 1 if we do checksum offload (a descriptor
+		 * is used to set the checksum context).
+		 */
+		txs->txs_mbuf = m0;
+		txs->txs_firstdesc = txq->txq_txnext;
+		txs->txs_ndesc = segs_needed;
+
+		/* Set up offload parameters for this packet. */
+		uint32_t cmdlen, fields, dcmdlen;
+		if (m0->m_pkthdr.csum_flags &
+		    (M_CSUM_TSOv4|M_CSUM_TSOv6|
+		    M_CSUM_IPv4|M_CSUM_TCPv4|M_CSUM_UDPv4|
+		    M_CSUM_TCPv6|M_CSUM_UDPv6)) {
+			if (wm_nq_tx_offload(sc, txq, txs, &cmdlen, &fields,
+			    &do_csum) != 0) {
+				/* Error message already displayed. */
+				bus_dmamap_unload(sc->sc_dmat, dmamap);
+				continue;
+			}
+		} else {
+			do_csum = false;
+			cmdlen = 0;
+			fields = 0;
+		}
+
+		/* Sync the DMA map. */
+		bus_dmamap_sync(sc->sc_dmat, dmamap, 0, dmamap->dm_mapsize,
+		    BUS_DMASYNC_PREWRITE);
+
+		/* Initialize the first transmit descriptor. */
+		nexttx = txq->txq_txnext;
+		if (!do_csum) {
+			/* setup a legacy descriptor */
+			wm_set_dma_addr(
+			    &txq->txq_txdescs[nexttx].wtx_addr,
+			    dmamap->dm_segs[0].ds_addr);
+			txq->txq_txdescs[nexttx].wtx_cmdlen =
+			    htole32(WTX_CMD_IFCS | dmamap->dm_segs[0].ds_len);
+			txq->txq_txdescs[nexttx].wtx_fields.wtxu_status = 0;
+			txq->txq_txdescs[nexttx].wtx_fields.wtxu_options = 0;
+			if ((mtag = VLAN_OUTPUT_TAG(&sc->sc_ethercom, m0)) !=
+			    NULL) {
+				txq->txq_txdescs[nexttx].wtx_cmdlen |=
+				    htole32(WTX_CMD_VLE);
+				txq->txq_txdescs[nexttx].wtx_fields.wtxu_vlan =
+				    htole16(VLAN_TAG_VALUE(mtag) & 0xffff);
+			} else {
+				txq->txq_txdescs[nexttx].wtx_fields.wtxu_vlan = 0;
+			}
+			dcmdlen = 0;
+		} else {
+			/* setup an advanced data descriptor */
+			txq->txq_nq_txdescs[nexttx].nqtx_data.nqtxd_addr =
+			    htole64(dmamap->dm_segs[0].ds_addr);
+			KASSERT((dmamap->dm_segs[0].ds_len & cmdlen) == 0);
+			txq->txq_nq_txdescs[nexttx].nqtx_data.nqtxd_cmdlen =
+			    htole32(dmamap->dm_segs[0].ds_len | cmdlen );
+			txq->txq_nq_txdescs[nexttx].nqtx_data.nqtxd_fields =
+			    htole32(fields);
+			DPRINTF(WM_DEBUG_TX,
+			    ("%s: TX: adv data desc %d 0x%" PRIx64 "\n",
+			    device_xname(sc->sc_dev), nexttx,
+			    (uint64_t)dmamap->dm_segs[0].ds_addr));
+			DPRINTF(WM_DEBUG_TX,
+			    ("\t 0x%08x%08x\n", fields,
+			    (uint32_t)dmamap->dm_segs[0].ds_len | cmdlen));
+			dcmdlen = NQTX_DTYP_D | NQTX_CMD_DEXT;
+		}
+
+		lasttx = nexttx;
+		nexttx = WM_NEXTTX(txq, nexttx);
+		/*
+		 * fill in the next descriptors. legacy or adcanced format
+		 * is the same here
+		 */
+		for (seg = 1; seg < dmamap->dm_nsegs;
+		    seg++, nexttx = WM_NEXTTX(txq, nexttx)) {
+			txq->txq_nq_txdescs[nexttx].nqtx_data.nqtxd_addr =
+			    htole64(dmamap->dm_segs[seg].ds_addr);
+			txq->txq_nq_txdescs[nexttx].nqtx_data.nqtxd_cmdlen =
+			    htole32(dcmdlen | dmamap->dm_segs[seg].ds_len);
+			KASSERT((dcmdlen & dmamap->dm_segs[seg].ds_len) == 0);
+			txq->txq_nq_txdescs[nexttx].nqtx_data.nqtxd_fields = 0;
+			lasttx = nexttx;
+
+			DPRINTF(WM_DEBUG_TX,
+			    ("%s: TX: desc %d: %#" PRIx64 ", "
+			     "len %#04zx\n",
+			    device_xname(sc->sc_dev), nexttx,
+			    (uint64_t)dmamap->dm_segs[seg].ds_addr,
+			    dmamap->dm_segs[seg].ds_len));
+		}
+
+		KASSERT(lasttx != -1);
+
+		/*
+		 * Set up the command byte on the last descriptor of
+		 * the packet.  If we're in the interrupt delay window,
+		 * delay the interrupt.
+		 */
+		KASSERT((WTX_CMD_EOP | WTX_CMD_RS) ==
+		    (NQTX_CMD_EOP | NQTX_CMD_RS));
+		txq->txq_txdescs[lasttx].wtx_cmdlen |=
+		    htole32(WTX_CMD_EOP | WTX_CMD_RS);
+
+		txs->txs_lastdesc = lasttx;
+
+		DPRINTF(WM_DEBUG_TX,
+		    ("%s: TX: desc %d: cmdlen 0x%08x\n",
+		    device_xname(sc->sc_dev),
+		    lasttx, le32toh(txq->txq_txdescs[lasttx].wtx_cmdlen)));
+
+		/* Sync the descriptors we're using. */
+		wm_cdtxsync(sc, txq, txq->txq_txnext, txs->txs_ndesc,
+		    BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
+
+		/* Give the packet to the chip. */
+		CSR_WRITE(sc, txq->txq_tdt_reg, nexttx);
+		sent = true;
+
+		DPRINTF(WM_DEBUG_TX,
+		    ("%s: TX: TDT -> %d\n", device_xname(sc->sc_dev), nexttx));
+
+		DPRINTF(WM_DEBUG_TX,
+		    ("%s: TX: finished transmitting packet, job %d\n",
+		    device_xname(sc->sc_dev), txq->txq_txsnext));
+
+		/* Advance the tx pointer. */
+		txq->txq_txfree -= txs->txs_ndesc;
+		txq->txq_txnext = nexttx;
+
+		txq->txq_txsfree--;
+		txq->txq_txsnext = WM_NEXTTXS(txq, txq->txq_txsnext);
+
+		/* Pass the packet to any BPF listeners. */
+		bpf_mtap(ifp, m0);
+	}
+
+	if (m0 != NULL) {
+		ifp->if_flags |= IFF_OACTIVE;
+		WM_EVCNT_INCR(&sc->sc_ev_txdrop);
+		DPRINTF(WM_DEBUG_TX, ("%s: TX: error after IFQ_DEQUEUE\n", __func__));
+		m_freem(m0);
+	}
+
+	if (txq->txq_txsfree == 0 || txq->txq_txfree <= 2) {
+		/* No more slots; notify upper layer. */
+		ifp->if_flags |= IFF_OACTIVE;
+	}
+
+	if (sent) {
+		/* Set a watchdog timer in case the chip flakes out. */
+		ifp->if_timer = 5;
+	}
+}
+
+/* XXXX */
+static int
+wm_select_txq_id(struct wm_softc *sc, u_int cpuid)
+{
+	int qid = cpuid % sc->sc_ntxqueues;
+
+	return qid;
+}
+
+static int
+wm_mq_transmit(struct ifnet *ifp, struct mbuf *m)
+{
+	ALTQ_DECL(struct altq_pktattr pktattr;)
+	int len, error;
+	short mflags;
+
+	struct wm_softc *sc = ifp->if_softc;
+	struct wm_txqueue *txq;
+	int txq_id;
+
+	txq_id = wm_select_txq_id(sc, cpu_index(curcpu()));
+	txq = &sc->sc_txq[txq_id];
+
+#ifdef ALTQ
+	/*
+	 * If ALTQ is enabled on the member interface, do
+	 * classification; the queueing discipline might
+	 * not require classification, but might require
+	 * the address family/header pointer in the pktattr.
+	 */
+	if (ALTQ_IS_ENABLED(&txq->txq_snd)) {
+		/* XXX IFT_ETHER */
+		altq_etherclassify(&txq->txq_snd, m, &pktattr);
+	}
+#endif /* ALTQ */
+
+	len = m->m_pkthdr.len;
+	m->m_flags |= M_PROTO1;
+	mflags = m->m_flags;
+
+	IFQ_ENQUEUE(&txq->txq_snd, m, &pktattr, error);
+
+	if (error) {
+		/* mbuf is already freed in IFQ_ENQUEUE */
+		return error;
+	}
+
+	ifp->if_obytes += len;
+
+	if (mflags & M_MCAST) {
+		ifp->if_omcasts++;
+	}
+
+
+	WM_TX_LOCK(txq);
+	if (!sc->sc_stopping)
+		wm_mq_transmit_locked(ifp, txq);
+	WM_TX_UNLOCK(txq);
+
+	return 0;
+}
+
+static void
+wm_mq_transmit_locked(struct ifnet *ifp, struct wm_txqueue *txq)
+{
+	struct wm_softc *sc = ifp->if_softc;
+	struct mbuf *m0;
+	struct m_tag *mtag;
+	struct wm_txsoft *txs;
+	bus_dmamap_t dmamap;
+	int error, nexttx, lasttx = -1, seg, segs_needed;
+	bool do_csum, sent;
+
+	KASSERT(WM_TX_LOCKED(txq));
+
+	if ((ifp->if_flags & (IFF_RUNNING|IFF_OACTIVE)) != IFF_RUNNING)
+		return;
+
+	sent = false;
+
+	/*
+	 * Loop through the send queue, setting up transmit descriptors
+	 * until we drain the queue, or use up all available transmit
+	 * descriptors.
+	 */
+	for (;;) {
+		m0 = NULL;
+
+		/* Get a work queue entry. */
+		if (txq->txq_txsfree < WM_TXQUEUE_GC(txq)) {
+			wm_txintr(txq);
+			if (txq->txq_txsfree == 0) {
+				DPRINTF(WM_DEBUG_TX,
+				    ("%s: TX: no free job descriptors\n",
+					device_xname(sc->sc_dev)));
+				WM_EVCNT_INCR(&sc->sc_ev_txsstall);
+				break;
+			}
+		}
+
+		/* Grab a packet off the queue. */
+		IFQ_DEQUEUE(&txq->txq_snd, m0);
 		if (m0 == NULL)
 			break;
 

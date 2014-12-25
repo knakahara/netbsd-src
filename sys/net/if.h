@@ -270,6 +270,10 @@ typedef struct ifnet {
 		    (struct ifnet *, struct mbuf *);
 	void	(*if_start)		/* initiate output routine */
 		    (struct ifnet *);
+#ifdef NET_MPSAFE
+	int	(*if_transmit)		/* MPSAFE output routine */
+		    (struct ifnet *, struct mbuf *);
+#endif
 	int	(*if_ioctl)		/* ioctl routine */
 		    (struct ifnet *, u_long, void *);
 	int	(*if_init)		/* init routine */

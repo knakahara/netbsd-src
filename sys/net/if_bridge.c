@@ -1480,6 +1480,24 @@ bridge_enqueue(struct bridge_softc *sc, struct ifnet *dst_ifp, struct mbuf *m,
 			return;
 	}
 
+#ifdef NET_MPSAFE
+	if(dst_ifp->if_transmit != NULL) {
+		error = (*dst_ifp->if_transmit)(dst_ifp, m);
+		if (error) {
+			sc->sc_if.if_oerrors++;
+			return;
+		}
+
+		sc->sc_if.if_opackets++;
+		sc->sc_if.if_obytes += m->m_pkthdr.len;
+		if (m->m_flags & M_MCAST) {
+			sc->sc_if.if_omcasts++;
+		}
+
+		return;
+
+	} else {
+#endif
 #ifdef ALTQ
 	/*
 	 * If ALTQ is enabled on the member interface, do
@@ -1517,6 +1535,9 @@ bridge_enqueue(struct bridge_softc *sc, struct ifnet *dst_ifp, struct mbuf *m,
 
 	if ((dst_ifp->if_flags & IFF_OACTIVE) == 0)
 		(*dst_ifp->if_start)(dst_ifp);
+#ifdef NET_MPSAFE
+	}
+#endif
 }
 
 /*
