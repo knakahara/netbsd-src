@@ -500,6 +500,9 @@ construct_msix_pic(struct pci_attach_args *pa)
 	bus_space_tag_t bstag;
 	bus_space_handle_t bshandle;
 	bus_size_t bssize;
+	uint32_t table_offset;
+	int table_nentry;
+	size_t table_size;
 	u_int memtype;
 	int off, bir, bar, err;
 	struct pic *msix_pic;
@@ -510,11 +513,18 @@ construct_msix_pic(struct pci_attach_args *pa)
 		return NULL;
 	}
 
+	table_nentry = pci_msix_count(pa);
+	if (table_nentry == 0) {
+		aprint_normal("MSI-X table entry is 0.\n");
+		return NULL;
+	}
+
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0) {
 		aprint_normal("%s: no msix capability", __func__);
 		return NULL;
 	}
 	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
+	table_offset = tbl & PCI_MSIX_TBLOFFSET_MASK;
 	bir = tbl & PCI_MSIX_PBABIR_MASK;
 	switch(bir) {
 	case 0:
@@ -540,7 +550,16 @@ construct_msix_pic(struct pci_attach_args *pa)
 		return NULL;
 	}
 	memtype = pci_mapreg_type(pc, tag, bar);
-	err = pci_mapreg_map(pa, bar, memtype, BUS_SPACE_MAP_LINEAR,
+	 /*
+	  * MSI-X table entry consists below
+	  *     - Vector Control (32bit)
+	  *     - Message Data (32bit)
+	  *     - Message Upper Address (32bit)
+	  *     - Message Lower Address (32bit)
+	  */
+	table_size = table_nentry * (sizeof(uint32_t) * 4);
+	err = pci_mapreg_submap(pa, bar, memtype, BUS_SPACE_MAP_LINEAR,
+	    roundup(table_size, PAGE_SIZE), table_offset,
 	    &bstag, &bshandle, NULL, &bssize);
 	if (err) {
 		aprint_normal("cannot map msix table.\n");
