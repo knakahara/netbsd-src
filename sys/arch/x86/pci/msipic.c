@@ -666,11 +666,10 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 	/* setup new mp_veccnt and mp_msixtablei */
 	veccnt = count;
 	for (newseq = 0; newseq < count; newseq++) {
-		if (pihs[newseq] == MSI_INT_MSIX_INVALID) {
-			vecs[newseq] = -1;
+		if (pihs[newseq] == MSI_INT_MSIX_INVALID)
 			veccnt -= 1;
-		} else
-			vecs[newseq] = MSI_INT_VEC(pihs[newseq]);
+		else
+			vecs[MSI_INT_VEC(pihs[newseq])] = newseq;
 	}
 
 	mutex_enter(&msipic->mp_lock);
