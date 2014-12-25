@@ -132,10 +132,7 @@ intr_list(int argc, char **argv)
 		err(EXIT_FAILURE, "malloc(line)");
 
 	cur = buf;
-	for (;;) {
-		end = strchr(cur, '\n');
-		if (end == NULL)
-			break;
+	while ((end = strchr(cur, '\n')) != NULL) {
 		*(end++) = '\0';
 
 		memset(line, '\0', INTR_LIST_BUFSIZE);
