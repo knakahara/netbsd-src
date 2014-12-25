@@ -1,4 +1,4 @@
-/*	$NetBSD: pcivar.h,v 1.101 2014/12/26 05:09:03 msaitoh Exp $	*/
+/*	$NetBSD: pcivar.h,v 1.100 2014/10/16 12:31:23 riastradh Exp $	*/
 
 /*
  * Copyright (c) 1996, 1997 Christopher G. Demetriou.  All rights reserved.
@@ -270,8 +270,8 @@ int	pci_mapreg_map(const struct pci_attach_args *, int, pcireg_t, int,
 	    bus_space_tag_t *, bus_space_handle_t *, bus_addr_t *,
 	    bus_size_t *);
 int	pci_mapreg_submap(const struct pci_attach_args *, int, pcireg_t, int,
-	    bus_size_t, bus_size_t, bus_space_tag_t *, bus_space_handle_t *, 
-	    bus_addr_t *, bus_size_t *);
+    bus_size_t, bus_size_t, bus_space_tag_t *, bus_space_handle_t *,
+    bus_addr_t *, bus_size_t *);
 
 
 int pci_find_rom(const struct pci_attach_args *, bus_space_tag_t,
