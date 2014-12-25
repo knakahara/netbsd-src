@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.4 2014/02/25 15:20:29 martin Exp $	*/
+/*	$NetBSD: pmap.c,v 1.7 2014/12/24 04:03:02 nonaka Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.4 2014/02/25 15:20:29 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.7 2014/12/24 04:03:02 nonaka Exp $");
 
 /*
  *	Manages physical address maps.
@@ -511,6 +511,11 @@ pmap_create(void)
 
 	pmap_segtab_init(pmap);
 
+#ifdef MULTIPROCESSOR
+	kcpuset_create(&pmap->pm_active, true);
+	kcpuset_create(&pmap->pm_onproc, true);
+#endif
+
 	UVMHIST_LOG(pmaphist, "<- pmap %p", pmap,0,0,0);
 	return pmap;
 }
@@ -536,6 +541,11 @@ pmap_destroy(pmap_t pmap)
 	kpreempt_disable();
 	pmap_tlb_asid_release_all(pmap);
 	pmap_segtab_destroy(pmap, NULL, 0);
+
+#ifdef MULTIPROCESSOR
+	kcpuset_destroy(pmap->pm_active);
+	kcpuset_destroy(pmap->pm_onproc);
+#endif
 
 	pool_put(&pmap_pmap_pool, pmap);
 	kpreempt_enable();
