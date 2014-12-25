@@ -136,6 +136,7 @@ void *pci_msi_establish_xname(pci_chipset_tag_t, pci_intr_handle_t,
 void pci_msi_disestablish(pci_chipset_tag_t, void *);
 
 /* experimental MSI-X support */
+#define MSI_INT_MSIX_INVALID	0x0000000000000000ULL /* needed by pci_msix_remap() */
 int pci_msix_count(struct pci_attach_args *);
 int pci_msix_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
 int pci_msix_alloc_exact(struct pci_attach_args *, pci_intr_handle_t **, int);
