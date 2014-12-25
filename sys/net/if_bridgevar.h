@@ -208,6 +208,7 @@ struct ifbrparam {
 
 #ifdef _KERNEL
 #include <sys/pserialize.h>
+#include <sys/workqueue.h>
 
 #include <net/pktqueue.h>
 
@@ -311,7 +312,10 @@ struct bridge_softc {
 	kmutex_t		*sc_iflist_lock;
 	LIST_HEAD(, bridge_rtnode) *sc_rthash;	/* our forwarding table */
 	LIST_HEAD(, bridge_rtnode) sc_rtlist;	/* list version of above */
+	kmutex_t		*sc_rtlist_intr_lock;
 	kmutex_t		*sc_rtlist_lock;
+	pserialize_t		sc_rtlist_psz;
+	struct workqueue	*sc_rtage_wq;
 	uint32_t		sc_rthash_key;	/* key for hash */
 	uint32_t		sc_filter_flags; /* ipf and flags */
 	pktqueue_t *		sc_fwd_pktq;
