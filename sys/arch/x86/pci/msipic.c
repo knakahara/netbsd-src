@@ -725,13 +725,13 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 		} else if (rewrite_idx <= count &&
 		    pihs[rewrite_idx] != MSI_INT_MSIX_INVALID) {
 			/*
-			 * The pci_intr_handle_t will use MSI-X table index,
-			 * which is not used.
+			 * The pci_intr_handle_t will use this MSI-X table index,
+			 * which is not established yet.
 			 */
 			addr_lo = 0;
 			addr_hi = 0;
 			data = 0;
-			vecctl = 0; /* unmask Vector Control Mask Bit */
+			vecctl = PCI_MSIX_VECTCTL_HWMASK_MASK;
 		} else {
 			/*
 			 * Either below 2 case
