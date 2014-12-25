@@ -634,61 +634,64 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 	struct msipic *msipic = msi_pic->pic_msipic;
 	bus_space_tag_t bstag = msipic->mp_bstag;
 	bus_space_handle_t bshandle = msipic->mp_bshandle;
-	uint64_t table_off;
-	pcireg_t tbl;
+	uint64_t pci_msix_table_offset;
+	pcireg_t pci_msix_table_reg;
 	int off;
-	int newseq, oldseq, table_idx, veccnt;
-	int *vecs;
-	struct pci_msix_table_entry *newtable;
+	int newseq, rewrite_idx, rewrite_count, new_mp_veccnt;
+	int *new_mp_msixtablei;
+	struct pci_msix_table_entry *rewrite;
 
 	if (pihs == NULL)
 		return 1;
 
-	vecs = kmem_zalloc(sizeof(int) * count, KM_SLEEP);
-	if (vecs == NULL) {
+	new_mp_msixtablei = kmem_zalloc(sizeof(int) * count, KM_SLEEP);
+	if (new_mp_msixtablei == NULL) {
 		aprint_normal("cannot allocate mp_msixtablei.\n");
-		return 1;
-	}
-
-	newtable = kmem_zalloc(sizeof(struct pci_msix_table_entry) * count,
-	    KM_SLEEP);
-	if (newtable == NULL) {
-		aprint_normal("cannot allocate MSI-X vector table.\n");
-		kmem_free(vecs, sizeof(int) * count);
 		return 1;
 	}
 
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
 		panic("%s: no msix capability", __func__);
-	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
-	table_off = tbl & PCI_MSIX_TBLOFFSET_MASK;
+	pci_msix_table_reg = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
+	pci_msix_table_offset = pci_msix_table_reg & PCI_MSIX_TBLOFFSET_MASK;
 
 	/* setup new mp_veccnt and mp_msixtablei */
-	veccnt = count;
+	new_mp_veccnt = count;
 	for (newseq = 0; newseq < count; newseq++) {
 		if (pihs[newseq] == MSI_INT_MSIX_INVALID)
-			veccnt -= 1;
+			new_mp_veccnt -= 1;
 		else
-			vecs[MSI_INT_VEC(pihs[newseq])] = newseq;
+			new_mp_msixtablei[MSI_INT_VEC(pihs[newseq])] = newseq;
+	}
+
+	rewrite_count = max(count, msipic->mp_veccnt);
+	rewrite = kmem_zalloc(sizeof(struct pci_msix_table_entry) * rewrite_count,
+	    KM_SLEEP);
+	if (rewrite == NULL) {
+		aprint_normal("cannot allocate MSI-X vector table to rewrite.\n");
+		kmem_free(new_mp_msixtablei, sizeof(int) * count);
+		return 1;
 	}
 
 	mutex_enter(&msipic->mp_lock);
 
-	/* setup new MSI-X table */
-	for (table_idx = 0; table_idx < count; table_idx++) {
+	/* make ready to rewrite MSI-X table. */
+	for (rewrite_idx = 0; rewrite_idx < rewrite_count; rewrite_idx++) {
 		uint32_t addr_lo, addr_hi, data, vecctl;
-		bool existing = false;
+		int oldseq;
+		bool is_used_entry = false;
 
+		/* Is "rewrite_idx"th MSI-X table entry used? */
 		for (oldseq = 0; oldseq < msipic->mp_veccnt; oldseq++) {
-			if (msipic->mp_msixtablei[oldseq] == table_idx) {
-				existing = true;
+			if (msipic->mp_msixtablei[oldseq] == rewrite_idx) {
+				is_used_entry = true;
 				break;
 			}
 		}
 
-		if (existing) {
-			uint64_t entry_base = table_off +
-				PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
+		if (is_used_entry) {
+			uint64_t entry_base = pci_msix_table_offset +
+				PCI_MSIX_TABLE_ENTRY_SIZE * rewrite_idx;
 			addr_lo = bus_space_read_4(bstag, bshandle,
 			    entry_base + PCI_MSIX_TABLE_ENTRY_ADDR_LO);
 			addr_hi = bus_space_read_4(bstag, bshandle,
@@ -703,40 +706,41 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 			data = 0;
 			vecctl = PCI_MSIX_VECTCTL_HWMASK_MASK;
 		}
-		newtable[table_idx].pci_msix_addr_lo = addr_lo;
-		newtable[table_idx].pci_msix_addr_hi = addr_hi;
-		newtable[table_idx].pci_msix_value = data;
-		newtable[table_idx].pci_msix_vector_control = vecctl;
+		rewrite[rewrite_idx].pci_msix_addr_lo = addr_lo;
+		rewrite[rewrite_idx].pci_msix_addr_hi = addr_hi;
+		rewrite[rewrite_idx].pci_msix_value = data;
+		rewrite[rewrite_idx].pci_msix_vector_control = vecctl;
 	}
 
-	/* write new MSI-X table */
-	for (table_idx = 0; table_idx < count; table_idx++) {
-			uint64_t entry_base;
+	/* do rewrite MSI-X table. */
+	for (rewrite_idx = 0; rewrite_idx < rewrite_count; rewrite_idx++) {
+		uint64_t entry_base;
 
-		entry_base = table_off + PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
+		entry_base = pci_msix_table_offset +
+			PCI_MSIX_TABLE_ENTRY_SIZE * rewrite_idx;
 		bus_space_write_4(bstag, bshandle,
 		    entry_base + PCI_MSIX_TABLE_ENTRY_ADDR_LO,
-		    newtable[table_idx].pci_msix_addr_lo);
+		    rewrite[rewrite_idx].pci_msix_addr_lo);
 		bus_space_write_4(bstag, bshandle,
 		    entry_base + PCI_MSIX_TABLE_ENTRY_ADDR_HI,
-		    newtable[table_idx].pci_msix_addr_hi);
+		    rewrite[rewrite_idx].pci_msix_addr_hi);
 		bus_space_write_4(bstag, bshandle,
 		    entry_base + PCI_MSIX_TABLE_ENTRY_DATA,
-		    newtable[table_idx].pci_msix_value);
+		    rewrite[rewrite_idx].pci_msix_value);
 		bus_space_write_4(bstag, bshandle,
 		    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL,
-		    newtable[table_idx].pci_msix_vector_control);
+		    rewrite[rewrite_idx].pci_msix_vector_control);
 	}
 	BUS_SPACE_WRITE_FLUSH(bstag, bshandle);
 
 	/* swap msipic members */
 	kmem_free(msipic->mp_msixtablei, sizeof(int) * msipic->mp_veccnt);
-	msi_pic->pic_msipic->mp_veccnt = veccnt;
-	msi_pic->pic_msipic->mp_msixtablei = vecs;
+	msi_pic->pic_msipic->mp_veccnt = new_mp_veccnt;
+	msi_pic->pic_msipic->mp_msixtablei = new_mp_msixtablei;
 
 	mutex_exit(&msipic->mp_lock);
 
-	kmem_free(newtable, sizeof(struct pci_msix_table_entry) * count);
+	kmem_free(rewrite, sizeof(struct pci_msix_table_entry) * rewrite_count);
 	return 0;
 }
 
