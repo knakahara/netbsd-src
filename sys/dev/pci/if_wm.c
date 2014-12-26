@@ -601,8 +601,10 @@ static int	wm_nq_tx_offload(struct wm_softc *, struct wm_txqueue *,
     struct wm_txsoft *, uint32_t *, uint32_t *, bool *);
 static void	wm_nq_start(struct ifnet *);
 static void	wm_nq_start_locked(struct ifnet *, struct wm_txqueue *);
+#ifdef WM_MPSAFE
 static int	wm_mq_transmit(struct ifnet *, struct mbuf *);
 static void	wm_mq_transmit_locked(struct ifnet *, struct wm_txqueue *);
+#endif
 /* Interrupt */
 static void	wm_txintr(struct wm_txqueue *);
 static void	wm_rxintr(struct wm_rxqueue *);
@@ -2315,7 +2317,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 #ifndef WM_MPSAFE
 	sc->sc_max_ntxqueues = 1;
 #endif
-	sc->sc_max_ntxqueues = 1; /* XXXXXXXX */
 
 	error = wm_alloc_intrs(sc, pa);
 	if (error)
@@ -3416,7 +3417,6 @@ wm_alloc_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 #ifndef WM_MPSAFE
 	sc->sc_ntxqueues = 1;
 #endif
-	sc->sc_ntxqueues = 1; /* XXXXXXXX */
 
 	sc->sc_nintrs = sc->sc_ntxqueues + sc->sc_nrxqueues + 1;
 	error = pci_msix_alloc_exact(pa, &sc->sc_intrs, sc->sc_nintrs);
@@ -6379,6 +6379,7 @@ wm_nq_start_locked(struct ifnet *ifp, struct wm_txqueue *txq)
 	}
 }
 
+#ifdef WM_MPSAFE
 /* XXXX */
 static int
 wm_select_txq_id(struct wm_softc *sc, u_int cpuid)
@@ -6714,6 +6715,7 @@ wm_mq_transmit_locked(struct ifnet *ifp, struct wm_txqueue *txq)
 		ifp->if_timer = 5;
 	}
 }
+#endif
 
 /* Interrupt */
 
