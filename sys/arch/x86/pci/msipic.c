@@ -668,11 +668,18 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 	}
 #ifdef MSIX_REMAP_DEBUG
 	{
+		int *old_mp_msixtablei =  msi_pic->pic_msipic->mp_msixtablei;
 		int i;
+
+		printf("==== old mp_msixtablei ====\n");
+		for (i = 0; i < new_mp_veccnt; i++) {
+			printf("mp_msixtablei[%d] = %d\n",
+			    i, old_mp_msixtablei[i]);
+		}
+		printf("\n");
+		printf("==== new mp_msixtablei ====\n");
 		for (i = 0; i < new_mp_veccnt; i++) {
 			printf("new_mp_msixtablei[%d] = %d\n",
-			    i, new_mp_msixtablei[i]);
-			printf("IOW vecid = %d MSI-X table index = %d\n",
 			    i, new_mp_msixtablei[i]);
 		}
 	}
@@ -722,19 +729,16 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 			    entry_base + PCI_MSIX_TABLE_ENTRY_DATA);
 			vecctl = bus_space_read_4(bstag, bshandle,
 			    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL);
-		} else if (rewrite_idx <= count &&
-		    pihs[rewrite_idx] != MSI_INT_MSIX_INVALID) {
-			/*
-			 * The pci_intr_handle_t will use this MSI-X table index,
-			 * which is not established yet.
-			 */
-			addr_lo = 0;
-			addr_hi = 0;
-			data = 0;
-			vecctl = PCI_MSIX_VECTCTL_HWMASK_MASK;
+
+			aprint_debug(
+				"new MSI-X table[%d]: data=0x%08x vector_control=0x%08x "
+				"binding handle's vec=%d (changed from %d)\n",
+				rewrite_idx, data, vecctl, (int)MSI_INT_VEC(pihs[rewrite_idx]), oldseq);
 		} else {
 			/*
-			 * Either below 2 case
+			 * Either below 3 case
+			 *     - The pci_intr_handle_t will use this MSI-X
+			 *       table index, which is not established yet.
 			 *     - The pci_intr_handle_t will be disable.
 			 *     - The MSI-X table entry is not binding with
 			 *       pci_intr_handle_t
@@ -743,6 +747,18 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 			addr_hi = 0;
 			data = 0;
 			vecctl = PCI_MSIX_VECTCTL_HWMASK_MASK;
+
+			if (rewrite_idx > count || pihs[rewrite_idx] == MSI_INT_MSIX_INVALID) {
+				aprint_debug(
+					"new MSI-X table[%d]: => data=0x%08x vector_control=0x%08x "
+					"NOT binding handle\n",
+					rewrite_idx, data, vecctl);
+			} else {
+				aprint_debug(
+					"new MSI-X table[%d]: data=0x%08x vector_control=0x%08x "
+					"binding handle's vec=%d (new)\n",
+					rewrite_idx, data, vecctl, (int)MSI_INT_VEC(pihs[rewrite_idx]));
+			}
 		}
 		rewrite[rewrite_idx].pci_msix_addr_lo = addr_lo;
 		rewrite[rewrite_idx].pci_msix_addr_hi = addr_hi;
@@ -756,9 +772,9 @@ remap_msix_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 
 #ifdef MSIX_REMAP_DEBUG
 		/* msix_vector_control 0th is Mask Bit. 1 means the entry is masked. */
-		printf("table_idx %d msix_value 0x%08x msix_vector_control 0x%08x\n", table_idx,
-			newtable[table_idx].pci_msix_value,
-			newtable[table_idx].pci_msix_vector_control);
+		printf("table_idx %d msix_value 0x%08x msix_vector_control 0x%08x\n", rewrite_idx,
+			rewrite[rewrite_idx].pci_msix_value,
+			rewrite[rewrite_idx].pci_msix_vector_control);
 #endif
 		entry_base = pci_msix_table_offset +
 			PCI_MSIX_TABLE_ENTRY_SIZE * rewrite_idx;
