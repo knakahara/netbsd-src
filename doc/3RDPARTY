@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1183 2014/12/17 20:53:08 roy Exp $
+#	$NetBSD: 3RDPARTY,v 1.1189 2015/01/04 01:52:24 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -157,7 +157,7 @@ Todo[5]: Reconcile the doc directory.
 
 Package:	binutils
 Version:	2.23.2
-Current Vers:	2.24
+Current Vers:	2.25
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/binutils/
 Home Page:	http://www.gnu.org/software/binutils/
@@ -196,8 +196,8 @@ is a FreeBSD committer who has been helpful with incorporating changes
 in the past.
 
 Package:	byacc
-Version:	20130304
-Current Vers:	20130925
+Version:	20141128
+Current Vers:	20141128
 Maintainer:	Thomas Dickey <dickey@invisible-island.net>
 Archive Site:	http://www.invisible-island.net/byacc/byacc.html
 Home Page:	http://www.invisible-island.net/byacc/byacc.html
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.6.6
-Current Vers:	6.6.6
+Version:	6.6.7
+Current Vers:	6.6.7
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -369,8 +369,8 @@ Notes:
 Please use "expat" as the vendor tag for CVS imports.
 
 Package:	file
-Version:	5.20
-Current Vers:	5.20
+Version:	5.22
+Current Vers:	5.22
 Maintainer:	Christos Zoulas <christos@zoulas.com>
 Archive Site:	ftp://ftp.astron.com/pub/file/
 Home Page:	http://www.darwinsys.com/file/
@@ -396,7 +396,7 @@ There is a flex2netbsd script to help newer imports.
 
 Package:	gcc
 Version:	4.1.3-20080831/4.5.4/4.8.3
-Current Vers:	4.8.3
+Current Vers:	4.8.4/4.9.2
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gcc/
 Home Page:	http://www.gnu.org/software/gcc/
@@ -785,7 +785,7 @@ License:	BSD 3-clause like (dns-sd)
 Responsible:	christos
 Location:	usr.bin/m4
 Notes:
-Uses libc's ohash, and strtonum
+Uses libc's ohash
 
 Package:	mDNSResponder
 Version:	320.16
@@ -896,8 +896,8 @@ and ndbootd-raw.c.  Restore saved config.h, and force it to define
 HAVE_STRICT_ALIGNMENT.  Fix RCS IDs, import.
 
 Package:	ntp
-Version:	4.2.7p404
-Current Vers:	4.2.6p5/4.2.7p404
+Version:	4.2.8
+Current Vers:	4.2.8
 Maintainer:	David L. Mills <mills@udel.edu>
 Archive Site:	http://www.ntp.org/
 Home Page:	http://www.ntp.org/, http://support.ntp.org/

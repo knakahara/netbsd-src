@@ -1,4 +1,4 @@
-/*	$NetBSD: e500_intr.c,v 1.24 2014/05/19 22:47:53 rmind Exp $	*/
+/*	$NetBSD: e500_intr.c,v 1.28 2014/12/27 16:19:33 nonaka Exp $	*/
 /*-
  * Copyright (c) 2010, 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -39,7 +39,7 @@
 #define __INTR_PRIVATE
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: e500_intr.c,v 1.24 2014/05/19 22:47:53 rmind Exp $");
+__KERNEL_RCSID(0, "$NetBSD: e500_intr.c,v 1.28 2014/12/27 16:19:33 nonaka Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -358,6 +358,29 @@ const struct e500_intr_name p20x0_onchip_intr_names[] = {
 };
 
 INTR_INFO_DECL(p20x0, P20x0);
+#endif
+
+#ifdef P1023
+#define	p1023_external_intr_names	default_external_intr_names
+const struct e500_intr_name p1023_onchip_intr_names[] = {
+	{ ISOURCE_FMAN,            "fman" },
+	{ ISOURCE_MDIO,            "mdio" },
+	{ ISOURCE_QMAN0,           "qman0" },
+	{ ISOURCE_BMAN0,           "bman0" },
+	{ ISOURCE_QMAN1,           "qman1" },
+	{ ISOURCE_BMAN1,           "bman1" },
+	{ ISOURCE_QMAN2,           "qman2" },
+	{ ISOURCE_BMAN2,           "bman2" },
+	{ ISOURCE_SECURITY2_P1023, "sec2" },
+	{ ISOURCE_SEC_GENERAL,     "sec-general" },
+	{ ISOURCE_DMA2_CHAN1,      "dma2-chan1" },
+	{ ISOURCE_DMA2_CHAN2,      "dma2-chan2" },
+	{ ISOURCE_DMA2_CHAN3,      "dma2-chan3" },
+	{ ISOURCE_DMA2_CHAN4,      "dma2-chan4" },
+	{ 0, "" },
+};
+
+INTR_INFO_DECL(p1023, P1023);
 #endif
 
 static const char ist_names[][12] = {
@@ -713,8 +736,10 @@ e500_intr_cpu_establish(struct cpu_info *ci, int irq, int ipl, int ist,
 
 	struct intr_source * const is = &e500_intr_sources[ii.irq_vector];
 	mutex_enter(&e500_intr_lock);
-	if (is->is_ipl != IPL_NONE)
+	if (is->is_ipl != IPL_NONE) {
+		mutex_exit(&e500_intr_lock);
 		return NULL;
+	}
 
 	is->is_func = handler;
 	is->is_arg = arg;
@@ -1044,6 +1069,12 @@ e500_intr_init(void)
 #ifdef MPC8572
 	case SVR_MPC8572v1 >> 16:
 		*ii = mpc8572_intr_info;
+		break;
+#endif
+#ifdef P1023
+	case SVR_P1017v1 >> 16:
+	case SVR_P1023v1 >> 16:
+		*ii = p1023_intr_info;
 		break;
 #endif
 #ifdef P1025

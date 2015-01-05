@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.603 2014/12/08 04:23:03 ozaki-r Exp $
+# $NetBSD: mi,v 1.605 2014/12/21 15:38:27 martin Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -2869,6 +2869,7 @@
 ./usr/tests/lib/libm/t_cosh			tests-lib-tests		atf
 ./usr/tests/lib/libm/t_erf			tests-lib-tests		atf
 ./usr/tests/lib/libm/t_exp			tests-lib-tests		atf
+./usr/tests/lib/libm/t_fenv			tests-lib-tests		atf
 ./usr/tests/lib/libm/t_floor			tests-obsolete		obsolete
 ./usr/tests/lib/libm/t_fmod			tests-lib-tests		atf
 ./usr/tests/lib/libm/t_infinity			tests-lib-tests		atf
@@ -3410,6 +3411,7 @@
 ./usr/tests/usr.bin/config/support/arch/regress/conf/files.regress		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/config/support/arch/regress/conf/std.regress		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/config/support/conf		tests-usr.bin-tests
+./usr/tests/usr.bin/config/support/conf/Makefile.kern.inc	tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/config/support/conf/files	tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/config/t_config		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/cut				tests-usr.bin-tests
