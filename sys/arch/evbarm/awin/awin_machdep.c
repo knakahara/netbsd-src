@@ -1,4 +1,4 @@
-/*	$NetBSD: awin_machdep.c,v 1.36 2014/12/11 23:35:11 jmcneill Exp $ */
+/*	$NetBSD: awin_machdep.c,v 1.38 2015/01/04 15:59:32 martin Exp $ */
 
 /*
  * Machine dependent functions for kernel setup for TI OSK5912 board.
@@ -125,7 +125,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.36 2014/12/11 23:35:11 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: awin_machdep.c,v 1.38 2015/01/04 15:59:32 martin Exp $");
 
 #include "opt_machdep.h"
 #include "opt_ddb.h"
@@ -814,10 +814,10 @@ awin_device_register(device_t self, void *aux)
 			prop_dictionary_set_cstring(dict, "phy-type", "mii");
 		}
 #endif
-#if AWIN_BOARD == AWIN_bpi
+#if AWIN_board == AWIN_bpi
 		prop_dictionary_set_cstring(dict, "phy-power", "gmacpwren");
 		prop_dictionary_set_cstring(dict, "phy-type", "rgmii-bpi");
-		prop_dictionary_set_uint8(dict, "pinset-func", 5);
+		prop_dictionary_set_uint8(dict, "pinset-func", 3);
 #endif
 		return;
 	}
