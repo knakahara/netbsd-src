@@ -1,11 +1,12 @@
-# $NetBSD: Makefile,v 1.28 2014/12/22 11:21:08 martin Exp $
+# $NetBSD: Makefile,v 1.31 2015/01/03 14:23:53 gson Exp $
 
 .include <bsd.own.mk>
 
 TESTSDIR=	${TESTSBASE}/lib/libm
 
 # ARM fenv is incomplete, so we can not enable that here
-.if ${MACHINE_CPU} == "aarch64" \
+.if ${MACHINE_CPU} == "aarch64" || ${MACHINE_CPU} == "arm" \
+    || ${MACHINE_ARCH} == "hppa" \
     || ${MACHINE_ARCH} == "sparc" || ${MACHINE_ARCH} == "sparc64" \
     || ${MACHINE_ARCH} == "i386" || ${MACHINE_ARCH} == "x86_64"
 CPPFLAGS+=	-DHAVE_FENV_H
@@ -14,6 +15,8 @@ CPPFLAGS+=	-DHAVE_FENV_H
 .if ${MACHINE} == "alpha"
 COPTS+=	-mfloat-ieee -mieee-with-inexact -mfp-trap-mode=sui -mtrap-precision=i
 .endif
+
+CPPFLAGS.t_fmod.c+=	-I${.CURDIR}/../libc/gen
 
 TESTS_C+=	t_acos
 TESTS_C+=	t_asin
