@@ -1689,6 +1689,7 @@ wm_alloc_rxtx_queues(struct wm_softc *sc)
 
 		IFQ_SET_MAXLEN(&txq->txq_snd, max(WM_IFQUEUELEN, IFQ_MAXLEN));
 		IFQ_SET_READY(&txq->txq_snd);
+		txq->txq_snd.ifq_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
 #else
 		txq->txq_tx_lock = NULL;
 #endif
@@ -1765,6 +1766,8 @@ wm_free_rxtx_queues(struct wm_softc *sc)
 #ifdef NOTYET
 		pcq_destroy(txq->txq_pcq);
 #endif
+		if (txq->txq_snd.ifq_lock)
+			mutex_obj_free(txq->txq_snd.ifq_lock);
 		if (txq->txq_tx_lock)
 			mutex_obj_free(txq->txq_tx_lock);
 	}
