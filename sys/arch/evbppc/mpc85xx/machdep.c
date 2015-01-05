@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.33 2014/08/04 23:31:36 joerg Exp $	*/
+/*	$NetBSD: machdep.c,v 1.37 2014/12/27 16:19:33 nonaka Exp $	*/
 /*-
  * Copyright (c) 2010, 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -207,14 +207,15 @@ static struct consdev e500_earlycons = {
 static const struct cpunode_locators mpc8548_cpunode_locs[] = {
 	{ "cpu", 0, 0, 0, 0, { 0 }, 0,	/* not a real device */
 		{ 0xffff, SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16,
-		  SVR_P1025v1 >> 16 } },
-#if defined(MPC8572) || defined(P2020) || defined(P1025)
+		  SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
+#if defined(MPC8572) || defined(P2020) || defined(P1025) \
+    || defined(P1023)
 	{ "cpu", 0, 0, 1, 0, { 0 }, 0,	/* not a real device */
 		{ SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16,
-		  SVR_P1025v1 >> 16 } },
+		  SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
 	{ "cpu", 0, 0, 2, 0, { 0 }, 0,	/* not a real device */
 		{ SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16,
-		  SVR_P1025v1 >> 16 } },
+		  SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
 #endif
 	{ "wdog" },	/* not a real device */
 	{ "duart", DUART1_BASE, 2*DUART_SIZE, 0,
@@ -223,7 +224,7 @@ static const struct cpunode_locators mpc8548_cpunode_locs[] = {
 	{ "tsec", ETSEC1_BASE, ETSEC_SIZE, 1,
 		3, { ISOURCE_ETSEC1_TX, ISOURCE_ETSEC1_RX, ISOURCE_ETSEC1_ERR },
 		1 + ilog2(DEVDISR_TSEC1),
-		{ 0xffff, SVR_P1025v1 >> 16 } },
+		{ 0xffff, SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
 #if defined(P1025)
 	{ "mdio", ETSEC1_BASE, ETSEC_SIZE, 1,
 		0, { },
@@ -366,30 +367,33 @@ static const struct cpunode_locators mpc8548_cpunode_locs[] = {
 		1 + ilog2(DEVDISR_PCI2),
 		{ SVR_MPC8548v1 >> 16 }, },
 #endif
-#if defined(MPC8572) || defined(P1025) || defined(P2020)
+#if defined(MPC8572) || defined(P1025) || defined(P2020) \
+    || defined(P1023)
 	{ "pcie", PCIE1_BASE, PCI_SIZE, 1,
 		1, { ISOURCE_PCIEX },
 		1 + ilog2(DEVDISR_PCIE),
 		{ SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16,
-		  SVR_P1025v1 >> 16 } },
+		  SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
 	{ "pcie", PCIE2_MPC8572_BASE, PCI_SIZE, 2,
 		1, { ISOURCE_PCIEX2 },
 		1 + ilog2(DEVDISR_PCIE2),
 		{ SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16,
-		  SVR_P1025v1 >> 16 } },
+		  SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
 #endif
-#if defined(MPC8572) || defined(P2020)
+#if defined(MPC8572) || defined(P2020) || defined(_P1023)
 	{ "pcie", PCIE3_MPC8572_BASE, PCI_SIZE, 3,
 		1, { ISOURCE_PCIEX3_MPC8572 },
 		1 + ilog2(DEVDISR_PCIE3),
-		{ SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16, } },
+		{ SVR_MPC8572v1 >> 16, SVR_P2020v2 >> 16,
+		  SVR_P1023v1 >> 16 } },
 #endif
-#if defined(MPC8536) || defined(P1025) || defined(P2020)
+#if defined(MPC8536) || defined(P1025) || defined(P2020) \
+    || defined(P1023)
 	{ "ehci", USB1_BASE, USB_SIZE, 1,
 		1, { ISOURCE_USB1 },
 		1 + ilog2(DEVDISR_USB1),
 		{ SVR_MPC8536v1 >> 16, SVR_P2020v2 >> 16,
-		  SVR_P1025v1 >> 16 } },
+		  SVR_P1025v1 >> 16, SVR_P1023v1 >> 16 } },
 #endif
 #ifdef MPC8536
 	{ "ehci", USB2_BASE, USB_SIZE, 2,
@@ -417,11 +421,14 @@ static const struct cpunode_locators mpc8548_cpunode_locs[] = {
 		1 + ilog2(DEVDISR_ESDHC_12),
 		{ SVR_MPC8536v1 >> 16 }, },
 #endif
-#if defined(P1025) || defined(P2020)
+#if defined(P1025) || defined(P2020) || defined(P1023)
 	{ "spi", SPI_BASE, SPI_SIZE, 0,
 		1, { ISOURCE_SPI },
 		1 + ilog2(DEVDISR_SPI_28),
-		{ SVR_P2020v2 >> 16, SVR_P1025v1 >> 16 }, },
+		{ SVR_P2020v2 >> 16, SVR_P1025v1 >> 16,
+		  SVR_P1023v1 >> 16 }, },
+#endif
+#if defined(P1025) || defined(P2020)
 	{ "sdhc", ESDHC_BASE, ESDHC_SIZE, 0,
 		1, { ISOURCE_ESDHC },
 		1 + ilog2(DEVDISR_ESDHC_10),
@@ -639,6 +646,7 @@ cpu_probe_cache(void)
 {
 	struct cpu_info * const ci = curcpu();
 	const uint32_t l1cfg0 = mfspr(SPR_L1CFG0);
+	const int dcache_assoc = L1CFG_CNWAY_GET(l1cfg0);
 
 	ci->ci_ci.dcache_size = L1CFG_CSIZE_GET(l1cfg0);
 	ci->ci_ci.dcache_line_size = 32 << L1CFG_CBSIZE_GET(l1cfg0);
@@ -652,6 +660,11 @@ cpu_probe_cache(void)
 		ci->ci_ci.icache_size = ci->ci_ci.dcache_size;
 		ci->ci_ci.icache_line_size = ci->ci_ci.dcache_line_size;
 	}
+
+	/*
+	 * Possibly recolor.
+	 */
+	uvm_page_recolor(atop(curcpu()->ci_ci.dcache_size / dcache_assoc));
 
 #ifdef DEBUG
 	uint32_t l1csr0 = mfspr(SPR_L1CSR0);
@@ -675,6 +688,7 @@ getsvr(void)
 	case SVR_MPC8541v1 >> 16:	return SVR_MPC8555v1 >> 16;
 	case SVR_P2010v2 >> 16:		return SVR_P2020v2 >> 16;
 	case SVR_P1016v1 >> 16:		return SVR_P1025v1 >> 16;
+	case SVR_P1017v1 >> 16:		return SVR_P1023v1 >> 16;
 	default:			return svr;
 	}
 }
@@ -699,6 +713,8 @@ socname(uint32_t svr)
 	case SVR_P2020v2 >> 8: return "P2020";
 	case SVR_P2010v2 >> 8: return "P2010";
 	case SVR_P1016v1 >> 8: return "P1016";
+	case SVR_P1017v1 >> 8: return "P1017";
+	case SVR_P1023v1 >> 8: return "P1023";
 	case SVR_P1025v1 >> 8: return "P1025";
 	default:
 		panic("%s: unknown SVR %#x", __func__, svr);
@@ -939,15 +955,15 @@ e500_cpu_spinup(device_t self, struct cpu_info *ci)
 				+ (uint64_t)h->hatch_tbl),
 			    h->hatch_running);
 			/*
-			 * Now we wait for the hatching to complete.  10ms
+			 * Now we wait for the hatching to complete.  30ms
 			 * should be long enough.
 			 */
-			for (u_int timo = 10000; timo-- > 0; ) {
+			for (u_int timo = 30000; timo-- > 0; ) {
 				if (kcpuset_isset(hatchlings, id)) {
 					aprint_normal_dev(self,
 					    "hatch successful (%u spins, "
 					    "timebase adjusted by %"PRId64")\n",
-					    10000 - timo,
+					    30000 - timo,
 					    (int64_t)
 						(((uint64_t)h->hatch_tbu << 32)
 						+ (uint64_t)h->hatch_tbl));
@@ -983,6 +999,7 @@ e500_cpu_hatch(struct cpu_info *ci)
 
 	intr_cpu_hatch(ci);
 
+	cpu_probe_cache();
 	cpu_print_info(ci);
 
 /*
@@ -1483,11 +1500,13 @@ cpu_startup(void)
 		break;
 #endif
 #if defined(MPC8544) || defined(MPC8572) || defined(MPC8536) \
-    || defined(P1025) || defined(P2020)
+    || defined(P1025) || defined(P2020) || defined(P1023)
 	case SVR_MPC8536v1 >> 16:
 	case SVR_MPC8544v1 >> 16:
 	case SVR_MPC8572v1 >> 16:
 	case SVR_P1016v1 >> 16:
+	case SVR_P1017v1 >> 16:
+	case SVR_P1023v1 >> 16:
 	case SVR_P2010v2 >> 16:
 	case SVR_P2020v2 >> 16:
 		mpc85xx_pci_setup("pcie3-interrupt-map", 0x001800, IST_LEVEL,
