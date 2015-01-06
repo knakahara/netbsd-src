@@ -83,6 +83,8 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.308 2014/11/16 09:47:35 msaitoh Exp $");
 
+#define USE_PCQ
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/callout.h>
@@ -97,7 +99,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.308 2014/11/16 09:47:35 msaitoh Exp $");
 #include <sys/queue.h>
 #include <sys/syslog.h>
 #include <sys/cpu.h>
-#ifdef NOTYET
+#ifdef USE_PCQ
 #include <sys/pcq.h>
 #endif
 
@@ -181,8 +183,8 @@ int	wm_debug = WM_DEBUG_TX | WM_DEBUG_RX | WM_DEBUG_LINK | WM_DEBUG_GMII
 #define	WM_NEXTTX(txq, x)	(((x) + 1) & WM_NTXDESC_MASK(txq))
 #define	WM_NEXTTXS(txq, x)	(((x) + 1) & WM_TXQUEUELEN_MASK(txq))
 
-#ifdef NOTYET
-#define WM_TXPCQSIZE		4096
+#ifdef USE_PCQ
+#define WM_TXPCQSIZE		256
 #endif
 
 #define	WM_MAXTXDMA		 (2 * round_page(IP_MAXPACKET)) /* for TSO */
@@ -245,14 +247,16 @@ struct wm_txqueue {
 
 	struct wm_softc *txq_sc;
 
+#ifdef USE_PCQ
+	pcq_t *txq_pcq;
+	int txq_drops;
+#else
 	struct ifaltq txq_snd;		/* output queue for this transmit queue */
+#endif
 
 	int txq_id;			/* index of transmit queues */
 	int txq_intr_idx;		/* index of MSI-X tables */
 
-#ifdef NOTYET
-	pcq_t *txq_pcq;
-#endif
 
 	/* Software state for the transmit and receive descriptors. */
 	int txq_txnum;			/* must be a power of two */
@@ -1687,22 +1691,25 @@ wm_alloc_rxtx_queues(struct wm_softc *sc)
 #ifdef WM_MPSAFE
 		txq->txq_tx_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
 
+#ifdef USE_PCQ
+		txq->txq_pcq = pcq_create(WM_TXPCQSIZE, KM_SLEEP);
+		if (txq->txq_pcq == NULL) {
+			error = ENOMEM;
+			break;
+		}
+		txq->txq_drops = 0;
+#else /* !USE_PCQ */
 		IFQ_SET_MAXLEN(&txq->txq_snd, max(WM_IFQUEUELEN, IFQ_MAXLEN));
 		IFQ_SET_READY(&txq->txq_snd);
 		txq->txq_snd.ifq_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
-#else
+#endif /* !USE_PCQ */
+#else /* !WM_MPSAFE */
 		txq->txq_tx_lock = NULL;
-#endif
-
-#ifdef NOTYET
-		txq->txq_pcq = pcq_create(WM_TXPCQSIZE, KM_SLEEP);
-		if (txq->txq_pcq == NULL)
-			break;
-#endif
+#endif /* !WM_MPSAFE */
 
 		error = wm_alloc_tx_descs(sc, txq);
 		if (error) {
-#ifdef NOTYET
+#ifdef USE_PCQ
 			pcq_destroy(txq->txq_pcq);
 #endif
 			break;
@@ -1763,11 +1770,13 @@ wm_free_rxtx_queues(struct wm_softc *sc)
 		txq = &sc->sc_txq[i];
 		wm_free_tx_descs(sc, txq);
 		wm_free_tx_buffer(sc, txq);
-#ifdef NOTYET
+#ifdef USE_PCQ
+		/*shoudl flush txq_pcq */
 		pcq_destroy(txq->txq_pcq);
-#endif
+#else
 		if (txq->txq_snd.ifq_lock)
 			mutex_obj_free(txq->txq_snd.ifq_lock);
+#endif
 		if (txq->txq_tx_lock)
 			mutex_obj_free(txq->txq_tx_lock);
 	}
@@ -6413,17 +6422,31 @@ wm_mq_transmit(struct ifnet *ifp, struct mbuf *m)
 	 * not require classification, but might require
 	 * the address family/header pointer in the pktattr.
 	 */
+#ifndef USE_PCQ /* XXXXXXXX */
 	if (ALTQ_IS_ENABLED(&txq->txq_snd)) {
 		/* XXX IFT_ETHER */
 		altq_etherclassify(&txq->txq_snd, m, &pktattr);
 	}
+#endif /* !USE_PCQ */
 #endif /* ALTQ */
 
 	len = m->m_pkthdr.len;
 	m->m_flags |= M_PROTO1;
 	mflags = m->m_flags;
 
+#ifdef USE_PCQ
+	kpreempt_disable();
+	if (__predict_false(!pcq_put(txq->txq_pcq, m))) {
+		m_freem(m);
+		txq->txq_drops++;
+		error = ENOBUFS;
+	} else {
+		error = 0;
+	}
+	kpreempt_enable();
+#else
 	IFQ_ENQUEUE(&txq->txq_snd, m, &pktattr, error);
+#endif
 
 	if (error) {
 		/* mbuf is already freed in IFQ_ENQUEUE */
@@ -6484,9 +6507,16 @@ wm_mq_transmit_locked(struct ifnet *ifp, struct wm_txqueue *txq)
 		}
 
 		/* Grab a packet off the queue. */
+#ifdef USE_PCQ
+		/* prevent concurrent dequeue by WM_TX_LOCK(txq) */
+		m0 = pcq_get(txq->txq_pcq);
+		if (__predict_false(m0 == NULL))
+			break;
+#else
 		IFQ_DEQUEUE(&txq->txq_snd, m0);
 		if (m0 == NULL)
 			break;
+#endif
 
 		DPRINTF(WM_DEBUG_TX,
 		    ("%s: TX: have packet to transmit: %p\n",
