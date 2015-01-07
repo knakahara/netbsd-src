@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bridge.c,v 1.97 2015/01/08 10:47:44 ozaki-r Exp $	*/
+/*	$NetBSD: if_bridge.c,v 1.96 2015/01/01 08:43:26 ozaki-r Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -80,7 +80,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.97 2015/01/08 10:47:44 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.96 2015/01/01 08:43:26 ozaki-r Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_bridge_ipf.h"
@@ -175,16 +175,16 @@ __KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.97 2015/01/08 10:47:44 ozaki-r Exp $
 #define	BRIDGE_RTABLE_PRUNE_PERIOD	(5 * 60)
 #endif
 
-#define BRIDGE_RT_INTR_LOCK(_sc)	mutex_enter((_sc)->sc_rtlist_intr_lock)
-#define BRIDGE_RT_INTR_UNLOCK(_sc)	mutex_exit((_sc)->sc_rtlist_intr_lock)
-#define BRIDGE_RT_INTR_LOCKED(_sc)	mutex_owned((_sc)->sc_rtlist_intr_lock)
+#define BRIDGE_RT_INTR_LOCK(_sc)	mutex_enter((_sc)->sc_rtlist_lock)
+#define BRIDGE_RT_INTR_UNLOCK(_sc)	mutex_exit((_sc)->sc_rtlist_lock)
+#define BRIDGE_RT_INTR_LOCKED(_sc)	mutex_owned((_sc)->sc_rtlist_lock)
 
-#define BRIDGE_RT_LOCK(_sc)	if ((_sc)->sc_rtlist_lock) \
-					mutex_enter((_sc)->sc_rtlist_lock)
-#define BRIDGE_RT_UNLOCK(_sc)	if ((_sc)->sc_rtlist_lock) \
-					mutex_exit((_sc)->sc_rtlist_lock)
-#define BRIDGE_RT_LOCKED(_sc)	(!(_sc)->sc_rtlist_lock || \
-				 mutex_owned((_sc)->sc_rtlist_lock))
+#define BRIDGE_RT_LOCK(_sc)	if ((_sc)->sc_rtlist_psz_lock) \
+					mutex_enter((_sc)->sc_rtlist_psz_lock)
+#define BRIDGE_RT_UNLOCK(_sc)	if ((_sc)->sc_rtlist_psz_lock) \
+					mutex_exit((_sc)->sc_rtlist_psz_lock)
+#define BRIDGE_RT_LOCKED(_sc)	(!(_sc)->sc_rtlist_psz_lock || \
+				 mutex_owned((_sc)->sc_rtlist_psz_lock))
 
 #define BRIDGE_RT_PSZ_PERFORM(_sc) \
 				if ((_sc)->sc_rtlist_psz != NULL) \
@@ -1126,7 +1126,7 @@ bridge_ioctl_rts(struct bridge_softc *sc, void *arg)
 	if (bac->ifbac_len == 0)
 		return (0);
 
-	BRIDGE_RT_INTR_LOCK(sc);
+	mutex_enter(sc->sc_rtlist_lock);
 
 	len = bac->ifbac_len;
 	LIST_FOREACH(brt, &sc->sc_rtlist, brt_list) {
@@ -1149,7 +1149,7 @@ bridge_ioctl_rts(struct bridge_softc *sc, void *arg)
 		len -= sizeof(bareq);
 	}
  out:
-	BRIDGE_RT_INTR_UNLOCK(sc);
+	mutex_exit(sc->sc_rtlist_lock);
 
 	bac->ifbac_len = sizeof(bareq) * count;
 	return (error);
@@ -2051,15 +2051,15 @@ next:
 		m_freem(m);
 }
 
-static int
-bridge_rtalloc(struct bridge_softc *sc, const uint8_t *dst,
-    struct bridge_rtnode **brtp)
+static struct bridge_rtnode *
+bridge_rtalloc(struct bridge_softc *sc, const uint8_t *dst, int *error)
 {
 	struct bridge_rtnode *brt;
-	int error;
 
-	if (sc->sc_brtcnt >= sc->sc_brtmax)
-		return ENOSPC;
+	if (sc->sc_brtcnt >= sc->sc_brtmax) {
+		*error = ENOSPC;
+		return NULL;
+	}
 
 	/*
 	 * Allocate a new bridge forwarding node, and
@@ -2067,8 +2067,10 @@ bridge_rtalloc(struct bridge_softc *sc, const uint8_t *dst,
 	 * address.
 	 */
 	brt = pool_get(&bridge_rtnode_pool, PR_NOWAIT);
-	if (brt == NULL)
-		return ENOMEM;
+	if (brt == NULL) {
+		*error = ENOMEM;
+		return NULL;
+	}
 
 	memset(brt, 0, sizeof(*brt));
 	brt->brt_expire = time_uptime + sc->sc_brttimeout;
@@ -2076,16 +2078,15 @@ bridge_rtalloc(struct bridge_softc *sc, const uint8_t *dst,
 	memcpy(brt->brt_addr, dst, ETHER_ADDR_LEN);
 
 	BRIDGE_RT_INTR_LOCK(sc);
-	error = bridge_rtnode_insert(sc, brt);
+	*error = bridge_rtnode_insert(sc, brt);
 	BRIDGE_RT_INTR_UNLOCK(sc);
 
-	if (error != 0) {
+	if (*error != 0) {
 		pool_put(&bridge_rtnode_pool, brt);
-		return error;
+		return NULL;
 	}
 
-	*brtp = brt;
-	return 0;
+	return brt;
 }
 
 /*
@@ -2098,6 +2099,7 @@ bridge_rtupdate(struct bridge_softc *sc, const uint8_t *dst,
     struct ifnet *dst_if, int setflags, uint8_t flags)
 {
 	struct bridge_rtnode *brt;
+	int error = 0;
 	int s;
 
 again:
@@ -2116,20 +2118,18 @@ again:
 				brt->brt_expire = 0;
 			else
 				brt->brt_expire = time_uptime + sc->sc_brttimeout;
-		} else {
-			if ((brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC)
-				brt->brt_expire = time_uptime + sc->sc_brttimeout;
 		}
 	}
 	BRIDGE_RT_REXIT(s);
 
 	if (brt == NULL) {
-		int r;
-
-		r = bridge_rtalloc(sc, dst, &brt);
-		if (r != 0)
-			return r;
+		brt = bridge_rtalloc(sc, dst, &error);
+		if (brt == NULL)
+			return error;
 		goto again;
+	} else {
+		if ((brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC)
+			brt->brt_expire = time_uptime + sc->sc_brttimeout;
 	}
 
 	return 0;
@@ -2156,19 +2156,8 @@ bridge_rtlookup(struct bridge_softc *sc, const uint8_t *addr)
 	return ifs;
 }
 
-typedef bool (*bridge_iterate_cb_t)
-    (struct bridge_softc *, struct bridge_rtnode *, bool *, void *);
-
-/*
- * bridge_rtlist_iterate_remove:
- *
- *	It iterates on sc->sc_rtlist and removes rtnodes of it which func
- *	callback judges to remove. Removals of rtnodes are done in a manner
- *	of pserialize. To this end, all kmem_* operations are placed out of
- *	mutexes.
- */
 static void
-bridge_rtlist_iterate_remove(struct bridge_softc *sc, bridge_iterate_cb_t func, void *arg)
+bridge_rttrim0(struct bridge_softc *sc)
 {
 	struct bridge_rtnode *brt, *nbrt;
 	struct bridge_rtnode **brt_list;
@@ -2183,7 +2172,6 @@ retry:
 	BRIDGE_RT_LOCK(sc);
 	BRIDGE_RT_INTR_LOCK(sc);
 	if (__predict_false(sc->sc_brtcnt > count)) {
-		/* The rtnodes increased, we need more memory */
 		BRIDGE_RT_INTR_UNLOCK(sc);
 		BRIDGE_RT_UNLOCK(sc);
 		kmem_free(brt_list, sizeof(*brt_list) * count);
@@ -2192,12 +2180,11 @@ retry:
 
 	i = 0;
 	LIST_FOREACH_SAFE(brt, &sc->sc_rtlist, brt_list, nbrt) {
-		bool need_break = false;
-		if (func(sc, brt, &need_break, arg)) {
+		if ((brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC) {
 			bridge_rtnode_remove(sc, brt);
 			brt_list[i++] = brt;
 		}
-		if (need_break)
+		if (sc->sc_brtcnt <= sc->sc_brtmax)
 			break;
 	}
 	BRIDGE_RT_INTR_UNLOCK(sc);
@@ -2210,25 +2197,6 @@ retry:
 		bridge_rtnode_destroy(brt_list[i]);
 
 	kmem_free(brt_list, sizeof(*brt_list) * count);
-}
-
-static bool
-bridge_rttrim0_cb(struct bridge_softc *sc, struct bridge_rtnode *brt,
-    bool *need_break, void *arg)
-{
-	if ((brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC) {
-		/* Take into account of the subsequent removal */
-		if ((sc->sc_brtcnt - 1) <= sc->sc_brtmax)
-			*need_break = true;
-		return true;
-	} else
-		return false;
-}
-
-static void
-bridge_rttrim0(struct bridge_softc *sc)
-{
-	bridge_rtlist_iterate_remove(sc, bridge_rttrim0_cb, NULL);
 }
 
 /*
@@ -2283,17 +2251,6 @@ bridge_rtage_work(struct work *wk, void *arg)
 		    bridge_rtable_prune_period * hz, bridge_timer, sc);
 }
 
-static bool
-bridge_rtage_cb(struct bridge_softc *sc, struct bridge_rtnode *brt,
-    bool *need_break, void *arg)
-{
-	if ((brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC &&
-	    time_uptime >= brt->brt_expire)
-		return true;
-	else
-		return false;
-}
-
 /*
  * bridge_rtage:
  *
@@ -2302,20 +2259,43 @@ bridge_rtage_cb(struct bridge_softc *sc, struct bridge_rtnode *brt,
 static void
 bridge_rtage(struct bridge_softc *sc)
 {
-	bridge_rtlist_iterate_remove(sc, bridge_rtage_cb, NULL);
-}
+	struct bridge_rtnode *brt, *nbrt;
+	struct bridge_rtnode **brt_list;
+	int i, count;
 
+retry:
+	count = sc->sc_brtcnt;
+	if (count == 0)
+		return;
+	brt_list = kmem_alloc(sizeof(struct bridge_rtnode *) * count, KM_SLEEP);
 
-static bool
-bridge_rtflush_cb(struct bridge_softc *sc, struct bridge_rtnode *brt,
-    bool *need_break, void *arg)
-{
-	int full = *(int*)arg;
+	BRIDGE_RT_LOCK(sc);
+	BRIDGE_RT_INTR_LOCK(sc);
+	if (__predict_false(sc->sc_brtcnt > count)) {
+		BRIDGE_RT_INTR_UNLOCK(sc);
+		BRIDGE_RT_UNLOCK(sc);
+		kmem_free(brt_list, sizeof(*brt_list) * count);
+		goto retry;
+	}
 
-	if (full || (brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC)
-		return true;
-	else
-		return false;
+	i = 0;
+	LIST_FOREACH_SAFE(brt, &sc->sc_rtlist, brt_list, nbrt) {
+		if ((brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC &&
+		    time_uptime >= brt->brt_expire) {
+			bridge_rtnode_remove(sc, brt);
+			brt_list[i++] = brt;
+		}
+	}
+	BRIDGE_RT_INTR_UNLOCK(sc);
+
+	if (i > 0)
+		BRIDGE_RT_PSZ_PERFORM(sc);
+	BRIDGE_RT_UNLOCK(sc);
+
+	while (--i >= 0)
+		bridge_rtnode_destroy(brt_list[i]);
+
+	kmem_free(brt_list, sizeof(*brt_list) * count);
 }
 
 /*
@@ -2326,7 +2306,42 @@ bridge_rtflush_cb(struct bridge_softc *sc, struct bridge_rtnode *brt,
 static void
 bridge_rtflush(struct bridge_softc *sc, int full)
 {
-	bridge_rtlist_iterate_remove(sc, bridge_rtflush_cb, &full);
+	struct bridge_rtnode *brt, *nbrt;
+	struct bridge_rtnode **brt_list;
+	int i, count;
+
+retry:
+	count = sc->sc_brtcnt;
+	if (count == 0)
+		return;
+	brt_list = kmem_alloc(sizeof(struct bridge_rtnode *) * count, KM_SLEEP);
+
+	BRIDGE_RT_LOCK(sc);
+	BRIDGE_RT_INTR_LOCK(sc);
+	if (__predict_false(sc->sc_brtcnt > count)) {
+		BRIDGE_RT_INTR_UNLOCK(sc);
+		BRIDGE_RT_UNLOCK(sc);
+		kmem_free(brt_list, sizeof(*brt_list) * count);
+		goto retry;
+	}
+
+	i = 0;
+	LIST_FOREACH_SAFE(brt, &sc->sc_rtlist, brt_list, nbrt) {
+		if (full || (brt->brt_flags & IFBAF_TYPEMASK) == IFBAF_DYNAMIC) {
+			bridge_rtnode_remove(sc, brt);
+			brt_list[i++] = brt;
+		}
+	}
+	BRIDGE_RT_INTR_UNLOCK(sc);
+
+	if (i > 0)
+		BRIDGE_RT_PSZ_PERFORM(sc);
+	BRIDGE_RT_UNLOCK(sc);
+
+	while (--i >= 0)
+		bridge_rtnode_destroy(brt_list[i]);
+
+	kmem_free(brt_list, sizeof(*brt_list) * count);
 }
 
 /*
@@ -2348,7 +2363,8 @@ bridge_rtdaddr(struct bridge_softc *sc, const uint8_t *addr)
 	}
 	bridge_rtnode_remove(sc, brt);
 	BRIDGE_RT_INTR_UNLOCK(sc);
-	BRIDGE_RT_PSZ_PERFORM(sc);
+	if (sc->sc_rtlist_psz != NULL)
+		pserialize_perform(sc->sc_rtlist_psz);
 	BRIDGE_RT_UNLOCK(sc);
 
 	bridge_rtnode_destroy(brt);
@@ -2379,7 +2395,8 @@ bridge_rtdelete(struct bridge_softc *sc, struct ifnet *ifp)
 	}
 	bridge_rtnode_remove(sc, brt);
 	BRIDGE_RT_INTR_UNLOCK(sc);
-	BRIDGE_RT_PSZ_PERFORM(sc);
+	if (sc->sc_rtlist_psz != NULL)
+		pserialize_perform(sc->sc_rtlist_psz);
 	BRIDGE_RT_UNLOCK(sc);
 
 	bridge_rtnode_destroy(brt);
@@ -2405,13 +2422,13 @@ bridge_rtable_init(struct bridge_softc *sc)
 
 	LIST_INIT(&sc->sc_rtlist);
 
-	sc->sc_rtlist_intr_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
+	sc->sc_rtlist_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NET);
 #ifdef BRIDGE_MPSAFE
 	sc->sc_rtlist_psz = pserialize_create();
-	sc->sc_rtlist_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_SOFTNET);
+	sc->sc_rtlist_psz_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_SOFTNET);
 #else
 	sc->sc_rtlist_psz = NULL;
-	sc->sc_rtlist_lock = NULL;
+	sc->sc_rtlist_psz_lock = NULL;
 #endif
 }
 
@@ -2425,9 +2442,9 @@ bridge_rtable_fini(struct bridge_softc *sc)
 {
 
 	kmem_free(sc->sc_rthash, sizeof(*sc->sc_rthash) * BRIDGE_RTHASH_SIZE);
-	if (sc->sc_rtlist_intr_lock)
-		mutex_obj_free(sc->sc_rtlist_intr_lock);
 	if (sc->sc_rtlist_lock)
+		mutex_obj_free(sc->sc_rtlist_lock);
+	if (sc->sc_rtlist_psz_lock)
 		mutex_obj_free(sc->sc_rtlist_lock);
 	if (sc->sc_rtlist_psz)
 		pserialize_destroy(sc->sc_rtlist_psz);
