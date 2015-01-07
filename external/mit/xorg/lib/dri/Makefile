@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.23 2014/12/23 17:50:42 christos Exp $
+# $NetBSD: Makefile,v 1.26 2015/01/05 18:51:10 gson Exp $
 
 # Link the mesa_dri_drivers mega driver.
 
@@ -372,7 +372,7 @@ CPPFLAGS.streaming-load-memcpy.c+= -msse4.1
 .for _d in ${DRIVERS}
 SYMLINKS+= mesa_dri_drivers.so.${SHLIB_MAJOR} ${DRIDIR}/${_d}_dri.so.${SHLIB_MAJOR} 
 SYMLINKS+= ${_d}_dri.so.${SHLIB_MAJOR} ${DRIDIR}/${_d}_dri.so
-.if ${MKDEBUG:Uno} == "yes"
+.if ${MKDEBUG} != "no"
 SYMLINKS+= mesa_dri_drivers.so.${SHLIB_MAJOR}.debug ${DRIDEBUGDIR}/${_d}_dri.so.${SHLIB_MAJOR}.debug
 .endif
 .endfor
@@ -398,7 +398,12 @@ FILES=		drirc
 .if ${MACHINE_ARCH} == "i386" || ${MACHINE_ARCH} == "x86_64"
 LIBDIR=		${X11USRLIBDIR}/modules/dri
 
+CWARNFLAGS.clang+=	-Wno-error=initializer-overrides -Wno-error=switch \
+			-Wno-error=tautological-constant-out-of-range-compare
+
 .include <bsd.lib.mk>
 .else
 .include <bsd.inc.mk>
 .endif
+# Don't re-build .c files when .y files change
+.y.c:

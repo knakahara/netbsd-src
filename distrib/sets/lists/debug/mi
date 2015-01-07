@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.98 2014/12/30 04:22:18 mrg Exp $
+# $NetBSD: mi,v 1.101 2015/01/07 02:53:42 christos Exp $
 
 ./etc/mtree/set.debug                           comp-sys-root
 ./usr/lib/i18n/libBIG5_g.a			comp-c-debuglib		debuglib
@@ -922,6 +922,8 @@
 ./usr/libdata/debug/usr/libexec/locate.bigram.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/libexec/locate.code.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/libexec/lpr/lpf.debug	comp-lpr-debug		debug
+./usr/libdata/debug/usr/libexec/lto-wrapper.debug	comp-c-debug		gcc=48,gcccmds,debug
+./usr/libdata/debug/usr/libexec/lto1.debug	comp-c-debug		gcc=48,gcccmds,debug
 ./usr/libdata/debug/usr/libexec/mail.local.debug	comp-mail-debug		debug
 ./usr/libdata/debug/usr/libexec/makekey.debug	comp-crypto-debug	debug
 ./usr/libdata/debug/usr/libexec/makewhatis.debug	comp-man-debug		!makemandb,debug
@@ -2076,7 +2078,8 @@
 ./usr/libdata/debug/usr/tests/lib/libm/t_sqrt.debug			tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libm/t_tan.debug			tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libm/t_tanh.debug			tests-lib-debug		debug,atf
-./usr/libdata/debug/usr/tests/lib/libobjc/t_threads.debug		tests-lib-debug		debug,atf,gcccmds
+./usr/libdata/debug/usr/tests/lib/libobjc/t_threads.debug		tests-lib-debug		debug,atf,gcc=45
+./usr/libdata/debug/usr/tests/lib/libobjc/t_threads.debug		tests-lib-debug		debug,atf,gcc=48
 ./usr/libdata/debug/usr/tests/lib/libposix/bsd/t_rename.debug		tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libposix/posix1/t_rename.debug	tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libposix/posix2/t_rename.debug	tests-lib-debug		debug,atf
@@ -2159,6 +2162,7 @@
 ./usr/libdata/debug/usr/tests/net/if/ifconf.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/if/t_compat.debug		tests-net-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/net/if_loop/t_pr.debug		tests-net-debug		debug,atf,rump
+./usr/libdata/debug/usr/tests/net/in_cksum/in_cksum.debug	tests-net-debug		debug,atf
 ./usr/libdata/debug/usr/tests/net/mcast/t_mcast.debug		tests-net-debug		debug,atf
 ./usr/libdata/debug/usr/tests/net/net/t_pktinfo.debug		tests-net-debug		debug,atf
 ./usr/libdata/debug/usr/tests/net/net/t_raw.debug		tests-net-debug		debug,atf,rump

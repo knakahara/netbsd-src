@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.37 2014/12/27 16:19:33 nonaka Exp $	*/
+/*	$NetBSD: machdep.c,v 1.39 2015/01/06 01:23:24 nonaka Exp $	*/
 /*-
  * Copyright (c) 2010, 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -996,6 +996,10 @@ e500_cpu_hatch(struct cpu_info *ci)
 	 * Make sure interrupts are blocked.
 	 */
 	cpu_write_4(OPENPIC_BASE + OPENPIC_CTPR, 15);	/* IPL_HIGH */
+
+	/* Set the MAS4 defaults */
+	mtspr(SPR_MAS4, MAS4_TSIZED_4KB | MAS4_MD);
+	tlb_invalidate_all();
 
 	intr_cpu_hatch(ci);
 
