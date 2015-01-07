@@ -1974,8 +1974,13 @@ out:
 	bridge_release_member(sc, bif);
 
 	/* Queue the packet for bridge forwarding. */
+#if 1
+	if (__predict_false(!pktq_enqueue(sc->sc_fwd_pktq, m, cpu_index(curcpu()))))
+		m_freem(m);
+#else
 	if (__predict_false(!pktq_enqueue(sc->sc_fwd_pktq, m, 0)))
 		m_freem(m);
+#endif
 }
 
 /*
