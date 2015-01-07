@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1935 2015/01/06 21:42:02 mrg Exp $
+#	$NetBSD: mi,v 1.1937 2015/01/07 02:53:41 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -3703,7 +3703,7 @@
 ./usr/lib/libobjc.a				comp-objc-lib		gcc=45
 ./usr/lib/libobjc.a				comp-objc-lib		gcc=48
 ./usr/lib/libobjc_p.a				comp-objc-proflib	profile,gcc=45
-./usr/lib/libobjc_p.a				comp-objc-proflib	profile,gcc=45
+./usr/lib/libobjc_p.a				comp-objc-proflib	profile,gcc=48
 ./usr/lib/libopenpgpsdk.a			comp-obsolete		obsolete
 ./usr/lib/libopenpgpsdk_p.a			comp-obsolete		obsolete
 ./usr/lib/libossaudio.a				comp-c-lib
@@ -4119,6 +4119,8 @@
 ./usr/libexec/f771				comp-obsolete		gcc=4,obsolete
 ./usr/libexec/lint1				comp-c-bin
 ./usr/libexec/lint2				comp-c-bin
+./usr/libexec/lto-wrapper			comp-c-bin		gcc=48
+./usr/libexec/lto1				comp-c-bin		gcc=48
 ./usr/libexec/pcpp				comp-c-bin		pcc
 ./usr/sbin/config				comp-obsolete		obsolete
 ./usr/sbin/config.new				comp-obsolete		obsolete
