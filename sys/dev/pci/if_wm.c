@@ -83,7 +83,7 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.308 2014/11/16 09:47:35 msaitoh Exp $");
 
-#define USE_PCQ
+#undef USE_PCQ
 
 #include <sys/param.h>
 #include <sys/systm.h>
