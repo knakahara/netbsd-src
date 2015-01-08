@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.839 2014/12/18 02:28:34 mrg Exp $
+#	$NetBSD: bsd.own.mk,v 1.841 2015/01/05 03:45:31 mrg Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -71,6 +71,12 @@ HAVE_GCC?=    0
 .else
 # Otherwise, default to GCC4.8
 HAVE_GCC?=    48
+.endif
+
+#
+# Platforms that can't run a modern GCC natively
+.if ${MACHINE_ARCH} == "m68000"
+MKGCCCMDS?=	no
 .endif
 
 #
@@ -1268,7 +1274,7 @@ X11SRCDIR.${_proto}proto?=		${X11SRCDIRMIT}/${_proto}proto/dist
 	xkbcomp xorg-cf-files imake xorg-server xbiff xkbdata xkeyboard-config \
 	xbitmaps appres xeyes xev xedit sessreg pixman \
 	beforelight bitmap editres makedepend fonttosfnt fslsfonts fstobdf \
-	glu glw mesa-demos MesaDemos MesaGLUT MesaLib \
+	glu glw mesa-demos MesaDemos MesaGLUT MesaLib MesaLib7 \
 	ico iceauth lbxproxy listres lndir \
 	luit xproxymanagementprotocol mkfontdir oclock proxymngr rgb \
 	setxkbmap smproxy twm viewres x11perf xauth xcalc xclipboard \

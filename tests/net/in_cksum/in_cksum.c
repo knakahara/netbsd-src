@@ -1,4 +1,4 @@
-/*	$NetBSD: in_cksum.c,v 1.3 2008/02/05 10:00:17 yamt Exp $	*/
+/*	$NetBSD: in_cksum.c,v 1.3 2015/01/06 21:36:38 joerg Exp $	*/
 /*-
  * Copyright (c) 2008 Joerg Sonnenberger <joerg@NetBSD.org>.
  * All rights reserved.
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in_cksum.c,v 1.3 2008/02/05 10:00:17 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in_cksum.c,v 1.3 2015/01/06 21:36:38 joerg Exp $");
 
 #include <sys/param.h>
 #include <sys/mbuf.h>
@@ -37,13 +37,30 @@ __KERNEL_RCSID(0, "$NetBSD: in_cksum.c,v 1.3 2008/02/05 10:00:17 yamt Exp $");
 #include <err.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
-int	portable_cpu_in_cksum(struct mbuf*, int, int, uint32_t);
+#define cpu_in_cksum portable_cpu_in_cksum 
+#include "cpu_in_cksum.c"
+
+#ifdef HAVE_CPU_IN_CKSUM
+#undef cpu_in_cksum
 int	cpu_in_cksum(struct mbuf*, int, int, uint32_t);
+#endif
 
 static bool	random_aligned;
+
+void panic(const char *, ...) __printflike(1, 2);
+void
+panic(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	verrx(1, fmt, ap);
+	va_end(ap);
+}
 
 static void
 free_mbuf_chain(struct mbuf *m)
@@ -89,7 +106,7 @@ randomise_mbuf_chain(struct mbuf *m)
 
 	for (i = 0; i < m->m_len; i += sizeof(int)) {
 		data = rand();
-		if (i + sizeof(int) < m->m_len)
+		if (i + sizeof(int) < (size_t)m->m_len)
 			len = sizeof(int);
 		else
 			len = m->m_len - i;
@@ -113,17 +130,40 @@ main(int argc, char **argv)
 {
 	struct rusage res;
 	struct timeval tv, old_tv;
-	int loops, old_sum, new_sum, off, len;
+	int loops, old_sum, off, len;
+#ifdef HAVE_CPU_IN_CKSUM
+	int new_sum;
+#endif
 	long i, iterations;
 	uint32_t init_sum;
 	struct mbuf *m;
+	bool verbose;
+	int c;
 
-	if (argc < 4)
-		err(1, "%s loops unalign iterations ...", argv[0]);
+	loops = 16;
+	verbose = false;
+	random_aligned = 0;
+	iterations = 100000;
 
-	loops = atoi(argv[1]);
-	random_aligned = atoi(argv[2]);
-	iterations = atol(argv[3]);
+	while ((c = getopt(argc, argv, "i:l:u:v")) != -1) {
+		switch (c) {
+		case 'i':
+			iterations = atoi(optarg);
+			break;
+		case 'l':
+			loops = atoi(optarg);
+			break;
+		case 'u':
+			random_aligned = atoi(optarg);
+			break;
+		case 'v':
+			verbose = true;
+			break;
+		default:
+			errx(1, "%s [-l <loops>] [-u <unalign> [-i <iterations> "
+			    "[<mbuf-size> ...]", getprogname());
+		}
+	}
 
 	for (; loops; --loops) {
 		if ((m = allocate_mbuf_chain(argv + 4)) == NULL)
@@ -140,9 +180,13 @@ main(int argc, char **argv)
 
 		len -= off;
 		old_sum = portable_cpu_in_cksum(m, len, off, init_sum);
+#ifdef HAVE_CPU_IN_CKSUM
 		new_sum = cpu_in_cksum(m, len, off, init_sum);
 		if (old_sum != new_sum)
-			errx(1, "comparision failed: %x %x", old_sum, new_sum);
+			errx(1, "comparison failed: %x %x", old_sum, new_sum);
+#else
+		__USE(old_sum);
+#endif
 
 		if (iterations == 0)
 			continue;
@@ -153,19 +197,25 @@ main(int argc, char **argv)
 			(void)portable_cpu_in_cksum(m, len, off, init_sum);
 		getrusage(RUSAGE_SELF, &res);
 		timersub(&res.ru_utime, &tv, &old_tv);
-		printf("portable version: %ld.%06ld\n", (long)old_tv.tv_sec, (long)old_tv.tv_usec);
+		if (verbose)
+			printf("portable version: %jd.%06jd\n",
+			    (intmax_t)old_tv.tv_sec, (intmax_t)old_tv.tv_usec);
 
+#ifdef HAVE_CPU_IN_CKSUM
 		getrusage(RUSAGE_SELF, &res);
 		tv = res.ru_utime;
 		for (i = iterations; i; --i)
 			(void)cpu_in_cksum(m, len, off, init_sum);
 		getrusage(RUSAGE_SELF, &res);
 		timersub(&res.ru_utime, &tv, &tv);
-		printf("test version:     %ld.%06ld\n", (long)tv.tv_sec, (long)tv.tv_usec);
-		printf("relative time:    %3.f%%\n",
-		    100 * ((float)tv.tv_sec * 1e6 + tv.tv_usec) /
-		    ((float)old_tv.tv_sec * 1e6 + old_tv.tv_usec + 1));
-
+		if (verbose) {
+			printf("test version:     %jd.%06jd\n",
+			    (intmax_t)tv.tv_sec, (intmax_t)tv.tv_usec);
+			printf("relative time:    %3.g%%\n",
+			    100 * ((double)tv.tv_sec * 1e6 + tv.tv_usec) /
+			    ((double)old_tv.tv_sec * 1e6 + old_tv.tv_usec + 1));
+		}
+#endif
 		free_mbuf_chain(m);
 	}
 
