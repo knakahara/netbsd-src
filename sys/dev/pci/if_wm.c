@@ -7216,6 +7216,11 @@ wm_txintr_msix(void *arg)
 	struct wm_softc *sc = txq->txq_sc;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 
+	/*
+	 * TODO
+	 * add rnd_add_uint32(), but what value should it be used?
+	 */
+
 	DPRINTF(WM_DEBUG_TX, ("%s: TX\n", device_xname(sc->sc_dev)));
 	CSR_WRITE(sc, WMREG_EIMC, 1 << txq->txq_intr_idx);
 
@@ -7250,6 +7255,11 @@ wm_rxintr_msix(void *arg)
 {
 	struct wm_rxqueue *rxq = arg;
 	struct wm_softc *sc = rxq->rxq_sc;
+
+	/*
+	 * TODO
+	 * add rnd_add_uint32(), but what value should it be used?
+	 */
 
 	DPRINTF(WM_DEBUG_RX, ("%s: RX\n", device_xname(sc->sc_dev)));
 
