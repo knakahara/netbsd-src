@@ -83,7 +83,9 @@ intrctl_intrids(void *data, int length)
 	if (length < 0)
 		return EINVAL;
 
+	mutex_enter(&cpu_lock);
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
+	mutex_exit(&cpu_lock);
 	if (ret != 0)
 		return ret;
 

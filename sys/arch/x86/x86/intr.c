@@ -457,6 +457,8 @@ intr_get_io_intrsource(const char *intrid)
 {
 	struct intrsource *isp;
 
+	KASSERT(mutex_owned(&cpu_lock));
+
 	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		KASSERT(isp->is_intrid != NULL);
 		if (strncmp(intrid, isp->is_intrid, INTRID_LEN) == 0) {
@@ -473,6 +475,8 @@ intr_allocate_io_intrsource(const char *intrid)
 	struct cpu_info *ci;
 	struct intrsource *isp;
 	struct percpu_evcnt *pep;
+
+	KASSERT(mutex_owned(&cpu_lock));
 
 	if (intrid == NULL)
 		return NULL;
@@ -521,6 +525,8 @@ void
 intr_free_io_intrsource(const char *intrid)
 {
 	struct intrsource *isp;
+
+	KASSERT(mutex_owned(&cpu_lock));
 
 	if (intrid == NULL)
 		return;
@@ -1931,6 +1937,8 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 	struct intrsource *isp;
 	char **ids;
 	int i;
+
+	KASSERT(mutex_owned(&cpu_lock));
 
 	if (count == NULL)
 		return EINVAL;
