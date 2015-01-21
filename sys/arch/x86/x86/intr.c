@@ -185,6 +185,12 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <ddb/db_output.h>
 #endif
 
+#ifdef INTRDEBUG
+#define DPRINTF(msg) printf msg
+#else
+#define DPRINTF(msg)
+#endif
+
 struct pic softintr_pic = {
 	.pic_name = "softintr_fakepic",
 	.pic_type = PIC_SOFT,
@@ -421,6 +427,10 @@ intr_scan_bus(int bus, int pin, int *handle)
 }
 #endif
 
+/*
+ * Create an interrupt id such as "ioapic0 pin 9". This interrupt id is used
+ * by MI code and intrctl(8).
+ */
 static const char *
 create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 {
@@ -452,6 +462,9 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 	return intr_string(ih, buf, len);
 }
 
+/*
+ * Find intrsource from io_interrupt_sources list.
+ */
 static struct intrsource *
 intr_get_io_intrsource(const char *intrid)
 {
@@ -468,6 +481,9 @@ intr_get_io_intrsource(const char *intrid)
 	return NULL;
 }
 
+/*
+ * Allocate intrsource and add to io_interrupt_sources list.
+ */
 struct intrsource *
 intr_allocate_io_intrsource(const char *intrid)
 {
@@ -504,6 +520,9 @@ intr_allocate_io_intrsource(const char *intrid)
 	return isp;
 }
 
+/*
+ * Remove from io_interrupt_sources list and free by the intrsource pointer.
+ */
 static void
 intr_free_io_intrsource_direct(struct intrsource *isp)
 {
@@ -521,6 +540,10 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 	kmem_free(isp, sizeof(*isp));
 }
 
+/*
+ * Remove from io_interrupt_sources list and free by the interrupt id.
+ * This function can be used by MI code.
+ */
 void
 intr_free_io_intrsource(const char *intrid)
 {
@@ -752,6 +775,10 @@ intr_findpic(int num)
 	return NULL;
 }
 
+/*
+ * Append device name to intrsource. If device A and device B share IRQ number,
+ * the device name of the interrupt id is "device A, device B".
+ */
 static int
 intr_append_intrsource_xname(struct intrsource *isp, const char *xname)
 {
@@ -1381,6 +1408,9 @@ softint_init_md(lwp_t *l, u_int level, uintptr_t *machdep)
 	intr_calculatemasks(ci);
 }
 
+/*
+ * Save current affinitied cpu's interrupt count.
+ */
 static void
 intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
 {
@@ -1399,6 +1429,9 @@ intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
 	}
 }
 
+/*
+ * Restore current affinitied cpu's interrupt count.
+ */
 static void
 intr_restore_evcnt(struct intrsource *source, cpuid_t cpuid)
 {
@@ -1415,6 +1448,9 @@ intr_restore_evcnt(struct intrsource *source, cpuid_t cpuid)
 	}
 }
 
+/*
+ *
+ */
 static void
 intr_redistribute_xc_t(void *arg1, void *arg2)
 {
@@ -1627,7 +1663,7 @@ cpu_intr_count(struct cpu_info *ci)
 }
 
 static int
-intr_find_unused_slot(struct cpu_info *ci, struct pic *pic, int *index)
+intr_find_unused_slot(struct cpu_info *ci, int *index)
 {
 	int slot, i;
 
@@ -1641,7 +1677,7 @@ intr_find_unused_slot(struct cpu_info *ci, struct pic *pic, int *index)
 		}
 	}
 	if (slot == -1) {
-		printf("cannot allocate ci_isources\n");
+		DPRINTF(("cannot allocate ci_isources\n"));
 		return EBUSY;
 	}
 
@@ -1649,7 +1685,9 @@ intr_find_unused_slot(struct cpu_info *ci, struct pic *pic, int *index)
 	return 0;
 }
 
-/* reuse same idt_vec */
+/*
+ * Let cpu_info ready to accept the interrupt.
+ */
 static void
 intr_activate_xcall(void *arg1, void *arg2)
 {
@@ -1662,6 +1700,8 @@ intr_activate_xcall(void *arg1, void *arg2)
 	int slot;
 
 	ih = arg1;
+
+	kpreempt_disable();
 
 	KASSERT(ih->ih_cpu == curcpu() || !mp_online);
 
@@ -1686,8 +1726,13 @@ intr_activate_xcall(void *arg1, void *arg2)
 	    SEL_KPL, GSEL(GCODE_SEL, SEL_KPL));
 
 	x86_write_psl(psl);
+
+	kpreempt_enable();
 }
 
+/*
+ * Let cpu_info not accept the interrupt.
+ */
 static void
 intr_deactivate_xcall(void *arg1, void *arg2)
 {
@@ -1698,6 +1743,8 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 
 	ih = arg1;
 
+	kpreempt_disable();
+
 	KASSERT(ih->ih_cpu == curcpu() || !mp_online);
 
 	ci = ih->ih_cpu;
@@ -1706,6 +1753,7 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 	psl = x86_read_psl();
 	x86_disable_intr();
 
+	/* Move all devices sharing IRQ number. */
 	ci->ci_isources[slot] = NULL;
 	for (lih = ih; lih != NULL; lih = lih->ih_next) {
 		ci->ci_nintrhand--;
@@ -1713,7 +1761,14 @@ intr_deactivate_xcall(void *arg1, void *arg2)
 
 	intr_calculatemasks(ci);
 
+	/*
+	 * Skip unsetgate(), because the same itd[] entry is overwritten in
+	 * intr_activate_xcall().
+	 */
+
 	x86_write_psl(psl);
+
+	kpreempt_enable();
 }
 
 static void
@@ -1753,29 +1808,30 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 
 	KASSERT(mutex_owned(&cpu_lock));
 
-	/*
+	/* XXX
 	 * logical destination mode is not supported, use lowest index cpu.
 	 */
 	cpu_idx = kcpuset_ffs(cpuset) - 1;
 	newci = cpu_lookup(cpu_idx);
 	if (newci == NULL) {
-		printf("invalid cpu index: %u\n", cpu_idx);
+		DPRINTF(("invalid cpu index: %u\n", cpu_idx));
 		return EINVAL;
 	}
 	if ((newci->ci_schedstate.spc_flags & SPCF_NOINTR) != 0) {
-		printf("the cpu is set nointr shield. index:%u\n", cpu_idx);
+		DPRINTF(("the cpu is set nointr shield. index:%u\n", cpu_idx));
 		return EINVAL;
 	}
 
 	isp = ich;
 	if (isp == NULL) {
-		printf("invalid intrctl handler\n");
+		DPRINTF(("invalid intrctl handler\n"));
 		return EINVAL;
 	}
 
+	/* i8259_pic supports only primary cpu, see i8259.c. */
 	pic = isp->is_pic;
 	if (pic == &i8259_pic) {
-		printf("i8259 pic does not support set_affinity\n");
+		DPRINTF(("i8259 pic does not support set_affinity\n"));
 		return ENOTSUP;
 	}
 
@@ -1787,10 +1843,10 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	oldslot = ih->ih_slot;
 	idt_vec = isp->is_idtvec;
 
-	err = intr_find_unused_slot(newci, pic, &newslot);
+	err = intr_find_unused_slot(newci, &newslot);
 	if (err) {
-		printf("failed to allocate interrupt slot for PIC %s intrid %s\n",
-		       isp->is_pic->pic_name, isp->is_intrid);
+		DPRINTF(("failed to allocate interrupt slot for PIC %s intrid %s\n",
+			isp->is_pic->pic_name, isp->is_intrid));
 		return err;
 	}
 
@@ -1798,10 +1854,12 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	(*pic->pic_hwmask)(pic, pin); /* for ci_ipending check */
 	if (oldci->ci_ipending & (1 << oldslot)) {
 		(*pic->pic_hwunmask)(pic, pin);
-		printf("pin %d on cpuid %ld has pending interrupts.\n",
-		    pin, oldci->ci_cpuid);
+		DPRINTF(("pin %d on cpuid %ld has pending interrupts.\n",
+			pin, oldci->ci_cpuid));
 		return EBUSY;
 	}
+
+	kpreempt_disable();
 
 	/* deactivate old interrupt setting */
 	if (oldci == curcpu() || !mp_online) {
@@ -1834,6 +1892,8 @@ intr_set_affinity(void *ich, const kcpuset_t *cpuset)
 	isp->is_active_cpu = newci->ci_cpuid;
 	(*pic->pic_addroute)(pic, newci, pin, idt_vec, isp->is_type);
 
+	kpreempt_enable();
+
 	(*pic->pic_hwunmask)(pic, pin);
 
 	return err;
@@ -1853,6 +1913,7 @@ intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
 void *
 intr_get_handler(const char *intrid)
 {
+
 	KASSERT(mutex_owned(&cpu_lock));
 
 	return intr_get_io_intrsource(intrid);
@@ -1924,9 +1985,11 @@ intr_get_devname(void *ich)
 int
 intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
 {
-	if (oldset != NULL) {
+
+	KASSERT(mutex_owned(&cpu_lock));
+
+	if (oldset != NULL)
 		intr_get_affinity(ich, oldset);
-	}
 
 	return intr_set_affinity(ich, newset);
 }

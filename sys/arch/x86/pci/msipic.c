@@ -95,7 +95,7 @@ struct dev_seq {
 static struct dev_seq dev_seq[NUM_MSI_DEVS];
 
 static int
-allocate_devid(struct pci_attach_args *pa)
+allocate_common_msi_devid(struct pci_attach_args *pa)
 {
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
@@ -134,7 +134,7 @@ allocate_devid(struct pci_attach_args *pa)
 }
 
 static void
-release_devid(int devid)
+release_common_msi_devid(int devid)
 {
 	if (devid < 0 || NUM_MSI_DEVS <= devid) {
 		aprint_normal("%s: invalid device.\n", __func__);
@@ -170,7 +170,7 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	pcitag_t tag = pa->pa_tag;
 	int devid;
 
-	devid = allocate_devid(pa);
+	devid = allocate_common_msi_devid(pa);
 	if (devid == -1)
 		return NULL;
 
@@ -218,7 +218,7 @@ destruct_common_msi_pic(struct pic *msi_pic)
 	LIST_REMOVE(msipic, mp_list);
 	mutex_exit(&msipic_list_lock);
 
-	release_devid(msipic->mp_devid);
+	release_common_msi_devid(msipic->mp_devid);
 	kmem_free(msipic, sizeof(*msipic));
 	kmem_free(msi_pic, sizeof(*msi_pic));
 }
