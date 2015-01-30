@@ -258,7 +258,7 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
 }
 
 void
-pci_intr_release(pci_intr_handle_t *pih)
+pci_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
 {
 	const char *intrstr;
 	char intrstr_buf[INTRID_LEN + 1];
@@ -282,7 +282,7 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 	pci_chipset_tag_t ipc;
 
 	if (INT_VIA_MSI(ih))
-		return pci_msi_string(ih, buf, len);
+		return pci_msi_string(pc, ih, buf, len);
 
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)

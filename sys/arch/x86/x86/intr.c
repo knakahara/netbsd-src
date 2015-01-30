@@ -449,7 +449,7 @@ create_intrid(int pin, struct pic *pic, char *buf, size_t len)
 		else if (pic->pic_type == PIC_MSIX)
 			MSI_INT_MAKE_MSIX(pih);
 
-		return pci_msi_string(pih, buf, len);
+		return pci_msi_string(NULL, pih, buf, len);
 	}
 
 	ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |

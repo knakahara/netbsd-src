@@ -3090,7 +3090,7 @@ wm_detach(device_t self, int flags __unused)
 			sc->sc_ihs[i] = NULL;
 		}
 	}
-	pci_any_intr_release(&sc->sc_intrs, sc->sc_nintrs);
+	pci_any_intr_release(sc->sc_pc, &sc->sc_intrs, sc->sc_nintrs);
 
 	/* Unmap the registers */
 	if (sc->sc_ss) {
@@ -3503,7 +3503,7 @@ wm_alloc_intrs(struct wm_softc *sc, struct pci_attach_args *pa)
 static void
 wm_free_intrs(struct wm_softc *sc)
 {
-	pci_any_intr_release(&sc->sc_intrs, sc->sc_nintrs);
+	pci_any_intr_release(sc->sc_pc, &sc->sc_intrs, sc->sc_nintrs);
 }
 
 static int
@@ -3597,7 +3597,7 @@ wm_setup_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 	for (i = 0; i < intr_idx; i++)
 		pci_msix_disestablish(pc, sc->sc_ihs[i]);
 
-	pci_msix_release(&sc->sc_intrs, sc->sc_nintrs);
+	pci_msix_release(pc, &sc->sc_intrs, sc->sc_nintrs);
 	return error;
 }
 

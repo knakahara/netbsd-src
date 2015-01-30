@@ -55,7 +55,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <x86/pci/msipic.h>
 
 const char *
-pci_msi_string(pci_intr_handle_t ih, char *buf, size_t len)
+pci_msi_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
+    size_t len)
 {
 	int dev, vec;
 
@@ -108,7 +109,7 @@ pci_msi_alloc_vectors(struct pic *msi_pic, int *count)
 	for (i = 0; i < *count; i++) {
 		pih = pci_msi_calculate_handle(msi_pic, i);
 
-		intrstr = pci_msi_string(pih, intrstr_buf, sizeof(intrstr_buf));
+		intrstr = pci_msi_string(NULL, pih, intrstr_buf, sizeof(intrstr_buf));
 		isp = intr_allocate_io_intrsource(intrstr);
 		if (isp == NULL) {
 			aprint_normal("can't allocate io_intersource\n");
@@ -133,7 +134,7 @@ pci_msi_free_vectors(struct pic *msi_pic, int count)
 	mutex_enter(&cpu_lock);
 	for (i = 0; i < count; i++) {
 		pih = pci_msi_calculate_handle(msi_pic, i);
-		intrstr = pci_msi_string(pih, intrstr_buf, sizeof(intrstr_buf));
+		intrstr = pci_msi_string(NULL, pih, intrstr_buf, sizeof(intrstr_buf));
 		intr_free_io_intrsource(intrstr);
 	}
 	mutex_exit(&cpu_lock);
@@ -444,7 +445,7 @@ pci_msi_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int co
 }
 
 void
-pci_msi_release(pci_intr_handle_t **pihs, int count)
+pci_msi_release(pci_chipset_tag_t pc, pci_intr_handle_t **pihs, int count)
 {
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
@@ -555,7 +556,7 @@ pci_msix_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int c
 }
 
 void
-pci_msix_release(pci_intr_handle_t **pihs, int count)
+pci_msix_release(pci_chipset_tag_t pc, pci_intr_handle_t **pihs, int count)
 {
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
@@ -595,7 +596,7 @@ pci_msix_disestablish(pci_chipset_tag_t pc, void *cookie)
 }
 
 int
-pci_msix_remap(pci_intr_handle_t *pihs, int count)
+pci_msix_remap(pci_chipset_tag_t pc, pci_intr_handle_t *pihs, int count)
 {
 	if (pihs == NULL)
 		return EINVAL;
@@ -616,12 +617,12 @@ pci_any_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 }
 
 void
-pci_any_intr_release(pci_intr_handle_t **pihs, int count)
+pci_any_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t **pihs, int count)
 {
 	if (!INT_VIA_MSI(*pihs[0]))
-		pci_intr_release(pihs[0]);
+		pci_intr_release(pc, pihs[0]);
 	else if (!MSI_INT_IS_MSIX(*pihs[0]))
-		pci_msi_release(pihs, count);
+		pci_msi_release(pc, pihs, count);
 	else
-		pci_msix_release(pihs, count);
+		pci_msix_release(pc, pihs, count);
 }

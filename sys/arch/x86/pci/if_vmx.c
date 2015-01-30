@@ -688,6 +688,7 @@ out:
 int
 vmxnet3_alloc_msix_interrupts(struct vmxnet3_softc *sc)
 {
+	struct pci_attach_args *pa = sc->vmx_pa;
 	int cnt, required;
 
 	if (sc->vmx_flags & VMXNET3_FLAG_NO_MSIX)
@@ -696,16 +697,16 @@ vmxnet3_alloc_msix_interrupts(struct vmxnet3_softc *sc)
 	/* Allocate an additional vector for the events interrupt. */
 	required = sc->vmx_max_nrxqueues + sc->vmx_max_ntxqueues + 1;
 
-	if (pci_msix_count(sc->vmx_pa) < required)
+	if (pci_msix_count(pa) < required)
 		return (1);
 
 	cnt = required;
-	if (pci_msix_alloc(sc->vmx_pa, &sc->vmx_intrs, &cnt) == 0 && cnt >= required) {
+	if (pci_msix_alloc(pa, &sc->vmx_intrs, &cnt) == 0 && cnt >= required) {
 		if (cnt >= required) {
 			sc->vmx_nintrs = required;
 			return (0);
 		} else {
-			pci_msix_release(&sc->vmx_intrs, cnt);
+			pci_msix_release(pa->pa_pc, &sc->vmx_intrs, cnt);
 		}
 	}
 
@@ -715,21 +716,22 @@ vmxnet3_alloc_msix_interrupts(struct vmxnet3_softc *sc)
 int
 vmxnet3_alloc_msi_interrupts(struct vmxnet3_softc *sc)
 {
+	struct pci_attach_args *pa = sc->vmx_pa;
 	int nmsi, cnt, required;
 
 	required = 1;
 
-	nmsi = pci_msi_count(sc->vmx_pa);
+	nmsi = pci_msi_count(pa);
 	if (nmsi < required)
 		return (1);
 
 	cnt = required;
-	if (pci_msi_alloc(sc->vmx_pa, &sc->vmx_intrs, &cnt) == 0) {
+	if (pci_msi_alloc(pa, &sc->vmx_intrs, &cnt) == 0) {
 		if (cnt >= required) {
 			sc->vmx_nintrs = required;
 			return (0);
 		} else {
-			pci_msi_release(&sc->vmx_intrs, cnt);
+			pci_msi_release(pa->pa_pc, &sc->vmx_intrs, cnt);
 		}
 	}
 
@@ -798,7 +800,7 @@ vmxnet3_free_interrupts(struct vmxnet3_softc *sc)
 	for (i = 0; i < sc->vmx_nintrs; i++) {
 		pci_any_intr_disestablish(pc, sc->vmx_ihs[i]);
 	}
-	pci_any_intr_release(&sc->vmx_intrs, sc->vmx_nintrs);
+	pci_any_intr_release(pc, &sc->vmx_intrs, sc->vmx_nintrs);
 }
 
 int
