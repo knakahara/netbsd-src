@@ -17,6 +17,7 @@ AC_INIT([am-utils],
 	[https://bugzilla.am-utils.org/ or am-utils@am-utils.org])
 AC_MSG_NOTICE(*** INITIALIZATION ***)
 AC_CONFIG_SRCDIR([amd/amd.c])
+AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER(config.h)
 AH_TOP([
 /*
@@ -55,8 +56,8 @@ AH_BOTTOM([
 dnl
 dnl AC_CONFIG_AUX_DIR(m4)
 AC_PREREQ(2.52)
-AC_REVISION(Revision: 1.2)
-AC_COPYRIGHT([Copyright (c) 1997-2009 Erez Zadok])
+AC_REVISION(Revision: 1.134 )
+AC_COPYRIGHT([Copyright (c) 1997-2011 Erez Zadok])
 dnl find out system type
 AC_MSG_NOTICE(*** SYSTEM TYPES ***)
 dnl run by libtool, but must be kept here because HOST_MACROS depends on it
@@ -70,7 +71,7 @@ AC_MSG_NOTICE(*** PACKAGE NAME AND VERSION ***)
 AMU_PACKAGE_NAME($PACKAGE_NAME)
 AMU_PACKAGE_VERSION($PACKAGE_VERSION)
 AMU_PACKAGE_BUGREPORT($PACKAGE_BUGREPORT)
-AM_INIT_AUTOMAKE($PACKAGE_NAME, $PACKAGE_VERSION)
+AM_INIT_AUTOMAKE
 dnl SET (shared) library version.  Update it only before major release!
 dnl Clarification:
 dnl The major number should change when an incompatible change is made to
@@ -396,6 +397,7 @@ AC_CHECK_FUNCS(			\
 	xdr_nfsstat		\
 	xdr_nfstime		\
 	xdr_pointer		\
+	xdr_u_int64_t		\
 	xdr_readargs		\
 	xdr_readdirargs		\
 	xdr_readdirres		\
@@ -445,17 +447,15 @@ AC_CHECK_HEADERS(			\
 	linux/list.h			\
 	linux/nfs.h			\
 	linux/nfs2.h			\
+	linux/nfs4.h			\
 	linux/posix_types.h		\
 	linux/socket.h			\
 	machine/endian.h		\
 	net/errno.h			\
-	net/if.h			\
 	net/if_var.h			\
-	net/route.h			\
 	netinet/in.h			\
 	nfs/export.h			\
 	nfs/mount.h			\
-	nfs/nfs_clnt.h			\
 	nfs/nfs_gfs.h			\
 	nfs/nfs_mount.h			\
 	nfs/nfsmount.h			\
@@ -464,7 +464,6 @@ AC_CHECK_HEADERS(			\
 	nfs/pathconf.h			\
 	nfs/rpcv2.h			\
 	nfsclient/nfsargs.h		\
-	rpc/auth_des.h			\
 	rpc/rpc.h			\
 	rpc/types.h			\
 	rpcsvc/autofs_prot.h		\
@@ -572,6 +571,21 @@ dnl	dirent.h			\
 	varargs.h			\
 	unistd.h			\
 	)
+dnl headers that likely have dependencies
+AC_CHECK_HEADERS([			\
+	net/if.h			\
+	net/route.h			\
+	nfs/nfs_clnt.h			\
+], [], [],
+[
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif /* HAVE_SYS_TYPES_H */
+#ifdef HAVE_SYS_SOCKET_H
+# include <sys/socket.h>
+#endif /* HAVE_SYS_SOCKET_H */
+])
+
 dnl optional headers
 if test "$with_ldap" = "yes"; then
 AC_CHECK_HEADERS(			\
@@ -590,6 +604,8 @@ AC_CHECK_HEADERS([			\
 	msdosfs/msdosfsmount.h		\
 	netinet/if_ether.h		\
 	nfs/nfs.h			\
+	rpc/auth.h			\
+	rpc/auth_des.h			\
 	rpc/pmap_clnt.h			\
 	rpc/pmap_prot.h			\
 	rpcsvc/yp_prot.h		\
@@ -601,6 +617,9 @@ AC_CHECK_HEADERS([			\
 #ifdef HAVE_SYS_TYPES_H
 # include <sys/types.h>
 #endif /* HAVE_SYS_TYPES_H */
+#ifdef HAVE_SYS_SOCKET_H
+# include <sys/socket.h>
+#endif /* HAVE_SYS_SOCKET_H */
 #ifdef HAVE_SYS_PARAM_H
 # include <sys/param.h>
 #endif /* HAVE_SYS_PARAM_H */
@@ -662,12 +681,17 @@ AC_CHECK_HEADERS([			\
 #ifdef HAVE_SYS_TYPES_H
 # include <sys/types.h>
 #endif /* HAVE_SYS_TYPES_H */
-# ifndef __KERNEL__
-#  define __KERNEL__
-# endif /* __KERNEL__ */
+/*
+ * It used to be the case that linux/socket.h would define sa_family_t,
+ * but as of FC15, this is not the case anymore (although the comments
+ * in some headers say that is true! So we include <sys/socket.h> too.
+ */
 #ifdef HAVE_LINUX_SOCKET_H
 # include <linux/socket.h>
 #endif /* HAVE_LINUX_SOCKET_H */
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif /* HAVE_SYS_SOCKET_H */
 #ifdef HAVE_LIMITS_H
 # include <limits.h>
 #endif /* HAVE_LIMITS_H */
@@ -675,8 +699,17 @@ AC_CHECK_HEADERS([			\
 # include <linux/posix_types.h>
 #endif /* HAVE_LINUX_POSIX_TYPES_H */
 #ifdef HAVE_LINUX_NFS2_H
+# if !defined(FHSIZE) && defined(NFS2_FHSIZE)
+#  define FHSIZE NFS2_FHSIZE
+# endif
+#ifdef HAVE_LINUX_NFS_H
+# include <linux/nfs.h>
+# if !defined(FHSIZE) && defined(NFS_FHSIZE)
+# define FHSIZE NFS_FHSIZE
+# endif
+#endif
 struct nfs2_fh {
-  char data[FHSIZE];
+  char data[[FHSIZE]];
 };
 # define _LINUX_NFS2_H
 #endif /* HAVE_LINUX_NFS2_H */
@@ -771,11 +804,18 @@ https://bugzilla.am-utils.org/ or am-utils@am-utils.org please.
 ])
 fi
 dnl -----------------------------------------------------------------------
+dnl NFS related tests need to happen earlier: many things depend on them
 AMU_STRUCT_FIELD_NFS_FH
 AMU_STRUCT_NFS_FH
 AMU_STRUCT_NFS_FH3
 AMU_CHECK_FS_MNTENT(nfs3)
+AMU_CHECK_FS_MNTENT(nfs4)
 dnl ======================================================================
+
+dnl -----------------------------------------------------------------------
+dnl Lustre related tests
+AMU_CHECK_FS_MNTENT(lustre)
+
 
 dnl *********
 AMU_SAVE_STATE
@@ -895,6 +935,7 @@ dnl ######################################################################
 dnl SYSTEM SERVICES
 AC_MSG_NOTICE(*** SYSTEM SERVICES ***)
 AC_SYS_LONG_FILE_NAMES
+AC_SYS_LARGEFILE
 AC_SYS_RESTARTABLE_SYSCALLS
 AMU_CHECK_NETWORK_TRANSPORT_TYPE
 dnl ======================================================================
@@ -1022,13 +1063,10 @@ AMU_CHECK_FS_MNTENT(cache)
 AMU_CHECK_FS_MNTENT(lofs lo, lofs)
 AMU_CHECK_FS_MNTENT(mfs)
 AMU_CHECK_FS_MNTENT(nfs)
-dnl This test for nfs3 was moved up, because other tests depend on it
-dnl especially checking for nfsv3 file handle structure types
-dnl AMU_CHECK_FS_MNTENT(nfs3)
 AMU_CHECK_FS_MNTENT(vfat pcfs pc msdos msdosfs fat, pcfs)
 AMU_CHECK_FS_MNTENT(tfs)
 AMU_CHECK_FS_MNTENT(tmpfs)
-AMU_CHECK_FS_MNTENT(ext3 ext2 ffs ufs 42 43 44 efs xfs jfs ultrix, ufs)
+AMU_CHECK_FS_MNTENT(ext4 ext3 ext2 ffs ufs 42 43 44 efs xfs jfs ultrix, ufs)
 dnl openbsd 2.4 introduce a new file system called xfs, which is not
 dnl the same as irix-s xfs.  Sigh, why did openbsd have to use such a name!
 case "${host_os_name}" in
@@ -1048,7 +1086,7 @@ AMU_CHECK_FS_HEADERS(fs/udf/udf_mount.h, udf)
 AMU_CHECK_FS_HEADERS(tmpfs/tmp.h, tmpfs)
 AMU_CHECK_FS_HEADERS(fs/tmpfs/tmpfs_args.h, tmpfs)
 AMU_CHECK_FS_HEADERS(fs/efs/efs_mount.h, efs)
-AMU_CHECK_FS_HEADERS(sys/fs/autofs.h, autofs)
+AMU_CHECK_FS_HEADERS(sys/fs/autofs.h linux/auto_fs.h, autofs)
 AMU_CHECK_FS_HEADERS(sys/fs/cachefs_fs.h, cachefs)
 dnl AMU_CHECK_FS_HEADERS(jfs/jfsmount.h, ufs)
 dnl ======================================================================
@@ -1079,7 +1117,9 @@ dnl check for mount(2) type/name for filesystem (MNTTYPE_*, MOUNT_*)
 AC_MSG_NOTICE(*** MOUNTING TYPES ***)
 AMU_CHECK_MOUNT_TYPE(nfs)
 AMU_CHECK_MOUNT_TYPE(nfs3)
-AMU_CHECK_MOUNT_TYPE(ext3 ext2 ffs ufs 4.2 4.3 4.4 efs xfs jfs ultrix, ufs)
+AMU_CHECK_MOUNT_TYPE(nfs4)
+AMU_CHECK_MOUNT_TYPE(lustre)
+AMU_CHECK_MOUNT_TYPE(ext4 ext3 ext2 ffs ufs 4.2 4.3 4.4 efs xfs jfs ultrix, ufs)
 AMU_CHECK_MOUNT_TYPE(xfs)
 AMU_CHECK_MOUNT_TYPE(efs)
 AMU_CHECK_MOUNT_TYPE(cdfs hsfs cd9660 iso9660 isofs cdrom, cdfs)
@@ -1103,7 +1143,9 @@ dnl check for mnttab name for filesystem
 AC_MSG_NOTICE(*** MOUNTING TABLE NAMES ***)
 AMU_CHECK_MNTTAB_TYPE(nfs)
 AMU_CHECK_MNTTAB_TYPE(nfs3)
-AMU_CHECK_MNTTAB_TYPE(ext3 ext2 ffs ufs 4.2 4.3 4.4 efs xfs jfs ultrix, ufs)
+AMU_CHECK_MNTTAB_TYPE(nfs4)
+AMU_CHECK_MNTTAB_TYPE(lustre)
+AMU_CHECK_MNTTAB_TYPE(ext4 ext3 ext2 ffs ufs 4.2 4.3 4.4 efs xfs jfs ultrix, ufs)
 AMU_CHECK_MNTTAB_TYPE(xfs)
 AMU_CHECK_MNTTAB_TYPE(efs)
 AMU_CHECK_MNTTAB_TYPE(cdfs hsfs cd9660 iso9660 isofs cdrom, cdfs)
@@ -1147,6 +1189,7 @@ AMU_CHECK_MNTTAB_OPTS(	\
 	maxgroups	\
 	multi		\
 	noac		\
+	noacl		\
 	noauto		\
 	noconn		\
 	nocto		\
@@ -1185,6 +1228,7 @@ dnl Generic mount(2) system call flags (hex/int numbers) like M_*/MS_*/MNT_*
 dnl if found, defines MNT2_GEN_OPT_*
 AC_MSG_NOTICE(*** GENERIC MOUNT(2) OPTIONS ***)
 AMU_CHECK_MNT2_GEN_OPTS(	\
+	active		\
 	async		\
 	automntfs	\
 	bind		\
@@ -1195,8 +1239,12 @@ AMU_CHECK_MNT2_GEN_OPTS(	\
 	fss		\
 	grpid		\
 	ignore		\
+	i_version	\
 	jfs		\
+	kernmount	\
 	log		\
+	mandlock	\
+	move		\
 	multi		\
 	newtype		\
 	nfs		\
@@ -1205,20 +1253,33 @@ AMU_CHECK_MNT2_GEN_OPTS(	\
 	nocoredump	\
 	nodev		\
 	nodevmtime	\
+	nodiratime	\
 	noexec		\
 	nomnttab	\
 	nosub		\
 	nosuid		\
+	nouser		\
 	optionstr	\
 	overlay		\
+	posixacl	\
+	private		\
 	quota		\
 	rdonly		\
+	rec		\
+	remount		\
+	relatime	\
 	ronly		\
+	shared		\
+	silent		\
+	slave		\
 	softdep		\
+	strictatime	\
 	sync		\
 	synchronous	\
 	symperm		\
+	unbindable	\
 	union		\
+	verbose		\
 	)
 dnl ======================================================================
 
@@ -1236,7 +1297,9 @@ AMU_CHECK_MNT2_NFS_OPTS(	\
 	acregmax	\
 	acregmin	\
 	auto		\
+	broken_suid	\
 	deadthresh	\
+	dirsync		\
 	dumbtimr	\
 	fsname		\
 	grpid		\
@@ -1250,11 +1313,14 @@ AMU_CHECK_MNT2_NFS_OPTS(	\
 	maxgrps		\
 	nfsv3		\
 	noac		\
+	noacl		\
 	noconn		\
 	nocto		\
 	noint		\
 	nonlm		\
+	nordirplus	\
 	nqnfs		\
+	nqlooklease	\
 	pgthresh	\
 	posix		\
 	private		\
@@ -1268,9 +1334,11 @@ AMU_CHECK_MNT2_NFS_OPTS(	\
 	rsize		\
 	soft		\
 	spongy		\
+	strictlock	\
 	symttl		\
 	tcp		\
 	timeo		\
+	unshared	\
 	ver3		\
 	wsize		\
 	xlatecookie	\
@@ -1425,7 +1493,6 @@ AC_CONFIG_FILES(			\
 	scripts/automount2amd		\
 	scripts/ctl-amd			\
 	scripts/ctl-hlfsd		\
-	scripts/expn			\
 	scripts/fix-amd-map		\
 	scripts/fixrmtab		\
 	scripts/lostaltmail		\

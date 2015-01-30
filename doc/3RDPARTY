@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1192 2015/01/15 08:50:36 skrll Exp $
+#	$NetBSD: 3RDPARTY,v 1.1195 2015/01/24 19:24:08 tron Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -55,7 +55,7 @@ Please read src/sys/dev/acpi/acpica/README before any modification.
 
 Package:	am-utils [amd]
 Version:	6.2
-Current Vers:	6.2rc1
+Current Vers:	6.2
 Maintainer:	Erez Zadok <ezk@cs.columbia.edu>
 Archive Site:	ftp://ftp.am-utils.org/pub/am-utils/
 Home Page:	http://www.am-utils.org/
@@ -426,7 +426,7 @@ Before importing a new version of external/gpl3/gcc:
 
 Package:	gdb
 Version:	7.7.1
-Current Vers:	7.8.1
+Current Vers:	7.8.2
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
@@ -1115,8 +1115,8 @@ and more. Vern's ping is gone. We are too different from everyone else
 now to do a new import.
 
 Package:	Postfix
-Version:	2.11.1
-Current Vers:	2.11.1
+Version:	2.11.3
+Current Vers:	2.11.3
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
 Home Page:	http://www.postfix.org/

@@ -1,4 +1,4 @@
-#	$NetBSD: files,v 1.1124 2015/01/11 14:22:53 jmcneill Exp $
+#	$NetBSD: files,v 1.1126 2015/01/17 15:04:47 jmcneill Exp $
 #	@(#)files.newconf	7.5 (Berkeley) 5/10/93
 
 version 	20141030
@@ -51,6 +51,7 @@ defflag	opt_sosend_loan.h	SOSEND_NO_LOAN
 defflag	opt_route.h		RTCACHE_DEBUG RTFLUSH_DEBUG
 
 defflag				MULTIPROCESSOR
+defflag				NET_MPSAFE
 
 defflag	opt_config.h		INCLUDE_CONFIG_FILE INCLUDE_JUST_CONFIG
 
@@ -1096,6 +1097,10 @@ file	dev/ic/acpipmtimer.c	acpipmtimer
 
 device 	hpet
 file 	dev/ic/hpet.c		hpet			needs-flag
+
+# DesignWare timer
+device	dwctmr
+file	dev/ic/dwc_tmr.c	dwctmr
 
 # SMSC LAN9118 Family Ethernet Controller
 #

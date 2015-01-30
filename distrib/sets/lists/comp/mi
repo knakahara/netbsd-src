@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1938 2015/01/07 22:26:50 pooka Exp $
+#	$NetBSD: mi,v 1.1942 2015/01/20 17:29:58 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -6400,6 +6400,8 @@
 ./usr/share/man/cat3/estrlcat.0			comp-c-catman		.cat
 ./usr/share/man/cat3/estrlcpy.0			comp-c-catman		.cat
 ./usr/share/man/cat3/estrndup.0			comp-c-catman		.cat
+./usr/share/man/cat3/estrtoi.0			comp-c-catman		.cat
+./usr/share/man/cat3/estrtou.0			comp-c-catman		.cat
 ./usr/share/man/cat3/etext.0			comp-c-catman		.cat
 ./usr/share/man/cat3/ether_aton.0		comp-c-catman		.cat
 ./usr/share/man/cat3/ether_hostton.0		comp-c-catman		.cat
@@ -8299,6 +8301,7 @@
 ./usr/share/man/cat3/popcountl.0		comp-c-catman		.cat
 ./usr/share/man/cat3/popcountll.0		comp-c-catman		.cat
 ./usr/share/man/cat3/popen.0			comp-c-catman		.cat
+./usr/share/man/cat3/popenve.0			comp-c-catman		.cat
 ./usr/share/man/cat3/pos_form_cursor.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pos_menu_cursor.0		comp-c-catman		.cat
 ./usr/share/man/cat3/posix2time.0		comp-c-catman		.cat
@@ -9198,13 +9201,16 @@
 ./usr/share/man/cat3/strsvisx.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtod.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtof.0			comp-c-catman		.cat
+./usr/share/man/cat3/strtoi.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoimax.0		comp-c-catman		.cat
 ./usr/share/man/cat3/strtok.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtok_r.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtol.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtold.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoll.0			comp-c-catman		.cat
+./usr/share/man/cat3/strtonum.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoq.0			comp-c-catman		.cat
+./usr/share/man/cat3/strtou.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoul.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoull.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoumax.0		comp-c-catman		.cat
@@ -13269,6 +13275,8 @@
 ./usr/share/man/html3/estrlcat.html		comp-c-htmlman		html
 ./usr/share/man/html3/estrlcpy.html		comp-c-htmlman		html
 ./usr/share/man/html3/estrndup.html		comp-c-htmlman		html
+./usr/share/man/html3/estrtoi.html		comp-c-htmlman		html
+./usr/share/man/html3/estrtou.html		comp-c-htmlman		html
 ./usr/share/man/html3/etext.html		comp-c-htmlman		html
 ./usr/share/man/html3/ether_aton.html		comp-c-htmlman		html
 ./usr/share/man/html3/ether_hostton.html	comp-c-htmlman		html
@@ -15128,6 +15136,7 @@
 ./usr/share/man/html3/popcountl.html		comp-c-htmlman		html
 ./usr/share/man/html3/popcountll.html		comp-c-htmlman		html
 ./usr/share/man/html3/popen.html		comp-c-htmlman		html
+./usr/share/man/html3/popenve.html		comp-c-htmlman		html
 ./usr/share/man/html3/pos_form_cursor.html	comp-c-htmlman		html
 ./usr/share/man/html3/pos_menu_cursor.html	comp-c-htmlman		html
 ./usr/share/man/html3/posix2time.html		comp-c-htmlman		html
@@ -16003,13 +16012,16 @@
 ./usr/share/man/html3/strsvisx.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtod.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtof.html		comp-c-htmlman		html
+./usr/share/man/html3/strtoi.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoimax.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtok.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtok_r.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtol.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtold.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoll.html		comp-c-htmlman		html
+./usr/share/man/html3/strtonum.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoq.html		comp-c-htmlman		html
+./usr/share/man/html3/strtou.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoul.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoull.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoumax.html		comp-c-htmlman		html
@@ -20050,6 +20062,8 @@
 ./usr/share/man/man3/estrlcat.3			comp-c-man		.man
 ./usr/share/man/man3/estrlcpy.3			comp-c-man		.man
 ./usr/share/man/man3/estrndup.3			comp-c-man		.man
+./usr/share/man/man3/estrtoi.3			comp-c-man		.man
+./usr/share/man/man3/estrtou.3			comp-c-man		.man
 ./usr/share/man/man3/etext.3			comp-c-man		.man
 ./usr/share/man/man3/ether_aton.3		comp-c-man		.man
 ./usr/share/man/man3/ether_hostton.3		comp-c-man		.man
@@ -21949,6 +21963,7 @@
 ./usr/share/man/man3/popcountl.3		comp-c-man		.man
 ./usr/share/man/man3/popcountll.3		comp-c-man		.man
 ./usr/share/man/man3/popen.3			comp-c-man		.man
+./usr/share/man/man3/popenve.3			comp-c-man		.man
 ./usr/share/man/man3/pos_form_cursor.3		comp-c-man		.man
 ./usr/share/man/man3/pos_menu_cursor.3		comp-c-man		.man
 ./usr/share/man/man3/posix2time.3		comp-c-man		.man
@@ -22844,13 +22859,16 @@
 ./usr/share/man/man3/strsvisx.3			comp-c-man		.man
 ./usr/share/man/man3/strtod.3			comp-c-man		.man
 ./usr/share/man/man3/strtof.3			comp-c-man		.man
+./usr/share/man/man3/strtoi.3			comp-c-man		.man
 ./usr/share/man/man3/strtoimax.3		comp-c-man		.man
 ./usr/share/man/man3/strtok.3			comp-c-man		.man
 ./usr/share/man/man3/strtok_r.3			comp-c-man		.man
 ./usr/share/man/man3/strtol.3			comp-c-man		.man
 ./usr/share/man/man3/strtold.3			comp-c-man		.man
 ./usr/share/man/man3/strtoll.3			comp-c-man		.man
+./usr/share/man/man3/strtonum.3			comp-c-man		.man
 ./usr/share/man/man3/strtoq.3			comp-c-man		.man
+./usr/share/man/man3/strtou.3			comp-c-man		.man
 ./usr/share/man/man3/strtoul.3			comp-c-man		.man
 ./usr/share/man/man3/strtoull.3			comp-c-man		.man
 ./usr/share/man/man3/strtoumax.3		comp-c-man		.man
