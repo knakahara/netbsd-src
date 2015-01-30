@@ -228,7 +228,7 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
 	char intrstr_buf[INTRID_LEN + 1];
 	pci_intr_handle_t *handle;
 
-	handle = kmem_zalloc(sizeof(handle), KM_SLEEP);
+	handle = kmem_zalloc(sizeof(*handle), KM_SLEEP);
 	if (handle == NULL) {
 		aprint_normal("cannot allocate pci_intr_handle_t\n");
 		return 1;
@@ -236,21 +236,25 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
 
 	if (pci_intr_map(pa, handle) != 0) {
 		aprint_normal("cannot set up pci_intr_handle_t\n");
-		return 1;
+		goto error;
 	}
 
 	intrstr = pci_intr_string(pa->pa_pc, *handle,
 	    intrstr_buf, sizeof(intrstr_buf));
 	mutex_enter(&cpu_lock);
 	isp = intr_allocate_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
 	if (isp == NULL) {
 		aprint_normal("can't allocate io_intersource\n");
-		return 1;
+		goto error;
 	}
-	mutex_exit(&cpu_lock);
 
 	*pih = handle;
 	return 0;
+
+ error:
+	kmem_free(handle, sizeof(*handle));
+	return 1;
 }
 
 void
