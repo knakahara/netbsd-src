@@ -30,6 +30,8 @@
 __RCSID("$NetBSD$");
 
 #include <sys/ioctl.h>
+#include <sys/param.h>
+#include <sys/sysctl.h>
 #include <sys/intrio.h>
 
 #include <err.h>
@@ -110,43 +112,22 @@ usage(void)
 static void
 intr_list(int argc, char **argv)
 {
-	char *buf, *line, *cur, *end;
 	int error;
+	size_t buf_size;
+	char *list;
 
-	buf = malloc(INTR_LIST_BUFSIZE);
-	if (buf == NULL)
-		err(EXIT_FAILURE, "malloc(buf)");
-
-	error = ioctl(fd, IOC_INTR_LIST_HEADER, buf);
+	error = sysctlbyname("kern.intr.list", NULL, &buf_size, NULL, 0);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_LIST_HEADER");
-	printf("%s", buf);
+		err(EXIT_FAILURE, "sysctl kern.intr.list listsize");
 
-	memset(buf, '\0', INTR_LIST_BUFSIZE);
-	error = ioctl(fd, IOC_INTR_INTRIDS, buf);
+	list = malloc(buf_size);
+
+	error = sysctlbyname("kern.intr.list", list, &buf_size, NULL, 0);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_INTRIDS");
+		err(EXIT_FAILURE, "sysctl kern.intr.list list");
 
-	line = malloc(INTR_LIST_BUFSIZE);
-	if (line == NULL)
-		err(EXIT_FAILURE, "malloc(line)");
-
-	cur = buf;
-	while ((end = strchr(cur, '\n')) != NULL) {
-		*(end++) = '\0';
-
-		memset(line, '\0', INTR_LIST_BUFSIZE);
-		strncpy(line, cur, INTRID_LEN);
-		error = ioctl(fd, IOC_INTR_LIST_DATA, line);
-		if (error < 0)
-			err(EXIT_FAILURE, "IOC_INTR_LIST_DATA");
-
-		printf("%s", line);
-		cur = end;
-	}
-
-	free(line);
-	free(buf);
+	printf("%s", list);
+	free(list);
 }
 
 static void
@@ -155,6 +136,7 @@ intr_affinity(int argc, char **argv)
 	struct intr_set iset;
 	cpuset_t *cpuset;
 	unsigned long index;
+	size_t is_size;
 	int ch;
 	int error;
 
@@ -190,10 +172,13 @@ intr_affinity(int argc, char **argv)
 	cpuset_set(index, cpuset);
 	iset.cpuset = cpuset;
 	iset.cpuset_size = cpuset_size(cpuset);
-	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
+	is_size = sizeof(iset);
+
+	error = sysctlbyname("kern.intr.affinity", NULL, NULL, &iset, is_size);
+
 	cpuset_destroy(cpuset);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_AFFINITY");
+		err(EXIT_FAILURE, "sysctl kern.intr.affinity");
 }
 
 static void

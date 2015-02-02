@@ -36,14 +36,18 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/cpu.h>
 #include <sys/intr.h>
 #include <sys/kcpuset.h>
+#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/xcall.h>
+#include <sys/sysctl.h>
 
 #include <sys/conf.h>
 #include <sys/intrio.h>
 #include <sys/kauth.h>
 
 #include <machine/limits.h>
+
+static struct intr_set kintr_set = { "\0", NULL, 0 };
 
 void	intrctlattach(int);
 
@@ -429,4 +433,276 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 	}
 
 	return error;
+}
+
+#define INTR_LIST_MIN_SIZE PAGE_SIZE
+
+static int
+intrctl_list(char *data, int length)
+{
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+	void *ich;
+	kcpuset_t *assigned, *avail;
+	char *buf, *cur, *end;
+	char **ids;
+	uint64_t intr_count;
+	u_int cpu_idx;
+	int nids, intr_idx, ret;
+	int bufsize = 0;
+	bool sizeonly;
+
+	if (data == NULL) {
+		buf = kmem_zalloc(INTR_LIST_MIN_SIZE, KM_SLEEP);
+		if (buf == NULL)
+			return ENOMEM;
+		length = INTR_LIST_MIN_SIZE;
+		sizeonly = true;
+	} else {
+		if (length < 0)
+			return EINVAL;
+		buf = data;
+		sizeonly = false;
+	}
+
+	cur = buf;
+	end = buf + length;
+	ret = snprintf(cur, end - cur, " interrupt name");
+	bufsize += ret;
+	if (!sizeonly) {
+		if (cur + ret >= end)
+			return -ENOMEM;
+
+		cur += ret;
+	}
+
+	kcpuset_create(&avail, true);
+	intr_get_available(avail);
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		char intr_enable;
+		if (kcpuset_isset(avail, cpu_index(ci)))
+			intr_enable = '+';
+		else
+			intr_enable = '-';
+
+		ret = snprintf(cur, end - cur, "\tCPU#%02u(%c)", cpu_index(ci),
+		    intr_enable);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		bufsize += ret;
+		if (!sizeonly) {
+			if (cur + ret >= end) {
+				ret = -ENOMEM;
+				goto out;
+			}
+			cur += ret;
+		}
+	}
+	bufsize += 1;
+	if (!sizeonly)
+		*(cur++) = '\n';
+
+	mutex_enter(&cpu_lock);
+	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
+	if (ret != 0) {
+		printf("intr_construct_intrids() failed\n");
+		ret = -EINVAL;
+		goto out1;
+	}
+
+	kcpuset_create(&assigned, true);
+	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
+		ret = snprintf(cur, end - cur, " %s", ids[intr_idx]);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto out2;
+		}
+		bufsize += ret;
+		if (!sizeonly) {
+			if (cur + ret >= end) {
+				ret = -ENOMEM;
+				goto out2;
+			}
+			cur += ret;
+		}
+
+		ich = intr_get_handler(ids[intr_idx]);
+		intr_get_assigned(ich, assigned);
+		for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
+			intr_count = intr_get_count(ich, cpu_idx);
+			if (kcpuset_isset(assigned, cpu_idx))
+				ret = snprintf(cur, end - cur, "\t%8" PRIu64 "*", intr_count);
+			else
+				ret = snprintf(cur, end - cur, "\t%8" PRIu64, intr_count);
+			if (ret < 0) {
+				ret = -ENOMEM;
+				goto out2;
+			}
+			bufsize += ret;
+			if (!sizeonly) {
+				if (cur + ret >= end) {
+					ret = -ENOMEM;
+					goto out2;
+				}
+				cur += ret;
+			}
+		}
+
+		ret = snprintf(cur, end - cur, "\t%s", intr_get_devname(ich));
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto out2;
+		}
+		bufsize += ret;
+		if (!sizeonly) {
+			if (cur + ret >= end) {
+				ret = -ENOMEM;
+				goto out2;
+			}
+
+			cur += ret;
+		}
+
+		bufsize += 1;
+		*(cur++) = '\n';
+	}
+
+	bufsize += 2; /* '\n' + '\0' */
+	if (!sizeonly) {
+		*(cur++) = '\n';
+		*cur = '\0';
+	}
+
+	ret = bufsize;
+
+ out2:
+	kcpuset_destroy(assigned);
+	intr_destruct_intrids(ids, nids);
+ out1:
+	mutex_exit(&cpu_lock);
+ out:
+	kcpuset_destroy(avail);
+	if (sizeonly) {
+		kmem_free(buf, INTR_LIST_MIN_SIZE);
+	}
+	return ret;
+}
+
+static int
+intr_list_sysctl(SYSCTLFN_ARGS)
+{
+	int listsize;
+	int ret;
+	char *buf;
+
+	if (oldp == NULL) {
+		listsize = intrctl_list(NULL, 0);
+		if (listsize < 0)
+			return EINVAL;
+
+		if (oldlenp == NULL)
+			return EINVAL;
+
+		*oldlenp = listsize;
+		return 0;
+	}
+
+	if (*oldlenp == 0)
+		return EINVAL;
+
+	buf = kmem_zalloc(*oldlenp, KM_SLEEP);
+	if (buf == NULL)
+		return ENOMEM;
+
+	ret = intrctl_list(buf, *oldlenp);
+	if (ret < 0)
+		return -ret;
+
+	return copyoutstr(buf, oldp, *oldlenp, NULL);
+}
+
+static int
+intr_set_affinity_sysctl(SYSCTLFN_ARGS)
+{
+	struct sysctlnode node;
+	int error;
+	struct intr_set *iset;
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
+	void *ich;
+
+	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
+	    KAUTH_REQ_SYSTEM_INTR_AFFINITY, NULL, NULL, NULL);
+	if (error)
+		return EPERM;
+
+	node = *rnode;
+	iset = (struct intr_set *)node.sysctl_data;
+
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error != 0 || newp == NULL)
+		return error;
+
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+
+	mutex_enter(&cpu_lock);
+	ich = intr_get_handler(iset->intrid);
+	if (ich == NULL) {
+		mutex_exit(&cpu_lock);
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+	error = intr_distribute(ich, kcpuset, NULL);
+	mutex_exit(&cpu_lock);
+
+	kcpuset_destroy(kcpuset);
+	return error;
+}
+
+SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
+{
+	const struct sysctlnode *node = NULL;
+	int err;
+
+	err = sysctl_createv(clog, 0, NULL, &node,
+			     CTLFLAG_PERMANENT, CTLTYPE_NODE, "intr",
+			     SYSCTL_DESCR("Interrupt options"),
+			     NULL, 0, NULL, 0,
+			     CTL_KERN, CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.intr) failed, err = %d\n", err);
+		return;
+	}
+
+	err = sysctl_createv(clog, 0, &node, NULL,
+			     CTLFLAG_PERMANENT,
+			     CTLTYPE_STRUCT, "list",
+			     SYSCTL_DESCR("intrctl list"),
+			     intr_list_sysctl, 0, NULL, 0,
+			     CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.intr.bufsize) failed, err = %d\n", err);
+		return;
+	}
+
+	err = sysctl_createv(clog, 0, &node, NULL,
+			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			     CTLTYPE_STRUCT, "affinity", SYSCTL_DESCR("set affinity"),
+			     intr_set_affinity_sysctl, 0, &kintr_set, sizeof(kintr_set),
+			     CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.intr.affinity) failed, err = %d\n", err);
+		return;
+	}
 }
