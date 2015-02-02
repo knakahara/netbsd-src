@@ -29,7 +29,8 @@
 #include <sys/cdefs.h>
 __RCSID("$NetBSD$");
 
-#include <sys/ioctl.h>
+#include <sys/param.h>
+#include <sys/sysctl.h>
 #include <sys/intrio.h>
 
 #include <err.h>
@@ -45,7 +46,6 @@ __RCSID("$NetBSD$");
 
 __dead static void	usage(void);
 
-static int	fd;
 int		verbose;
 
 static void	intr_list(int, char **);
@@ -82,14 +82,10 @@ main(int argc, char **argv)
 			break;
 		}
 	}
-
 	if (ct->label == NULL)
 		errx(EXIT_FAILURE, "unknown command ``%s''", cmdname);
 
-	if ((fd = open(_PATH_INTRCTL, O_RDWR)) < 0)
-		err(EXIT_FAILURE, _PATH_INTRCTL);
 	(*ct->func)(argc, argv);
-	close(fd);
 	exit(EXIT_SUCCESS);
 	/* NOTREACHED */
 }
@@ -110,19 +106,26 @@ usage(void)
 static void
 intr_list(int argc, char **argv)
 {
-	char *buf;
 	int error;
+	size_t buf_size;
+	char *list;
 
-	buf = malloc(INTR_LIST_BUFSIZE);
-	if (buf == NULL)
-		err(EXIT_FAILURE, "malloc");
-
-	error = ioctl(fd, IOC_INTR_LIST, buf);
+	error = sysctlbyname("kern.intr.list", NULL, &buf_size, NULL, 0);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_LIST");
+		err(EXIT_FAILURE, "sysctl kern.intr.list listsize");
 
-	printf("%s", buf);
-	free(buf);
+	list = malloc(buf_size);
+	if (list == NULL)
+		err(EXIT_FAILURE, "malloc(buf_size)");
+
+	error = sysctlbyname("kern.intr.list", list, &buf_size, NULL, 0);
+	if (error < 0) {
+		free(list);
+		err(EXIT_FAILURE, "sysctl kern.intr.list list");
+	}
+
+	printf("%s", list);
+	free(list);
 }
 
 static void
@@ -166,10 +169,10 @@ intr_affinity(int argc, char **argv)
 	cpuset_set(index, cpuset);
 	iset.cpuset = cpuset;
 	iset.cpuset_size = cpuset_size(cpuset);
-	error = ioctl(fd, IOC_INTR_AFFINITY, &iset);
+	error = sysctlbyname("kern.intr.affinity", NULL, NULL, &iset, sizeof(iset));
 	cpuset_destroy(cpuset);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_AFFINITY");
+		err(EXIT_FAILURE, "sysctl kern.intr.affinity");
 }
 
 static void
@@ -207,10 +210,10 @@ intr_intr(int argc, char **argv)
 	cpuset_set(index, cpuset);
 	iset.cpuset = cpuset;
 	iset.cpuset_size = cpuset_size(cpuset);
-	error = ioctl(fd, IOC_INTR_INTR, &iset);
+	error = sysctlbyname("kern.intr.intr", NULL, NULL, &iset, sizeof(iset));
 	cpuset_destroy(cpuset);
 	if (error < 0)
-		err(EXIT_FAILURE, "IOC_INTR_INTR");
+		err(EXIT_FAILURE, "sysctl kern.intr.intr");
 }
 
 static void
@@ -248,9 +251,8 @@ intr_nointr(int argc, char **argv)
 	cpuset_set(index, cpuset);
 	iset.cpuset = cpuset;
 	iset.cpuset_size = cpuset_size(cpuset);
-	error = ioctl(fd, IOC_INTR_NOINTR, &iset);
+	error = sysctlbyname("kern.intr.nointr", NULL, NULL, &iset, sizeof(iset));
 	cpuset_destroy(cpuset);
-	if (error < 0) {
-		err(EXIT_FAILURE, "IOC_INTR_NOINTR");
-	}
+	if (error < 0)
+		err(EXIT_FAILURE, "sysctl kern.intr.nointr");
 }

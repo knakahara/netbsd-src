@@ -36,8 +36,10 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/cpu.h>
 #include <sys/intr.h>
 #include <sys/kcpuset.h>
+#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/xcall.h>
+#include <sys/sysctl.h>
 
 #include <sys/conf.h>
 #include <sys/intrio.h>
@@ -45,150 +47,13 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <machine/limits.h>
 
-void	intrctlattach(int);
+#ifdef INTR_DEBUG
+#define DPRINTF(msg) printf msg
+#else
+#define DPRINTF(msg)
+#endif
 
-dev_type_ioctl(intrctl_ioctl);
-
-const struct cdevsw intrctl_cdevsw = {
-	.d_open = nullopen,
-	.d_close = nullclose,
-	.d_read = nullread,
-	.d_write = nullwrite,
-	.d_ioctl = intrctl_ioctl,
-	.d_stop = nullstop,
-	.d_tty = notty,
-	.d_poll = nopoll,
-	.d_mmap = nommap,
-	.d_kqfilter = nokqfilter,
-	.d_discard = nodiscard,
-	.d_flag = D_OTHER | D_MPSAFE
-};
-
-void
-intrctlattach(int dummy)
-{
-}
-
-static int
-intrctl_list(void *data, int length)
-{
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-	kcpuset_t *avail, *assigned;
-	void *ich;
-	char *buf, *buf_end;
-	char **ids;
-	uint64_t intr_count;
-	u_int cpu_idx;
-	int intr_idx, nids;
-	int ret;
-
-	buf = data;
-	if (buf == NULL)
-		return EINVAL;
-
-	if (length < 0)
-		return EINVAL;
-
-	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
-	if (ret != 0)
-		return ret;
-
-	kcpuset_create(&avail, true);
-	kcpuset_create(&assigned, true);
-
-	buf_end = buf + length;
-
-#define FILL_BUF(cur, end, fmt, ...) do{				\
-		ret = snprintf(cur, end - cur, fmt, ## __VA_ARGS__);	\
-		if (ret < 0) {						\
-			goto out;					\
-		}							\
-		cur += ret;						\
-		if (cur > end) {					\
-			ret = ENOBUFS;					\
-			goto out;					\
-		}							\
-	}while(0)
-
-	FILL_BUF(buf, buf_end, " interrupt name");
-	intr_get_available(avail);
-	for (CPU_INFO_FOREACH(cii, ci)) {
-		char intr_enable;
-		if (kcpuset_isset(avail, cpu_index(ci)))
-			intr_enable = '+';
-		else
-			intr_enable = '-';
-
-		FILL_BUF(buf, buf_end, "\tCPU#%02u(%c)", cpu_index(ci),
-		    intr_enable);
-	}
-	*(buf++) = '\n';
-
-	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
-		FILL_BUF(buf, buf_end, " %s", ids[intr_idx]);
-
-		mutex_enter(&cpu_lock);
-		ich = intr_get_handler(ids[intr_idx]);
-		KASSERT(ich != NULL);
-		mutex_exit(&cpu_lock);
-
-		intr_get_assigned(ich, assigned);
-		for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
-			intr_count = intr_get_count(ich, cpu_idx);
-			if (kcpuset_isset(assigned, cpu_idx)) {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64 "*", intr_count);
-			} else {
-				FILL_BUF(buf, buf_end, "\t%8" PRIu64, intr_count);
-			}
-
-		}
-		FILL_BUF(buf, buf_end, "\t%s", intr_get_devname(ich));
-		*(buf++) = '\n';
-	}
-
-	*(buf++) = '\0';
-	ret = 0;
-out:
-	kcpuset_destroy(assigned);
-	kcpuset_destroy(avail);
-	intr_destruct_intrids(ids, nids);
-	return ret;
-
-#undef FILL_BUF
-}
-
-static int
-intrctl_affinity(void *data)
-{
-	cpuset_t *ucpuset;
-	kcpuset_t *kcpuset;
-	struct intr_set *iset;
-	void *ich;
-	int error;
-
-	iset = data;
-	ucpuset = iset->cpuset;
-	kcpuset_create(&kcpuset, true);
-	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
-	if (kcpuset_iszero(kcpuset)) {
-		kcpuset_destroy(kcpuset);
-		return EINVAL;
-	}
-
-	mutex_enter(&cpu_lock);
-	ich = intr_get_handler(iset->intrid);
-	if (ich == NULL) {
-		mutex_exit(&cpu_lock);
-		kcpuset_destroy(kcpuset);
-		return EINVAL;
-	}
-	error = intr_distribute(ich, kcpuset, NULL);
-	mutex_exit(&cpu_lock);
-
-	kcpuset_destroy(kcpuset);
-	return error;
-}
+static struct intr_set kintr_set = { "\0", NULL, 0 };
 
 #define UNSET_NOINTR_SHIELD	0
 #define SET_NOINTR_SHIELD	1
@@ -213,6 +78,9 @@ intr_shield_xcall(void *arg1, void *arg2)
 	splx(s);
 }
 
+/*
+ * Change SPCF_NOINTR flag of schedstate_percpu->spc_flags
+ */
 static int
 intr_shield(u_int cpu_idx, int shield)
 {
@@ -245,6 +113,11 @@ intr_shield(u_int cpu_idx, int shield)
 	return 0;
 }
 
+/*
+ * Move all assigned interrupts from "cpu_idx" to the other cpu as possible.
+ * The destination cpu is lowest cpuid of available cpus.
+ * If there are no available cpus, give up to move interrupts.
+ */
 static int
 intr_avert_intr(u_int cpu_idx)
 {
@@ -269,7 +142,7 @@ intr_avert_intr(u_int cpu_idx)
 	intr_get_available(cpuset);
 	kcpuset_clear(cpuset, cpu_idx);
 	if (kcpuset_iszero(cpuset)) {
-		printf("no available cpu\n");
+		DPRINTF(("%s: no available cpu\n", __func__));
 		return ENOENT;
 	}
 
@@ -289,41 +162,277 @@ intr_avert_intr(u_int cpu_idx)
 	return error;
 }
 
+/*
+ * Set intrctl list to "data", and return list bytes (include '\0').
+ * If error occured, return <0.
+ * If "data" == NULL, simply return list bytes.
+ */
+#define INTR_LIST_LINE 1024
 static int
-intrctl_intr(void *data)
+intr_list(char *data, int length)
 {
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
+	void *ich;
+	kcpuset_t *assigned, *avail;
+	char *buf, *cur, *end;
+	char **ids;
+	uint64_t intr_count;
+	u_int cpu_idx;
+	int nids, intr_idx, ret;
+	int bufsize = 0;
+	bool sizeonly;
+
+	if (data == NULL) {
+		buf = kmem_zalloc(INTR_LIST_LINE, KM_SLEEP);
+		if (buf == NULL)
+			return -ENOMEM;
+		length = INTR_LIST_LINE;
+		sizeonly = true;
+	} else {
+		if (length <= 0)
+			return -EINVAL;
+		buf = data;
+		sizeonly = false;
+	}
+
+	cur = buf;
+	end = buf + length;
+
+#define FILL_BUF(_label, _fmt, ...) do{				\
+		ret = snprintf(cur, end - cur, _fmt, ## __VA_ARGS__);    \
+		if (ret < 0) {                                          \
+			ret = -EIO;					\
+			goto _label;					\
+		}                                                       \
+		bufsize += ret;						\
+		if (!sizeonly) {					\
+			if (cur + ret >= end) {				\
+				ret =  -ENOBUFS;			\
+				goto _label;				\
+			}						\
+			cur += ret;					\
+		}							\
+	}while(0)
+
+
+	FILL_BUF(out0, " interrupt name");
+
+	kcpuset_create(&avail, true);
+	intr_get_available(avail);
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		char intr_enable;
+		if (kcpuset_isset(avail, cpu_index(ci)))
+			intr_enable = '+';
+		else
+			intr_enable = '-';
+
+		FILL_BUF(out1, "\tCPU#%02u(%c)", cpu_index(ci), intr_enable);
+	}
+	FILL_BUF(out1, "\n");
+
+	mutex_enter(&cpu_lock);
+	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
+	if (ret != 0) {
+		DPRINTF(("%s: intr_construct_intrids() failed\n", __func__));
+		ret = -ret;
+		goto out2;
+	}
+
+	kcpuset_create(&assigned, true);
+	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
+		FILL_BUF(out3, " %s", ids[intr_idx]);
+
+		ich = intr_get_handler(ids[intr_idx]);
+		intr_get_assigned(ich, assigned);
+		for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
+			intr_count = intr_get_count(ich, cpu_idx);
+			if (kcpuset_isset(assigned, cpu_idx))
+				FILL_BUF(out3, "\t%8" PRIu64 "*", intr_count);
+			else
+				FILL_BUF(out3, "\t%8" PRIu64, intr_count);
+		}
+
+		FILL_BUF(out3, "\t%s\n", intr_get_devname(ich));
+	}
+
+	ret = bufsize + 1; /* add '\0' */
+
+ out3:
+	kcpuset_destroy(assigned);
+	intr_destruct_intrids(ids, nids);
+ out2:
+	mutex_exit(&cpu_lock);
+ out1:
+	kcpuset_destroy(avail);
+	if (sizeonly) {
+		kmem_free(buf, INTR_LIST_LINE);
+	}
+ out0:
+	return ret;
+
+#undef FULL_BUF
+}
+
+/*
+ * "intrctl list" entry
+ */
+static int
+intr_list_sysctl(SYSCTLFN_ARGS)
+{
+	int listsize;
+	int ret;
+	char *buf;
+
+	if (oldp == NULL) {
+		listsize = intr_list(NULL, 0);
+		if (listsize < 0)
+			return EINVAL;
+
+		if (oldlenp == NULL)
+			return EINVAL;
+
+		*oldlenp = listsize;
+		return 0;
+	}
+
+	if (*oldlenp == 0)
+		return EINVAL;
+
+	buf = kmem_zalloc(*oldlenp, KM_SLEEP);
+	if (buf == NULL)
+		return ENOMEM;
+
+	ret = intr_list(buf, *oldlenp);
+	if (ret < 0)
+		return -ret;
+
+	return copyoutstr(buf, oldp, *oldlenp, NULL);
+}
+
+/*
+ * "intrctl affinity" entry
+ */
+static int
+intr_set_affinity_sysctl(SYSCTLFN_ARGS)
+{
+	struct sysctlnode node;
+	int error;
+	struct intr_set *iset;
 	cpuset_t *ucpuset;
 	kcpuset_t *kcpuset;
-	struct intr_set *iset;
-	u_int cpu_idx;
-	int error;
+	void *ich;
 
-	iset = data;
+	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
+	    KAUTH_REQ_SYSTEM_INTR_AFFINITY, NULL, NULL, NULL);
+	if (error)
+		return EPERM;
+
+	node = *rnode;
+	iset = (struct intr_set *)node.sysctl_data;
+
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error != 0 || newp == NULL)
+		return error;
+
 	ucpuset = iset->cpuset;
 	kcpuset_create(&kcpuset, true);
 	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+
+	mutex_enter(&cpu_lock);
+	ich = intr_get_handler(iset->intrid);
+	if (ich == NULL) {
+		mutex_exit(&cpu_lock);
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+	error = intr_distribute(ich, kcpuset, NULL);
+	mutex_exit(&cpu_lock);
+
+	kcpuset_destroy(kcpuset);
+	return error;
+}
+
+/*
+ * "intrctl intr" entry
+ */
+static int
+intr_intr_sysctl(SYSCTLFN_ARGS)
+{
+	struct sysctlnode node;
+	int error;
+	u_int cpu_idx;
+	struct intr_set *iset;
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
+
+	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
+	    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
+	if (error)
+		return EPERM;
+
+	node = *rnode;
+	iset = (struct intr_set *)node.sysctl_data;
+
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error != 0 || newp == NULL)
+		return error;
+
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+
 	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
 
 	mutex_enter(&cpu_lock);
 	error = intr_shield(cpu_idx, UNSET_NOINTR_SHIELD);
 	mutex_exit(&cpu_lock);
 
+	kcpuset_destroy(kcpuset);
 	return error;
 }
 
+/*
+ * "intrctl nointr" entry
+ */
 static int
-intrctl_nointr(void *data)
+intr_nointr_sysctl(SYSCTLFN_ARGS)
 {
+	struct sysctlnode node;
+	int error;
+	u_int cpu_idx;
+	struct intr_set *iset;
 	cpuset_t *ucpuset;
 	kcpuset_t *kcpuset;
-	struct intr_set *iset;
-	u_int cpu_idx;
-	int error;
 
-	iset = data;
+	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
+	    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
+	if (error)
+		return EPERM;
+
+	node = *rnode;
+	iset = (struct intr_set *)node.sysctl_data;
+
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error != 0 || newp == NULL)
+		return error;
+
 	ucpuset = iset->cpuset;
 	kcpuset_create(&kcpuset, true);
 	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+
 	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
 
 	mutex_enter(&cpu_lock);
@@ -335,43 +444,42 @@ intrctl_nointr(void *data)
 	error = intr_avert_intr(cpu_idx);
 	mutex_exit(&cpu_lock);
 
+	kcpuset_destroy(kcpuset);
 	return error;
 }
 
-int
-intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
+
+SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 {
-	int error;
+	const struct sysctlnode *node = NULL;
 
-	switch (cmd) {
-	case IOC_INTR_LIST:
-		error = intrctl_list(data, INTR_LIST_BUFSIZE);
-		break;
-	case IOC_INTR_AFFINITY:
-		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
-		    KAUTH_REQ_SYSTEM_INTR_AFFINITY, NULL, NULL, NULL);
-		if (error)
-			break;
-		error = intrctl_affinity(data);
-		break;
-	case IOC_INTR_INTR:
-		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
-		    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
-		if (error)
-			break;
-		error = intrctl_intr(data);
-		break;
-	case IOC_INTR_NOINTR:
-		error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
-		    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
-		if (error)
-			break;
-		error = intrctl_nointr(data);
-		break;
-	default:
-		error = ENOTTY;
-		break;
-	}
+	sysctl_createv(clog, 0, NULL, &node,
+		       CTLFLAG_PERMANENT, CTLTYPE_NODE,
+		       "intr", SYSCTL_DESCR("Interrupt options"),
+		       NULL, 0, NULL, 0,
+		       CTL_KERN, CTL_CREATE, CTL_EOL);
 
-	return error;
+	sysctl_createv(clog, 0, &node, NULL,
+		       CTLFLAG_PERMANENT, CTLTYPE_STRUCT,
+ 		       "list", SYSCTL_DESCR("intrctl list"),
+		       intr_list_sysctl, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, &node, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+		       "affinity", SYSCTL_DESCR("set affinity"),
+		       intr_set_affinity_sysctl, 0, &kintr_set, sizeof(kintr_set),
+		       CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, &node, NULL,
+ 		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+ 		       "intr", SYSCTL_DESCR("set intr"),
+		       intr_intr_sysctl, 0, &kintr_set, sizeof(kintr_set),
+		       CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, &node, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+		       "nointr", SYSCTL_DESCR("set nointr"),
+		       intr_nointr_sysctl, 0, &kintr_set, sizeof(kintr_set),
+		       CTL_CREATE, CTL_EOL);
 }
