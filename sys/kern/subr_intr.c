@@ -452,57 +452,34 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 {
 	const struct sysctlnode *node = NULL;
-	int error;
 
-	error = sysctl_createv(clog, 0, NULL, &node,
-			     CTLFLAG_PERMANENT, CTLTYPE_NODE, "intr",
-			     SYSCTL_DESCR("Interrupt options"),
-			     NULL, 0, NULL, 0,
-			     CTL_KERN, CTL_CREATE, CTL_EOL);
-	if (error) {
-		DPRINTF(("kern: sysctl_createv "
-			"(kern.intr) failed, err = %d\n", error));
-		return;
-	}
+	sysctl_createv(clog, 0, NULL, &node,
+		       CTLFLAG_PERMANENT, CTLTYPE_NODE,
+		       "intr", SYSCTL_DESCR("Interrupt options"),
+		       NULL, 0, NULL, 0,
+		       CTL_KERN, CTL_CREATE, CTL_EOL);
 
-	error = sysctl_createv(clog, 0, &node, NULL,
-			     CTLFLAG_PERMANENT,
-			     CTLTYPE_STRUCT, "list",
-			     SYSCTL_DESCR("intrctl list"),
-			     intr_list_sysctl, 0, NULL, 0,
-			     CTL_CREATE, CTL_EOL);
-	if (error) {
-		DPRINTF(("kern: sysctl_createv "
-			"(kern.intr.list) failed, err = %d\n", error));
-	}
+	sysctl_createv(clog, 0, &node, NULL,
+		       CTLFLAG_PERMANENT, CTLTYPE_STRUCT,
+ 		       "list", SYSCTL_DESCR("intrctl list"),
+		       intr_list_sysctl, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
 
-	error = sysctl_createv(clog, 0, &node, NULL,
-			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
-			     CTLTYPE_STRUCT, "affinity", SYSCTL_DESCR("set affinity"),
-			     intr_set_affinity_sysctl, 0, &kintr_set, sizeof(kintr_set),
-			     CTL_CREATE, CTL_EOL);
-	if (error) {
-		DPRINTF(("kern: sysctl_createv "
-			"(kern.intr.affinity) failed, err = %d\n", error));
-	}
+	sysctl_createv(clog, 0, &node, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+		       "affinity", SYSCTL_DESCR("set affinity"),
+		       intr_set_affinity_sysctl, 0, &kintr_set, sizeof(kintr_set),
+		       CTL_CREATE, CTL_EOL);
 
-	error = sysctl_createv(clog, 0, &node, NULL,
-			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
-			     CTLTYPE_STRUCT, "intr", SYSCTL_DESCR("set intr"),
-			     intr_intr_sysctl, 0, &kintr_set, sizeof(kintr_set),
-			     CTL_CREATE, CTL_EOL);
-	if (error) {
-		DPRINTF(("kern: sysctl_createv "
-			"(kern.intr.intr) failed, err = %d\n", error));
-	}
+	sysctl_createv(clog, 0, &node, NULL,
+ 		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+ 		       "intr", SYSCTL_DESCR("set intr"),
+		       intr_intr_sysctl, 0, &kintr_set, sizeof(kintr_set),
+		       CTL_CREATE, CTL_EOL);
 
-	error = sysctl_createv(clog, 0, &node, NULL,
-			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
-			     CTLTYPE_STRUCT, "nointr", SYSCTL_DESCR("set nointr"),
-			     intr_nointr_sysctl, 0, &kintr_set, sizeof(kintr_set),
-			     CTL_CREATE, CTL_EOL);
-	if (error) {
-		DPRINTF(("kern: sysctl_createv "
-			"(kern.intr.nointr) failed, err = %d\n", error));
-	}
+	sysctl_createv(clog, 0, &node, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+		       "nointr", SYSCTL_DESCR("set nointr"),
+		       intr_nointr_sysctl, 0, &kintr_set, sizeof(kintr_set),
+		       CTL_CREATE, CTL_EOL);
 }
