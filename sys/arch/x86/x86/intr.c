@@ -497,12 +497,12 @@ intr_allocate_io_intrsource(const char *intrid)
 	if (intrid == NULL)
 		return NULL;
 
-	isp = kmem_zalloc(sizeof(*isp), KM_NOSLEEP);
+	isp = kmem_zalloc(sizeof(*isp), KM_SLEEP);
 	if (isp == NULL) {
 		return NULL;
 	}
 
-	pep = kmem_zalloc(sizeof(*pep) * ncpuonline, KM_NOSLEEP);
+	pep = kmem_zalloc(sizeof(*pep) * ncpuonline, KM_SLEEP);
 	if (pep == NULL) {
 		kmem_free(isp, sizeof(*isp));
 		return NULL;
@@ -2026,7 +2026,7 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		if (!intr_is_affinity_intrsource(isp, cpuset))
 			continue;
 
-		ids[i] = kmem_zalloc(INTRID_LEN + 1, KM_NOSLEEP);
+		ids[i] = kmem_zalloc(INTRID_LEN + 1, KM_SLEEP);
 		if (ids[i] == NULL) {
 			int j;
 			for (j = i - 1; j >= 0; i--) {
