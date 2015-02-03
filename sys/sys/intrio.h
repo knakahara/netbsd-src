@@ -29,7 +29,6 @@
 #ifndef _SYS_INTRIO_H_
 #define _SYS_INTRIO_H_
 
-#include <sys/ioccom.h>
 #include <sys/types.h>
 #include <sys/intr.h>
 #include <sys/sched.h>
@@ -39,12 +38,5 @@ struct intr_set {
 	cpuset_t *cpuset;
 	size_t cpuset_size;
 };
-
-#define	IOC_INTR_INTRIDS	_IOR('c', 0, char[INTR_LIST_BUFSIZE])
-#define	IOC_INTR_LIST_HEADER	_IOR('c', 1, char[INTR_LIST_BUFSIZE])
-#define	IOC_INTR_LIST_DATA	_IOWR('c', 2, char[INTR_LIST_BUFSIZE])
-#define	IOC_INTR_AFFINITY	_IOW('c', 3, struct intr_set)
-#define	IOC_INTR_INTR		_IOW('c', 4, struct intr_set)
-#define	IOC_INTR_NOINTR		_IOW('c', 5, struct intr_set)
 
 #endif /* !_SYS_INTRIO_H_ */
