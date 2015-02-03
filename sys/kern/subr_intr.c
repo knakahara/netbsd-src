@@ -436,7 +436,6 @@ intrctl_ioctl(dev_t dev, u_long cmd, void *data, int flag, lwp_t *l)
 }
 
 #define INTR_LIST_MIN_SIZE PAGE_SIZE
-
 static int
 intrctl_list(char *data, int length)
 {
@@ -667,6 +666,92 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 	return error;
 }
 
+static int
+intr_intr_sysctl(SYSCTLFN_ARGS)
+{
+	struct sysctlnode node;
+	int error;
+	u_int cpu_idx;
+	struct intr_set *iset;
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
+
+	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
+	    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
+	if (error)
+		return EPERM;
+
+	node = *rnode;
+	iset = (struct intr_set *)node.sysctl_data;
+
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error != 0 || newp == NULL)
+		return error;
+
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+
+	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
+
+	mutex_enter(&cpu_lock);
+	error = intr_shield(cpu_idx, UNSET_NOINTR_SHIELD);
+	mutex_exit(&cpu_lock);
+
+	kcpuset_destroy(kcpuset);
+	return error;
+}
+
+static int
+intr_nointr_sysctl(SYSCTLFN_ARGS)
+{
+	struct sysctlnode node;
+	int error;
+	u_int cpu_idx;
+	struct intr_set *iset;
+	cpuset_t *ucpuset;
+	kcpuset_t *kcpuset;
+
+	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
+	    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
+	if (error)
+		return EPERM;
+
+	node = *rnode;
+	iset = (struct intr_set *)node.sysctl_data;
+
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error != 0 || newp == NULL)
+		return error;
+
+	ucpuset = iset->cpuset;
+	kcpuset_create(&kcpuset, true);
+	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (kcpuset_iszero(kcpuset)) {
+		kcpuset_destroy(kcpuset);
+		return EINVAL;
+	}
+
+	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
+
+	mutex_enter(&cpu_lock);
+	error = intr_shield(cpu_idx, SET_NOINTR_SHIELD);
+	if (error) {
+		mutex_exit(&cpu_lock);
+		return error;
+	}
+	error = intr_avert_intr(cpu_idx);
+	mutex_exit(&cpu_lock);
+
+	kcpuset_destroy(kcpuset);
+	return error;
+}
+
+
 SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 {
 	const struct sysctlnode *node = NULL;
@@ -703,6 +788,28 @@ SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 	if (err) {
 		printf("kern: sysctl_createv "
 		    "(kern.intr.affinity) failed, err = %d\n", err);
+		return;
+	}
+
+	err = sysctl_createv(clog, 0, &node, NULL,
+			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			     CTLTYPE_STRUCT, "intr", SYSCTL_DESCR("set intr"),
+			     intr_intr_sysctl, 0, &kintr_set, sizeof(kintr_set),
+			     CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.intr.intr) failed, err = %d\n", err);
+		return;
+	}
+
+	err = sysctl_createv(clog, 0, &node, NULL,
+			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			     CTLTYPE_STRUCT, "nointr", SYSCTL_DESCR("set nointr"),
+			     intr_nointr_sysctl, 0, &kintr_set, sizeof(kintr_set),
+			     CTL_CREATE, CTL_EOL);
+	if (err) {
+		printf("kern: sysctl_createv "
+		    "(kern.intr.nointr) failed, err = %d\n", err);
 		return;
 	}
 }
