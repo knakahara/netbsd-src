@@ -199,6 +199,8 @@ static const struct handlespec {
 
 	{ "/kern/intr/list",			printother, NULL, "intrctl" },
 	{ "/kern/intr/affinity",		printother, NULL, "intrctl" },
+	{ "/kern/intr/intr",			printother, NULL, "intrctl" },
+	{ "/kern/intr/nointr",			printother, NULL, "intrctl" },
 
 	{ "/vm/vmmeter",			printother, NULL,
 						"vmstat' or 'systat" },
