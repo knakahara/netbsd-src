@@ -47,6 +47,12 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <machine/limits.h>
 
+#ifdef INTR_DEBUG
+#define DPRINTF(msg) printf msg
+#else
+#define DPRINTF(msg)
+#endif
+
 static struct intr_set kintr_set = { "\0", NULL, 0 };
 
 #define UNSET_NOINTR_SHIELD	0
@@ -72,6 +78,9 @@ intr_shield_xcall(void *arg1, void *arg2)
 	splx(s);
 }
 
+/*
+ * Change SPCF_NOINTR flag of schedstate_percpu->spc_flags
+ */
 static int
 intr_shield(u_int cpu_idx, int shield)
 {
@@ -104,6 +113,11 @@ intr_shield(u_int cpu_idx, int shield)
 	return 0;
 }
 
+/*
+ * Move all assigned interrupts from "cpu_idx" to the other cpu as possible.
+ * The destination cpu is lowest cpuid of available cpus.
+ * If there are no available cpus, give up to move interrupts.
+ */
 static int
 intr_avert_intr(u_int cpu_idx)
 {
@@ -128,7 +142,7 @@ intr_avert_intr(u_int cpu_idx)
 	intr_get_available(cpuset);
 	kcpuset_clear(cpuset, cpu_idx);
 	if (kcpuset_iszero(cpuset)) {
-		printf("no available cpu\n");
+		DPRINTF(("%s: no available cpu\n", __func__));
 		return ENOENT;
 	}
 
@@ -220,7 +234,7 @@ intr_list(char *data, int length)
 	mutex_enter(&cpu_lock);
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
 	if (ret != 0) {
-		printf("intr_construct_intrids() failed\n");
+		DPRINTF(("%s: intr_construct_intrids() failed\n", __func__));
 		ret = -ret;
 		goto out2;
 	}
@@ -260,6 +274,9 @@ intr_list(char *data, int length)
 #undef FULL_BUF
 }
 
+/*
+ * "intrctl list" entry
+ */
 static int
 intr_list_sysctl(SYSCTLFN_ARGS)
 {
@@ -293,6 +310,9 @@ intr_list_sysctl(SYSCTLFN_ARGS)
 	return copyoutstr(buf, oldp, *oldlenp, NULL);
 }
 
+/*
+ * "intrctl affinity" entry
+ */
 static int
 intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 {
@@ -337,6 +357,9 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 	return error;
 }
 
+/*
+ * "intrctl intr" entry
+ */
 static int
 intr_intr_sysctl(SYSCTLFN_ARGS)
 {
@@ -377,6 +400,9 @@ intr_intr_sysctl(SYSCTLFN_ARGS)
 	return error;
 }
 
+/*
+ * "intrctl nointr" entry
+ */
 static int
 intr_nointr_sysctl(SYSCTLFN_ARGS)
 {
@@ -426,61 +452,57 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 {
 	const struct sysctlnode *node = NULL;
-	int err;
+	int error;
 
-	err = sysctl_createv(clog, 0, NULL, &node,
+	error = sysctl_createv(clog, 0, NULL, &node,
 			     CTLFLAG_PERMANENT, CTLTYPE_NODE, "intr",
 			     SYSCTL_DESCR("Interrupt options"),
 			     NULL, 0, NULL, 0,
 			     CTL_KERN, CTL_CREATE, CTL_EOL);
-	if (err) {
-		printf("kern: sysctl_createv "
-		    "(kern.intr) failed, err = %d\n", err);
+	if (error) {
+		DPRINTF(("kern: sysctl_createv "
+			"(kern.intr) failed, err = %d\n", error));
 		return;
 	}
 
-	err = sysctl_createv(clog, 0, &node, NULL,
+	error = sysctl_createv(clog, 0, &node, NULL,
 			     CTLFLAG_PERMANENT,
 			     CTLTYPE_STRUCT, "list",
 			     SYSCTL_DESCR("intrctl list"),
 			     intr_list_sysctl, 0, NULL, 0,
 			     CTL_CREATE, CTL_EOL);
-	if (err) {
-		printf("kern: sysctl_createv "
-		    "(kern.intr.list) failed, err = %d\n", err);
-		return;
+	if (error) {
+		DPRINTF(("kern: sysctl_createv "
+			"(kern.intr.list) failed, err = %d\n", error));
 	}
 
-	err = sysctl_createv(clog, 0, &node, NULL,
+	error = sysctl_createv(clog, 0, &node, NULL,
 			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
 			     CTLTYPE_STRUCT, "affinity", SYSCTL_DESCR("set affinity"),
 			     intr_set_affinity_sysctl, 0, &kintr_set, sizeof(kintr_set),
 			     CTL_CREATE, CTL_EOL);
-	if (err) {
-		printf("kern: sysctl_createv "
-		    "(kern.intr.affinity) failed, err = %d\n", err);
-		return;
+	if (error) {
+		DPRINTF(("kern: sysctl_createv "
+			"(kern.intr.affinity) failed, err = %d\n", error));
 	}
 
-	err = sysctl_createv(clog, 0, &node, NULL,
+	error = sysctl_createv(clog, 0, &node, NULL,
 			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
 			     CTLTYPE_STRUCT, "intr", SYSCTL_DESCR("set intr"),
 			     intr_intr_sysctl, 0, &kintr_set, sizeof(kintr_set),
 			     CTL_CREATE, CTL_EOL);
-	if (err) {
-		printf("kern: sysctl_createv "
-		    "(kern.intr.intr) failed, err = %d\n", err);
-		return;
+	if (error) {
+		DPRINTF(("kern: sysctl_createv "
+			"(kern.intr.intr) failed, err = %d\n", error));
 	}
 
-	err = sysctl_createv(clog, 0, &node, NULL,
+	error = sysctl_createv(clog, 0, &node, NULL,
 			     CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
 			     CTLTYPE_STRUCT, "nointr", SYSCTL_DESCR("set nointr"),
 			     intr_nointr_sysctl, 0, &kintr_set, sizeof(kintr_set),
 			     CTL_CREATE, CTL_EOL);
-	if (err) {
-		printf("kern: sysctl_createv "
-		    "(kern.intr.nointr) failed, err = %d\n", err);
-		return;
+	if (error) {
+		DPRINTF(("kern: sysctl_createv "
+			"(kern.intr.nointr) failed, err = %d\n", error));
 	}
 }
