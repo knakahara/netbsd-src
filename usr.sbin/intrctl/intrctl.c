@@ -148,7 +148,7 @@ intr_affinity(int argc, char **argv)
 		case 'i':
 			if (strnlen(optarg, ARG_MAX) > INTRID_LEN)
 				usage();
-			strncpy(iset.intrid, optarg, INTRID_LEN);
+			strlcpy(iset.intrid, optarg, INTRID_LEN);
 			break;
 		default:
 			usage();
