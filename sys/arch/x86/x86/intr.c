@@ -2029,8 +2029,8 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		ids[i] = kmem_zalloc(INTRID_LEN + 1, KM_SLEEP);
 		if (ids[i] == NULL) {
 			int j;
-			for (j = i - 1; j >= 0; i--) {
-				kmem_free(ids[i], INTRID_LEN + 1);
+			for (j = i - 1; j >= 0; j--) {
+				kmem_free(ids[j], INTRID_LEN + 1);
 			}
 			kmem_free(ids, sizeof(char*) * (*count));
 			return ENOMEM;
