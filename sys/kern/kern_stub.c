@@ -157,6 +157,29 @@ __weak_alias(intr_construct_intrids, eopnotsupp);
 __weak_alias(intr_destruct_intrids, eopnotsupp);
 
 /*
+ * XXX
+ * should be not stub but kernel option?
+ */
+__weak_alias(pci_msi_count, eopnotsupp);
+__weak_alias(pci_msi_alloc, eopnotsupp);
+__weak_alias(pci_msi_alloc_exact, eopnotsupp);
+__weak_alias(pci_msi_establish, eopnotsupp);
+__weak_alias(pci_msi_establish_xname, eopnotsupp);
+__weak_alias(pci_msi_disestablish, eopnotsupp);
+__weak_alias(pci_msi_release, eopnotsupp);
+__weak_alias(pci_msix_count, eopnotsupp);
+__weak_alias(pci_msix_alloc, eopnotsupp);
+__weak_alias(pci_msix_alloc_exact, eopnotsupp);
+__weak_alias(pci_msix_establish, eopnotsupp);
+__weak_alias(pci_msix_establish_xname, eopnotsupp);
+__weak_alias(pci_msix_disestablish, eopnotsupp);
+__weak_alias(pci_msix_release, eopnotsupp);
+__weak_alias(pci_intr_establish_xname, eopnotsupp);
+__weak_alias(pci_intr_alloc, eopnotsupp);
+__weak_alias(pci_any_intr_disestablish, eopnotsupp);
+__weak_alias(pci_any_intr_release, eopnotsupp);
+
+/*
  * Scheduler activations system calls.  These need to remain until libc's
  * major version is bumped.
  */
