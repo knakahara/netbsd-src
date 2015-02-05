@@ -59,7 +59,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /*$FreeBSD: src/sys/dev/ixgbe/ixgbe.c,v 1.51 2011/04/25 23:34:21 jfv Exp $*/
-/*$NetBSD: ixgbe.c,v 1.14 2014/04/21 16:35:06 chs Exp $*/
+/*$NetBSD: ixgbe.c,v 1.18 2015/02/04 09:05:53 msaitoh Exp $*/
 
 #include "opt_inet.h"
 
@@ -1478,11 +1478,11 @@ ixgbe_legacy_irq(void *arg)
 {
 	struct ix_queue *que = arg;
 	struct adapter	*adapter = que->adapter;
+	struct ifnet   *ifp = adapter->ifp;
 	struct ixgbe_hw	*hw = &adapter->hw;
 	struct 		tx_ring *txr = adapter->tx_rings;
-	bool		more_tx, more_rx;
+	bool		more_tx = false, more_rx = false;
 	u32       	reg_eicr, loop = MAX_LOOP;
-
 
 	reg_eicr = IXGBE_READ_REG(hw, IXGBE_EICR);
 
@@ -1490,18 +1490,21 @@ ixgbe_legacy_irq(void *arg)
 	++que->irqs;
 	if (reg_eicr == 0) {
 		adapter->stats.intzero.ev_count++;
-		ixgbe_enable_intr(adapter);
+		if ((ifp->if_flags & IFF_UP) != 0)
+			ixgbe_enable_intr(adapter);
 		return 0;
 	}
 
-	more_rx = ixgbe_rxeof(que, adapter->rx_process_limit);
+	if ((ifp->if_flags & IFF_RUNNING) != 0) {
+		more_rx = ixgbe_rxeof(que, adapter->rx_process_limit);
 
-	IXGBE_TX_LOCK(txr);
-	do {
-		adapter->txloops.ev_count++;
-		more_tx = ixgbe_txeof(txr);
-	} while (loop-- && more_tx);
-	IXGBE_TX_UNLOCK(txr);
+		IXGBE_TX_LOCK(txr);
+		do {
+			adapter->txloops.ev_count++;
+			more_tx = ixgbe_txeof(txr);
+		} while (loop-- && more_tx);
+		IXGBE_TX_UNLOCK(txr);
+	}
 
 	if (more_rx || more_tx) {
 		if (more_rx)
@@ -3177,10 +3180,8 @@ ixgbe_free_transmit_structures(struct adapter *adapter)
 	struct tx_ring *txr = adapter->tx_rings;
 
 	for (int i = 0; i < adapter->num_queues; i++, txr++) {
-		IXGBE_TX_LOCK(txr);
 		ixgbe_free_transmit_buffers(txr);
 		ixgbe_dma_free(adapter, &txr->txdma);
-		IXGBE_TX_UNLOCK(txr);
 		IXGBE_TX_LOCK_DESTROY(txr);
 	}
 	free(adapter->tx_rings, M_DEVBUF);
@@ -3932,11 +3933,15 @@ ixgbe_setup_receive_ring(struct rx_ring *rxr)
 	/* Free current RX buffer structs and their mbufs */
 	ixgbe_free_receive_ring(rxr);
 
+	IXGBE_RX_UNLOCK(rxr);
+
 	/* Now reinitialize our supply of jumbo mbufs.  The number
 	 * or size of jumbo mbufs may have changed.
 	 */
 	ixgbe_jcl_reinit(&adapter->jcl_head, rxr->ptag->dt_dmat,
 	    2 * adapter->num_rx_desc, adapter->rx_mbuf_sz);
+
+	IXGBE_RX_LOCK(rxr);
 
 	/* Configure header split? */
 	if (ixgbe_header_split)
@@ -4223,6 +4228,7 @@ ixgbe_free_receive_structures(struct adapter *adapter)
 #endif /* LRO */
 		/* Free the ring memory as well */
 		ixgbe_dma_free(adapter, &rxr->rxdma);
+		IXGBE_RX_LOCK_DESTROY(rxr);
 	}
 
 	free(adapter->rx_rings, M_DEVBUF);

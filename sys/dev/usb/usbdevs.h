@@ -1,10 +1,10 @@
-/*	$NetBSD: usbdevs.h,v 1.679 2014/12/17 10:02:46 jnemeth Exp $	*/
+/*	$NetBSD: usbdevs.h,v 1.681 2015/02/04 14:23:18 jmcneill Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: usbdevs,v 1.687 2014/12/17 10:02:01 jnemeth Exp
+ *	NetBSD: usbdevs,v 1.689 2015/02/04 14:23:04 jmcneill Exp
  */
 
 /*
@@ -2174,6 +2174,7 @@
 #define	USB_PRODUCT_MICROSOFT_XBOX_CONTROLLER_S10	0x0285		/* Xbox Controller S (1.0) */
 #define	USB_PRODUCT_MICROSOFT_XBOX_CONTROLLER_HUB	0x0288		/* Xbox Controller Hub */
 #define	USB_PRODUCT_MICROSOFT_XBOX_CONTROLLER_S12	0x0289		/* Xbox Controller S (1.2) */
+#define	USB_PRODUCT_MICROSOFT_XBOX_360_WIRELESS_RECEIVER	0x0291		/* Xbox 360 Wireless Receiver */
 #define	USB_PRODUCT_MICROSOFT_24GHZ_XCVR10	0x071d		/* 2.4GHz Transceiver V1.0 */
 #define	USB_PRODUCT_MICROSOFT_24GHZ_XCVR20	0x071f		/* 2.4GHz Transceiver V2.0 */
 
@@ -2918,6 +2919,7 @@
 #define	USB_PRODUCT_SILABS2_DCU11CLONE	0xaa26		/* DCU-11 clone */
 #define	USB_PRODUCT_SILABS_CP210X_1	0xea60		/* CP210x Serial */
 #define	USB_PRODUCT_SILABS_CP210X_2	0xea61		/* CP210x Serial */
+#define	USB_PRODUCT_SILABS_EC3	0x8044		/* EC3 USB Debug Adapter */
 
 /* Silicon Portals Inc. */
 #define	USB_PRODUCT_SILICONPORTALS_YAPPH_NF	0x0200		/* YAP Phone (no firmware) */

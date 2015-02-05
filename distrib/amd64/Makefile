@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.7 2013/07/15 00:29:49 khorben Exp $
+#	$NetBSD: Makefile,v 1.9 2015/01/12 19:40:48 snj Exp $
 
 SUBDIR=
 SUBDIR+=	ramdisks
@@ -8,7 +8,6 @@ SUBDIR+=	kmod
 SUBDIR+=	kmod-cgdroot
 SUBDIR+=	.WAIT
 SUBDIR+=	cdroms
-SUBDIR+=	floppies
 SUBDIR+=	liveimage
 SUBDIR+=	installimage
 TARGETS+=	release 

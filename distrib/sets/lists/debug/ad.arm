@@ -1,4 +1,4 @@
-# $NetBSD: ad.arm,v 1.55 2015/01/05 00:51:50 mrg Exp $
+# $NetBSD: ad.arm,v 1.59 2015/01/25 15:50:30 christos Exp $
 ./usr/lib/libarm_g.a				comp-c-debuglib		debuglib
 ./usr/lib/libc_vfp_g.a				comp-c-debuglib		debuglib,softfloat
 ./usr/lib/libpmc_g.a				comp-c-debuglib		debuglib
@@ -50,7 +50,7 @@
 ./usr/libdata/debug/usr/lib/oabi/i18n/libmapper_serial.so.5.0.debug	comp-i18n-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/i18n/libmapper_std.so.5.0.debug	comp-i18n-debug		debug,compat
 ./usr/libdata/debug/usr/lib/oabi/i18n/libmapper_zone.so.5.0.debug	comp-i18n-debug		debug,compat
-./usr/libdata/debug/usr/lib/oabi/libamu.so.4.0.debug		comp-amd-debug	debug,compat
+./usr/libdata/debug/usr/lib/oabi/libamu.so.5.0.debug		comp-amd-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libarchive.so.3.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libarm.so.0.0.debug		comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libasn1.so.8.1.debug		comp-compat-shlib	compat,pic,kerberos,debug,obsolete
@@ -62,16 +62,17 @@
 ./usr/libdata/debug/usr/lib/oabi/libavl.so.0.0.debug		comp-zfs-debug	zfs,dynamicroot,debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libbfd.so.13.0.debug	comp-sys-debug	binutils,debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libbind9.so.8.1.debug	comp-bind-debug	debug,compat
+./usr/libdata/debug/usr/lib/oabi/libblacklist.so.0.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libbluetooth.so.4.2.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libbsdmalloc.so.0.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libbz2.so.1.1.debug		comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libc++.so.1.0.debug		comp-sys-debug	debug,compat,pic,libcxx
-./usr/libdata/debug/usr/lib/oabi/libc.so.12.196.debug		comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/oabi/libc.so.12.197.debug		comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libc_vfp.so.0.0.debug		comp-sys-debug	debug,compat,pic
 ./usr/libdata/debug/usr/lib/oabi/libcom_err.so.6.0.debug	comp-compat-shlib	 compat,pic,kerberos,debug,obsolete
 ./usr/libdata/debug/usr/lib/oabi/libcom_err.so.7.0.debug	comp-compat-shlib	 compat,pic,kerberos,debug
 ./usr/libdata/debug/usr/lib/oabi/libcrypt.so.1.0.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/oabi/libcrypto.so.8.3.debug	comp-crypto-debug	crypto,debug,compat
+./usr/libdata/debug/usr/lib/oabi/libcrypto.so.8.4.debug	comp-crypto-debug	crypto,debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libcrypto_rc5.so.7.0.debug	comp-crypto-debug	crypto,crypto_rc5,debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libctf.so.2.0.debug		comp-sys-debug	dtrace,debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libcurses.so.7.0.debug	comp-sys-debug	debug,compat
@@ -186,7 +187,7 @@
 ./usr/libdata/debug/usr/lib/oabi/libsqlite3.so.1.2.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libss.so.6.0.debug		comp-krb5-debug	obsolete
 ./usr/libdata/debug/usr/lib/oabi/libssh.so.23.0.debug	comp-secsh-debug	crypto,debug,compat
-./usr/libdata/debug/usr/lib/oabi/libssl.so.10.4.debug		comp-crypto-debug	crypto,debug,compat
+./usr/libdata/debug/usr/lib/oabi/libssl.so.10.5.debug		comp-crypto-debug	crypto,debug,compat
 ./usr/libdata/debug/usr/lib/oabi/libstdc++.so.5.0.debug	comp-sys-debug	gcc=3,cxx,debug,compat,libstdcxx
 ./usr/libdata/debug/usr/lib/oabi/libstdc++.so.7.0.debug	comp-sys-debug	gcc=4,cxx,debug,compat,libstdcxx
 ./usr/libdata/debug/usr/lib/oabi/libstdc++.so.7.1.debug	comp-sys-debug	gcc=45,cxx,debug,compat,libstdcxx

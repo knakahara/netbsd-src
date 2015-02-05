@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.rumpkern,v 1.152 2015/01/03 17:23:51 pooka Exp $
+#	$NetBSD: Makefile.rumpkern,v 1.154 2015/02/04 12:48:05 pooka Exp $
 #
 
 .include "${RUMPTOP}/Makefile.rump"
@@ -28,7 +28,7 @@ MAN=		rump.3 rump_lwproc.3
 SRCS+=	rump.c rumpcopy.c cons.c emul.c etfs_wrap.c intr.c	\
 	lwproc.c klock.c kobj_rename.c ltsleep.c scheduler.c	\
 	signals.c sleepq.c threads.c vm.c hyperentropy.c	\
-	accessors.c sysproxy.c
+	accessors.c
 
 SRCS+=	rumpkern_syscalls.c
 
@@ -50,18 +50,10 @@ SRCS+=	locks_up.c
 SRCS+=	locks.c
 .endif
 
-MKREPRO?=no
-
-.if ${MKREPRO} == "yes"
-_NVFLAGS=-r
-.else
-_NVFLAGS=
-.endif
-
 vers.c: ${RUMPTOP}/../conf/newvers.sh ${RUMPTOP}/../conf/osrelease.sh \
 		${RUMPTOP}/../sys/param.h ${_NETBSD_VERSION_DEPENDS}
 	${_MKMSG_CREATE} vers.c
-	${HOST_SH} ${RUMPTOP}/../conf/newvers.sh -i RUMP-ROAST -n ${_NVFLAGS}
+	${HOST_SH} ${RUMPTOP}/../conf/newvers.sh -i RUMP-ROAST -n -r
 SRCS+=		vers.c
 CLEANFILES+=	vers.c version
 

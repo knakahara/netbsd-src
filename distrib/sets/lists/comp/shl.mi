@@ -1,4 +1,4 @@
-# $NetBSD: shl.mi,v 1.271 2014/11/19 01:08:42 pooka Exp $
+# $NetBSD: shl.mi,v 1.273 2015/01/25 15:50:30 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -14,6 +14,7 @@
 ./usr/lib/libatf_pic.a				comp-obsolete		obsolete
 ./usr/lib/libavl_pic.a				comp-zfs-piclib		zfs,picinstall
 ./usr/lib/libbind9_pic.a			comp-bind-piclib	picinstall
+./usr/lib/libblacklist_pic.a			comp-c-piclib	picinstall
 ./usr/lib/libbluetooth_pic.a			comp-c-piclib	picinstall
 ./usr/lib/libbsdmalloc_pic.a			comp-c-piclib	picinstall
 ./usr/lib/libbz2_pic.a				comp-c-piclib	picinstall
@@ -210,6 +211,7 @@
 ./usr/lib/librumpkern_ksem_pic.a		comp-obsolete		obsolete
 ./usr/lib/librumpkern_sljit_pic.a		comp-c-piclib		sljit,rump,picinstall
 ./usr/lib/librumpkern_solaris_pic.a		comp-c-piclib		zfs,rump,picinstall
+./usr/lib/librumpkern_sysproxy_pic.a			comp-c-piclib		rump,picinstall
 ./usr/lib/librumpkern_time_pic.a			comp-obsolete obsolete
 ./usr/lib/librumpkern_tty_pic.a			comp-c-piclib		rump,picinstall
 ./usr/lib/librumpkern_z_pic.a			comp-c-piclib		rump,picinstall

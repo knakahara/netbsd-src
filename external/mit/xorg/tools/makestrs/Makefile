@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.1.1.1 2008/07/29 05:01:22 mrg Exp $
+#	$NetBSD: Makefile,v 1.3 2015/01/08 03:47:32 christos Exp $
 
 NOMAN=	1
 
@@ -7,12 +7,6 @@ NOMAN=	1
 .PATH:	${X11SRCDIR.Xt}/util
 
 HOSTPROG=	makestrs
-HOST_CPPFLAGS+=	-I. -I${DESTDIR}${X11INCDIR}
-
-#	Can't use -I${DESTDIR}${X11INCDIR} since pswrap is needed
-#	to create some header files.
-#
-BUILDSYMLINKS=	${X11SRCDIR.Xt}/include/X11 X11
-DPSRCS+=	X11
+HOST_CPPFLAGS+=	-I.
 
 .include <bsd.hostprog.mk>
