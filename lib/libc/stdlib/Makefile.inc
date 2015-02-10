@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.83 2014/12/10 16:55:54 pooka Exp $
+#	$NetBSD: Makefile.inc,v 1.86 2015/01/18 17:59:36 christos Exp $
 #	from: @(#)Makefile.inc	8.3 (Berkeley) 2/4/95
 
 # stdlib sources
@@ -13,6 +13,7 @@ SRCS+=	_env.c _rand48.c \
 	nrand48.c putenv.c qabs.c qdiv.c qsort.c posix_openpt.c pty.c \
 	quick_exit.c radixsort.c rand.c rand_r.c random.c remque.c \
 	seed48.c setenv.c srand48.c strsuftoll.c \
+	strtoi.c strtou.c strtonum.c \
 	strtoimax.c strtol.c strtoll.c strtoq.c strtoul.c strtoull.c \
 	strtoumax.c strtouq.c system.c tdelete.c tfind.c tsearch.c twalk.c \
 	unsetenv.c strfmon.c
@@ -52,7 +53,8 @@ MAN+=	a64l.3 abort.3 abs.3 alloca.3 atexit.3 atof.3 atoi.3 atol.3 atoll.3 \
 	posix_memalign.3 posix_openpt.3 ptsname.3 \
 	qabs.3 qdiv.3 quick_exit.3 qsort.3 \
 	radixsort.3 rand48.3 rand.3 random.3 \
-	strfmon.3 strsuftoll.3 strtod.3 strtol.3 strtoul.3 system.3 \
+	strfmon.3 strsuftoll.3 strtod.3 strtol.3 strtoul.3 strtonum.3 \
+	system.3 \
 	tsearch.3 \
 	unlockpt.3
 
@@ -86,7 +88,9 @@ MLINKS+=strtod.3 strtof.3 strtod.3 strtold.3
 MLINKS+=strtol.3 strtoimax.3
 MLINKS+=strtol.3 strtoll.3
 MLINKS+=strtol.3 strtoq.3
+MLINKS+=strtol.3 strtoi.3
 MLINKS+=strtoul.3 strtoull.3
 MLINKS+=strtoul.3 strtoumax.3
 MLINKS+=strtoul.3 strtouq.3
+MLINKS+=strtoul.3 strtou.3
 MLINKS+=tsearch.3 tfind.3 tsearch.3 twalk.3 tsearch.3 tdelete.3

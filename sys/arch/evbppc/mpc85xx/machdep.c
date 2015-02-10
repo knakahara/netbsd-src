@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.39 2015/01/06 01:23:24 nonaka Exp $	*/
+/*	$NetBSD: machdep.c,v 1.41 2015/01/30 15:04:35 nonaka Exp $	*/
 /*-
  * Copyright (c) 2010, 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -41,6 +41,7 @@ __KERNEL_RCSID(0, "$NetSBD$");
 #include "opt_altivec.h"
 #include "opt_ddb.h"
 #include "opt_mpc85xx.h"
+#include "opt_multiprocessor.h"
 #include "opt_pci.h"
 #include "gpio.h"
 #include "pci.h"
@@ -1054,6 +1055,13 @@ e500_cpu_attach(device_t self, u_int instance)
 void
 e500_ipi_halt(void)
 {
+#ifdef MULTIPROCESSOR
+	struct cpuset_info * const csi = &cpuset_info;
+	const cpuid_t index = cpu_index(curcpu());
+
+	printf("cpu%lu: shutting down\n", index);
+	kcpuset_set(csi->cpus_halted, index);
+#endif
 	register_t msr, hid0;
 
 	msr = wrtee(0);
@@ -1074,6 +1082,7 @@ calltozero(void)
 	panic("call to 0 from %p", __builtin_return_address(0));
 }
 
+#if !defined(ROUTERBOOT)
 static void
 parse_cmdline(char *cp)
 {
@@ -1109,6 +1118,7 @@ parse_cmdline(char *cp)
 	if (root_string[0])
 		printf(" root=%s", root_string);
 }
+#endif	/* !ROUTERBOOT */
 
 void
 initppc(vaddr_t startkernel, vaddr_t endkernel,
@@ -1121,12 +1131,14 @@ initppc(vaddr_t startkernel, vaddr_t endkernel,
 	printf(" initppc(%#"PRIxVADDR", %#"PRIxVADDR", %p, %p, %p, %p)<enter>",
 	    startkernel, endkernel, a0, a1, a2, a3);
 
+#if !defined(ROUTERBOOT)
 	if (a2[0] != '\0')
 		printf(" consdev=<%s>", a2);
 	if (a3[0] != '\0') {
 		printf(" cmdline=<%s>", a3);
 		parse_cmdline(a3);
 	}
+#endif	/* !ROUTERBOOT */
 
 	/*
 	 * Make sure we don't enter NAP or SLEEP if PSL_POW (MSR[WE]) is set.

@@ -1,4 +1,4 @@
-# $NetBSD: ad.riscv,v 1.11 2015/01/02 21:18:51 christos Exp $
+# $NetBSD: ad.riscv,v 1.15 2015/01/25 15:50:29 christos Exp $
 ./lib/rv32					base-compat-shlib	compat,arch64
 ./lib/rv32/npf					base-npf-shlib		compat,arch64
 ./lib/rv32/npf/ext_log.so			base-npf-shlib		compat,pic,arch64
@@ -59,8 +59,8 @@
 ./usr/lib/rv32/i18n/libmapper_std.so.5.0	base-i18n-shlib		compat,pic,arch64
 ./usr/lib/rv32/i18n/libmapper_zone.so.5		base-i18n-shlib		compat,pic,arch64
 ./usr/lib/rv32/i18n/libmapper_zone.so.5.0	base-i18n-shlib		compat,pic,arch64
-./usr/lib/rv32/libamu.so.4			base-compat-shlib	compat,pic,arch64
-./usr/lib/rv32/libamu.so.4.0			base-compat-shlib	compat,pic,arch64
+./usr/lib/rv32/libamu.so.5			base-compat-shlib	compat,pic,arch64
+./usr/lib/rv32/libamu.so.5.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libarchive.so.3			base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libarchive.so.3.1		base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libasan.so.0			base-compat-shlib	compat,pic,gcc=48
@@ -75,6 +75,8 @@
 ./usr/lib/rv32/libbfd.so.13.0			base-compat-shlib	compat,pic,binutils,arch64
 ./usr/lib/rv32/libbind9.so.8			base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libbind9.so.8.1			base-compat-shlib	compat,pic,arch64
+./usr/lib/rv32/libblacklist.so.0		base-compat-shlib	compat,pic,arch64
+./usr/lib/rv32/libblacklist.so.0.0		base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libbluetooth.so.4		base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libbluetooth.so.4.2		base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libbsdmalloc.so.0		base-compat-shlib	compat,pic,arch64
@@ -84,13 +86,13 @@
 ./usr/lib/rv32/libc++.so.1			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/rv32/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx,arch64
 ./usr/lib/rv32/libc.so.12			base-compat-shlib	compat,pic,arch64
-./usr/lib/rv32/libc.so.12.196			base-compat-shlib	compat,pic,arch64
+./usr/lib/rv32/libc.so.12.197			base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/rv32/libcom_err.so.7.0		base-compat-shlib	compat,pic,kerberos,arch64
 ./usr/lib/rv32/libcrypt.so.1			base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libcrypt.so.1.0			base-compat-shlib	compat,pic,arch64
 ./usr/lib/rv32/libcrypto.so.8			base-compat-shlib	compat,pic,crypto,arch64
-./usr/lib/rv32/libcrypto.so.8.3			base-compat-shlib	compat,pic,crypto,arch64
+./usr/lib/rv32/libcrypto.so.8.4			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/rv32/libcrypto_rc5.so.7		base-compat-shlib	compat,pic,crypto,crypto_rc5,arch64
 ./usr/lib/rv32/libcrypto_rc5.so.7.0		base-compat-shlib	compat,pic,crypto,crypto_rc5,arch64
 ./usr/lib/rv32/libcurses.so.7			base-compat-shlib	compat,pic,arch64
@@ -268,7 +270,7 @@
 ./usr/lib/rv32/libssh.so.23			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/rv32/libssh.so.23.0			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/rv32/libssl.so.10			base-compat-shlib	compat,pic,crypto,arch64
-./usr/lib/rv32/libssl.so.10.4			base-compat-shlib	compat,pic,crypto,arch64
+./usr/lib/rv32/libssl.so.10.5			base-compat-shlib	compat,pic,crypto,arch64
 ./usr/lib/rv32/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx,arch64
 ./usr/lib/rv32/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx,arch64
 ./usr/lib/rv32/libstdc++.so.7.3			base-compat-shlib	gcc=48,compat,pic,cxx,libstdcxx,arch64
