@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1938 2015/01/07 22:26:50 pooka Exp $
+#	$NetBSD: mi,v 1.1944 2015/01/26 00:22:02 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -207,6 +207,7 @@
 ./usr/include/bfd/bfd.h				comp-obsolete		obsolete
 ./usr/include/bfd/libiberty.h			comp-obsolete		obsolete
 ./usr/include/bitstring.h			comp-c-include
+./usr/include/blacklist.h			comp-c-include
 ./usr/include/bluetooth.h			comp-c-include
 ./usr/include/bm.h				comp-c-include
 ./usr/include/bzlib.h				comp-c-include
@@ -3514,6 +3515,8 @@
 ./usr/lib/libbfd.a				comp-obsolete		obsolete
 ./usr/lib/libbind9.a				comp-bind-lib
 ./usr/lib/libbind9_p.a				comp-bind-proflib	profile
+./usr/lib/libblacklist.a			comp-c-lib
+./usr/lib/libblacklist_p.a			comp-c-proflib		profile
 ./usr/lib/libbluetooth.a			comp-c-lib
 ./usr/lib/libbluetooth_p.a			comp-c-proflib		profile
 ./usr/lib/libbsdmalloc.a			comp-c-lib
@@ -4001,6 +4004,7 @@
 ./usr/libdata/lint/llib-larchive.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lasn1.ln		comp-krb5-lintlib	lint,kerberos
 ./usr/libdata/lint/llib-lbind9.ln		comp-bind-lintlib	lint
+./usr/libdata/lint/llib-lblacklist.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lbluetooth.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lbsdmalloc.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lbz2.ln			comp-c-lintlib		lint
@@ -4121,8 +4125,8 @@
 ./usr/libexec/f771				comp-obsolete		gcc=4,obsolete
 ./usr/libexec/lint1				comp-c-bin
 ./usr/libexec/lint2				comp-c-bin
-./usr/libexec/lto-wrapper			comp-c-bin		gcc=48
-./usr/libexec/lto1				comp-c-bin		gcc=48
+./usr/libexec/lto-wrapper			comp-c-bin		gcc=48,pic
+./usr/libexec/lto1				comp-c-bin		gcc=48,pic
 ./usr/libexec/pcpp				comp-c-bin		pcc
 ./usr/sbin/config				comp-obsolete		obsolete
 ./usr/sbin/config.new				comp-obsolete		obsolete
@@ -5644,6 +5648,12 @@
 ./usr/share/man/cat3/bitstring.0		comp-c-catman		.cat
 ./usr/share/man/cat3/bkgd.0			comp-c-catman		.cat
 ./usr/share/man/cat3/bkgdset.0			comp-c-catman		.cat
+./usr/share/man/cat3/blacklist.0		comp-c-catman		.cat
+./usr/share/man/cat3/blacklist_close.0		comp-c-catman		.cat
+./usr/share/man/cat3/blacklist_open.0		comp-c-catman		.cat
+./usr/share/man/cat3/blacklist_r.0		comp-c-catman		.cat
+./usr/share/man/cat3/blacklist_sa.0		comp-c-catman		.cat
+./usr/share/man/cat3/blacklist_sa_r.0		comp-c-catman		.cat
 ./usr/share/man/cat3/blowfish.0			comp-obsolete		obsolete
 ./usr/share/man/cat3/bluetooth.0		comp-c-catman		.cat
 ./usr/share/man/cat3/bm.0			comp-c-catman		.cat
@@ -6402,6 +6412,8 @@
 ./usr/share/man/cat3/estrlcat.0			comp-c-catman		.cat
 ./usr/share/man/cat3/estrlcpy.0			comp-c-catman		.cat
 ./usr/share/man/cat3/estrndup.0			comp-c-catman		.cat
+./usr/share/man/cat3/estrtoi.0			comp-c-catman		.cat
+./usr/share/man/cat3/estrtou.0			comp-c-catman		.cat
 ./usr/share/man/cat3/etext.0			comp-c-catman		.cat
 ./usr/share/man/cat3/ether_aton.0		comp-c-catman		.cat
 ./usr/share/man/cat3/ether_hostton.0		comp-c-catman		.cat
@@ -7851,6 +7863,7 @@
 ./usr/share/man/cat3/lhash.0			comp-obsolete		obsolete
 ./usr/share/man/cat3/libarchive.0		comp-c-catman		.cat
 ./usr/share/man/cat3/libarchive_internals.0	comp-c-catman		.cat
+./usr/share/man/cat3/libblacklist.0		comp-c-catman		.cat
 ./usr/share/man/cat3/libiscsi.0			comp-c-catman		iscsi,.cat
 ./usr/share/man/cat3/libmagic.0			comp-c-catman		.cat
 ./usr/share/man/cat3/libmj.0			comp-c-catman		crypto,.cat
@@ -8301,6 +8314,7 @@
 ./usr/share/man/cat3/popcountl.0		comp-c-catman		.cat
 ./usr/share/man/cat3/popcountll.0		comp-c-catman		.cat
 ./usr/share/man/cat3/popen.0			comp-c-catman		.cat
+./usr/share/man/cat3/popenve.0			comp-c-catman		.cat
 ./usr/share/man/cat3/pos_form_cursor.0		comp-c-catman		.cat
 ./usr/share/man/cat3/pos_menu_cursor.0		comp-c-catman		.cat
 ./usr/share/man/cat3/posix2time.0		comp-c-catman		.cat
@@ -9200,13 +9214,16 @@
 ./usr/share/man/cat3/strsvisx.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtod.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtof.0			comp-c-catman		.cat
+./usr/share/man/cat3/strtoi.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoimax.0		comp-c-catman		.cat
 ./usr/share/man/cat3/strtok.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtok_r.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtol.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtold.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoll.0			comp-c-catman		.cat
+./usr/share/man/cat3/strtonum.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoq.0			comp-c-catman		.cat
+./usr/share/man/cat3/strtou.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoul.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoull.0			comp-c-catman		.cat
 ./usr/share/man/cat3/strtoumax.0		comp-c-catman		.cat
@@ -12550,6 +12567,12 @@
 ./usr/share/man/html3/bitstring.html		comp-c-htmlman		html
 ./usr/share/man/html3/bkgd.html			comp-c-htmlman		html
 ./usr/share/man/html3/bkgdset.html		comp-c-htmlman		html
+./usr/share/man/html3/blacklist.html		comp-c-html		html
+./usr/share/man/html3/blacklist_close.html	comp-c-html		html
+./usr/share/man/html3/blacklist_open.html	comp-c-html		html
+./usr/share/man/html3/blacklist_r.html		comp-c-html		html
+./usr/share/man/html3/blacklist_sa.html		comp-c-html		html
+./usr/share/man/html3/blacklist_sa_r.html	comp-c-html		html
 ./usr/share/man/html3/bluetooth.html		comp-c-htmlman		html
 ./usr/share/man/html3/bm.html			comp-c-htmlman		html
 ./usr/share/man/html3/bm_comp.html		comp-c-htmlman		html
@@ -13271,6 +13294,8 @@
 ./usr/share/man/html3/estrlcat.html		comp-c-htmlman		html
 ./usr/share/man/html3/estrlcpy.html		comp-c-htmlman		html
 ./usr/share/man/html3/estrndup.html		comp-c-htmlman		html
+./usr/share/man/html3/estrtoi.html		comp-c-htmlman		html
+./usr/share/man/html3/estrtou.html		comp-c-htmlman		html
 ./usr/share/man/html3/etext.html		comp-c-htmlman		html
 ./usr/share/man/html3/ether_aton.html		comp-c-htmlman		html
 ./usr/share/man/html3/ether_hostton.html	comp-c-htmlman		html
@@ -14696,6 +14721,7 @@
 ./usr/share/man/html3/lh_stats.html		comp-c-htmlman		crypto,html
 ./usr/share/man/html3/libarchive.html		comp-c-htmlman		html
 ./usr/share/man/html3/libarchive_internals.html	comp-c-htmlman		html
+./usr/share/man/html3/libblacklist.html		comp-c-html		html
 ./usr/share/man/html3/libiscsi.html		comp-c-htmlman		iscsi,html
 ./usr/share/man/html3/libmagic.html		comp-c-htmlman		html
 ./usr/share/man/html3/libmj.html		comp-c-htmlman		crypto,html
@@ -15130,6 +15156,7 @@
 ./usr/share/man/html3/popcountl.html		comp-c-htmlman		html
 ./usr/share/man/html3/popcountll.html		comp-c-htmlman		html
 ./usr/share/man/html3/popen.html		comp-c-htmlman		html
+./usr/share/man/html3/popenve.html		comp-c-htmlman		html
 ./usr/share/man/html3/pos_form_cursor.html	comp-c-htmlman		html
 ./usr/share/man/html3/pos_menu_cursor.html	comp-c-htmlman		html
 ./usr/share/man/html3/posix2time.html		comp-c-htmlman		html
@@ -16005,13 +16032,16 @@
 ./usr/share/man/html3/strsvisx.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtod.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtof.html		comp-c-htmlman		html
+./usr/share/man/html3/strtoi.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoimax.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtok.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtok_r.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtol.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtold.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoll.html		comp-c-htmlman		html
+./usr/share/man/html3/strtonum.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoq.html		comp-c-htmlman		html
+./usr/share/man/html3/strtou.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoul.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoull.html		comp-c-htmlman		html
 ./usr/share/man/html3/strtoumax.html		comp-c-htmlman		html
@@ -19276,6 +19306,12 @@
 ./usr/share/man/man3/bitstring.3		comp-c-man		.man
 ./usr/share/man/man3/bkgd.3			comp-c-man		.man
 ./usr/share/man/man3/bkgdset.3			comp-c-man		.man
+./usr/share/man/man3/blacklist.3		comp-c-man		.man
+./usr/share/man/man3/blacklist_close.3		comp-c-man		.man
+./usr/share/man/man3/blacklist_open.3		comp-c-man		.man
+./usr/share/man/man3/blacklist_r.3		comp-c-man		.man
+./usr/share/man/man3/blacklist_sa.3		comp-c-man		.man
+./usr/share/man/man3/blacklist_sa_r.3		comp-c-man		.man
 ./usr/share/man/man3/blowfish.3			comp-obsolete		obsolete
 ./usr/share/man/man3/bluetooth.3		comp-c-man		.man
 ./usr/share/man/man3/bm.3			comp-c-man		.man
@@ -20052,6 +20088,8 @@
 ./usr/share/man/man3/estrlcat.3			comp-c-man		.man
 ./usr/share/man/man3/estrlcpy.3			comp-c-man		.man
 ./usr/share/man/man3/estrndup.3			comp-c-man		.man
+./usr/share/man/man3/estrtoi.3			comp-c-man		.man
+./usr/share/man/man3/estrtou.3			comp-c-man		.man
 ./usr/share/man/man3/etext.3			comp-c-man		.man
 ./usr/share/man/man3/ether_aton.3		comp-c-man		.man
 ./usr/share/man/man3/ether_hostton.3		comp-c-man		.man
@@ -21501,6 +21539,7 @@
 ./usr/share/man/man3/lhash.3			comp-obsolete		obsolete
 ./usr/share/man/man3/libarchive.3		comp-c-man		.man
 ./usr/share/man/man3/libarchive_internals.3	comp-c-man		.man
+./usr/share/man/man3/libblacklist.3		comp-c-man		.man
 ./usr/share/man/man3/libiscsi.3			comp-c-man		iscsi,.man
 ./usr/share/man/man3/libmagic.3			comp-c-man		.man
 ./usr/share/man/man3/libmj.3			comp-c-man		crypto,.man
@@ -21951,6 +21990,7 @@
 ./usr/share/man/man3/popcountl.3		comp-c-man		.man
 ./usr/share/man/man3/popcountll.3		comp-c-man		.man
 ./usr/share/man/man3/popen.3			comp-c-man		.man
+./usr/share/man/man3/popenve.3			comp-c-man		.man
 ./usr/share/man/man3/pos_form_cursor.3		comp-c-man		.man
 ./usr/share/man/man3/pos_menu_cursor.3		comp-c-man		.man
 ./usr/share/man/man3/posix2time.3		comp-c-man		.man
@@ -22846,13 +22886,16 @@
 ./usr/share/man/man3/strsvisx.3			comp-c-man		.man
 ./usr/share/man/man3/strtod.3			comp-c-man		.man
 ./usr/share/man/man3/strtof.3			comp-c-man		.man
+./usr/share/man/man3/strtoi.3			comp-c-man		.man
 ./usr/share/man/man3/strtoimax.3		comp-c-man		.man
 ./usr/share/man/man3/strtok.3			comp-c-man		.man
 ./usr/share/man/man3/strtok_r.3			comp-c-man		.man
 ./usr/share/man/man3/strtol.3			comp-c-man		.man
 ./usr/share/man/man3/strtold.3			comp-c-man		.man
 ./usr/share/man/man3/strtoll.3			comp-c-man		.man
+./usr/share/man/man3/strtonum.3			comp-c-man		.man
 ./usr/share/man/man3/strtoq.3			comp-c-man		.man
+./usr/share/man/man3/strtou.3			comp-c-man		.man
 ./usr/share/man/man3/strtoul.3			comp-c-man		.man
 ./usr/share/man/man3/strtoull.3			comp-c-man		.man
 ./usr/share/man/man3/strtoumax.3		comp-c-man		.man

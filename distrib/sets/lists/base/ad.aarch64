@@ -1,4 +1,4 @@
-# $NetBSD: ad.aarch64,v 1.15 2015/01/02 21:18:51 christos Exp $
+# $NetBSD: ad.aarch64,v 1.19 2015/01/25 15:50:29 christos Exp $
 ./lib/eabi					base-compat-shlib	compat
 ./lib/eabi/npf					base-npf-shlib		compat
 ./lib/eabi/npf/ext_log.so			base-npf-shlib		compat,pic
@@ -83,8 +83,8 @@
 ./usr/lib/eabi/i18n/libmapper_std.so.5.0		base-i18n-shlib		compat,pic
 ./usr/lib/eabi/i18n/libmapper_zone.so.5		base-i18n-shlib		compat,pic
 ./usr/lib/eabi/i18n/libmapper_zone.so.5.0		base-i18n-shlib		compat,pic
-./usr/lib/eabi/libamu.so.4			base-compat-shlib	compat,pic
-./usr/lib/eabi/libamu.so.4.0			base-compat-shlib	compat,pic
+./usr/lib/eabi/libamu.so.5			base-compat-shlib	compat,pic
+./usr/lib/eabi/libamu.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libarchive.so.3			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libarchive.so.3.1		base-compat-shlib	compat,pic
 ./usr/lib/eabi/libarm.so.0			base-compat-shlib	compat,pic
@@ -101,6 +101,8 @@
 ./usr/lib/eabi/libbfd.so.13.0			base-compat-shlib	compat,pic,binutils
 ./usr/lib/eabi/libbind9.so.8			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libbind9.so.8.1			base-compat-shlib	compat,pic
+./usr/lib/eabi/libblacklist.so.0			base-compat-shlib	compat,pic
+./usr/lib/eabi/libblacklist.so.0.0		base-compat-shlib	compat,pic
 ./usr/lib/eabi/libbluetooth.so.4			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libbluetooth.so.4.2		base-compat-shlib	compat,pic
 ./usr/lib/eabi/libbsdmalloc.so.0			base-compat-shlib	compat,pic
@@ -110,13 +112,13 @@
 ./usr/lib/eabi/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabi/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabi/libc.so.12				base-compat-shlib	compat,pic
-./usr/lib/eabi/libc.so.12.196			base-compat-shlib	compat,pic
+./usr/lib/eabi/libc.so.12.197			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabi/libcrypt.so.1			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libcrypt.so.1.0			base-compat-shlib	compat,pic
 ./usr/lib/eabi/libcrypto.so.8			base-compat-shlib	compat,pic,crypto
-./usr/lib/eabi/libcrypto.so.8.3			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabi/libcrypto.so.8.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libcrypto_rc5.so.7			base-compat-shlib	compat,pic,crypto,crypto_rc5
 ./usr/lib/eabi/libcrypto_rc5.so.7.0		base-compat-shlib	compat,pic,crypto,crypto_rc5
 ./usr/lib/eabi/libcurses.so.7			base-compat-shlib	compat,pic
@@ -298,7 +300,7 @@
 ./usr/lib/eabi/libssh.so.23			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libssl.so.10			base-compat-shlib	compat,pic,crypto
-./usr/lib/eabi/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabi/libssl.so.10.5			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabi/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx
 ./usr/lib/eabi/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx
 ./usr/lib/eabi/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx
@@ -399,8 +401,8 @@
 ./usr/lib/eabihf/i18n/libmapper_std.so.5.0		base-i18n-shlib		compat,pic
 ./usr/lib/eabihf/i18n/libmapper_zone.so.5		base-i18n-shlib		compat,pic
 ./usr/lib/eabihf/i18n/libmapper_zone.so.5.0		base-i18n-shlib		compat,pic
-./usr/lib/eabihf/libamu.so.4			base-compat-shlib	compat,pic
-./usr/lib/eabihf/libamu.so.4.0			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libamu.so.5			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libamu.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libarchive.so.3			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libarchive.so.3.1			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libarm.so.0			base-compat-shlib	compat,pic
@@ -417,6 +419,8 @@
 ./usr/lib/eabihf/libbfd.so.13.0			base-compat-shlib	compat,pic,binutils
 ./usr/lib/eabihf/libbind9.so.8			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libbind9.so.8.1			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libblacklist.so.0			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libblacklist.so.0.0		base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libbluetooth.so.4			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libbluetooth.so.4.2		base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libbsdmalloc.so.0			base-compat-shlib	compat,pic
@@ -426,13 +430,13 @@
 ./usr/lib/eabihf/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabihf/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/eabihf/libc.so.12				base-compat-shlib	compat,pic
-./usr/lib/eabihf/libc.so.12.196			base-compat-shlib	compat,pic
+./usr/lib/eabihf/libc.so.12.197			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libcom_err.so.7.0			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/eabihf/libcrypt.so.1			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libcrypt.so.1.0			base-compat-shlib	compat,pic
 ./usr/lib/eabihf/libcrypto.so.8			base-compat-shlib	compat,pic,crypto
-./usr/lib/eabihf/libcrypto.so.8.3			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabihf/libcrypto.so.8.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libcrypto_rc5.so.7			base-compat-shlib	compat,pic,crypto,crypto_rc5
 ./usr/lib/eabihf/libcrypto_rc5.so.7.0		base-compat-shlib	compat,pic,crypto,crypto_rc5
 ./usr/lib/eabihf/libcurses.so.7			base-compat-shlib	compat,pic
@@ -614,7 +618,7 @@
 ./usr/lib/eabihf/libssh.so.23			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libssl.so.10			base-compat-shlib	compat,pic,crypto
-./usr/lib/eabihf/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
+./usr/lib/eabihf/libssl.so.10.5			base-compat-shlib	compat,pic,crypto
 ./usr/lib/eabihf/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx
 ./usr/lib/eabihf/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx
 ./usr/lib/eabihf/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx
@@ -715,8 +719,8 @@
 ./usr/lib/oabi/i18n/libmapper_std.so.5.0	base-i18n-shlib		compat,pic
 ./usr/lib/oabi/i18n/libmapper_zone.so.5		base-i18n-shlib		compat,pic
 ./usr/lib/oabi/i18n/libmapper_zone.so.5.0	base-i18n-shlib		compat,pic
-./usr/lib/oabi/libamu.so.4			base-compat-shlib	compat,pic
-./usr/lib/oabi/libamu.so.4.0			base-compat-shlib	compat,pic
+./usr/lib/oabi/libamu.so.5			base-compat-shlib	compat,pic
+./usr/lib/oabi/libamu.so.5.0			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libarchive.so.3			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libarchive.so.3.1		base-compat-shlib	compat,pic
 ./usr/lib/oabi/libarm.so.0			base-compat-shlib	compat,pic
@@ -733,6 +737,8 @@
 ./usr/lib/oabi/libbfd.so.13.0			base-compat-shlib	compat,pic,binutils
 ./usr/lib/oabi/libbind9.so.8			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libbind9.so.8.1			base-compat-shlib	compat,pic
+./usr/lib/oabi/libblacklist.so.0		base-compat-shlib	compat,pic
+./usr/lib/oabi/libblacklist.so.0.0		base-compat-shlib	compat,pic
 ./usr/lib/oabi/libbluetooth.so.4		base-compat-shlib	compat,pic
 ./usr/lib/oabi/libbluetooth.so.4.2		base-compat-shlib	compat,pic
 ./usr/lib/oabi/libbsdmalloc.so.0		base-compat-shlib	compat,pic
@@ -742,13 +748,13 @@
 ./usr/lib/oabi/libc++.so.1			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/oabi/libc++.so.1.0			base-compat-shlib	compat,pic,libcxx
 ./usr/lib/oabi/libc.so.12			base-compat-shlib	compat,pic
-./usr/lib/oabi/libc.so.12.196			base-compat-shlib	compat,pic
+./usr/lib/oabi/libc.so.12.197			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libcom_err.so.7			base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libcom_err.so.7.0		base-compat-shlib	compat,pic,kerberos
 ./usr/lib/oabi/libcrypt.so.1			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libcrypt.so.1.0			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libcrypto.so.8			base-compat-shlib	compat,pic,crypto
-./usr/lib/oabi/libcrypto.so.8.3			base-compat-shlib	compat,pic,crypto
+./usr/lib/oabi/libcrypto.so.8.4			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libcurses.so.7			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libcurses.so.7.0			base-compat-shlib	compat,pic
 ./usr/lib/oabi/libdes.so.8			base-compat-shlib	compat,pic,crypto
@@ -928,7 +934,7 @@
 ./usr/lib/oabi/libssh.so.23			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libssh.so.23.0			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libssl.so.10			base-compat-shlib	compat,pic,crypto
-./usr/lib/oabi/libssl.so.10.4			base-compat-shlib	compat,pic,crypto
+./usr/lib/oabi/libssl.so.10.5			base-compat-shlib	compat,pic,crypto
 ./usr/lib/oabi/libstdc++.so.7			base-compat-shlib	compat,pic,cxx,gcccmds,libstdcxx
 ./usr/lib/oabi/libstdc++.so.7.0			base-compat-shlib	gcc=4,compat,pic,cxx,libstdcxx
 ./usr/lib/oabi/libstdc++.so.7.1			base-compat-shlib	gcc=45,compat,pic,cxx,libstdcxx

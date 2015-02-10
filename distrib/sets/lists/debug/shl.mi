@@ -1,7 +1,8 @@
-# $NetBSD: shl.mi,v 1.90 2015/01/07 22:26:50 pooka Exp $
-./usr/libdata/debug/lib/libc.so.12.196.debug		comp-sys-debug	debug
+# $NetBSD: shl.mi,v 1.94 2015/01/25 15:50:30 christos Exp $
+./usr/libdata/debug/lib/libblacklist.so.0.0.debug	comp-sys-debug	debug
+./usr/libdata/debug/lib/libc.so.12.197.debug		comp-sys-debug	debug
 ./usr/libdata/debug/lib/libcrypt.so.1.0.debug		comp-sys-debug	debug
-./usr/libdata/debug/lib/libcrypto.so.8.3.debug		comp-sys-debug	debug
+./usr/libdata/debug/lib/libcrypto.so.8.4.debug		comp-sys-debug	debug
 ./usr/libdata/debug/lib/libdevmapper.so.1.0.debug	comp-sys-debug	lvm,debug
 ./usr/libdata/debug/lib/libdm.so.0.0.debug 		comp-sys-debug	debug,obsolete
 ./usr/libdata/debug/lib/libedit.so.3.1.debug		comp-sys-debug	debug
@@ -48,7 +49,7 @@
 ./usr/libdata/debug/usr/lib/i18n/libmapper_serial.so.5.0.debug	comp-i18n-debug	debug
 ./usr/libdata/debug/usr/lib/i18n/libmapper_std.so.5.0.debug	comp-i18n-debug		debug
 ./usr/libdata/debug/usr/lib/i18n/libmapper_zone.so.5.0.debug	comp-i18n-debug		debug
-./usr/libdata/debug/usr/lib/libamu.so.4.0.debug		comp-amd-debug	debug
+./usr/libdata/debug/usr/lib/libamu.so.5.0.debug		comp-amd-debug	debug
 ./usr/libdata/debug/usr/lib/libarchive.so.3.1.debug	comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libasan.so.0.0.debug	comp-krb5-debug	debug,gcc=48
 ./usr/libdata/debug/usr/lib/libasn1.so.9.0.debug	comp-krb5-debug	kerberos,debug
@@ -58,14 +59,15 @@
 ./usr/libdata/debug/usr/lib/libavl.so.0.0.debug		comp-zfs-debug	zfs,dynamicroot,debug
 ./usr/libdata/debug/usr/lib/libbfd.so.13.0.debug	comp-sys-debug	binutils,debug
 ./usr/libdata/debug/usr/lib/libbind9.so.8.1.debug	comp-bind-debug	debug
+./usr/libdata/debug/usr/lib/libblacklist.so.0.0.debug	comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libbluetooth.so.4.2.debug	comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libbsdmalloc.so.0.0.debug	comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libbz2.so.1.1.debug		comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libc++.so.1.0.debug		comp-sys-debug	debug,libcxx
-./usr/libdata/debug/usr/lib/libc.so.12.196.debug	comp-sys-debug	debug
+./usr/libdata/debug/usr/lib/libc.so.12.197.debug	comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libcom_err.so.7.0.debug	comp-krb5-debug	kerberos,debug
 ./usr/libdata/debug/usr/lib/libcrypt.so.1.0.debug	comp-sys-debug	debug
-./usr/libdata/debug/usr/lib/libcrypto.so.8.3.debug	comp-crypto-debug	crypto,debug
+./usr/libdata/debug/usr/lib/libcrypto.so.8.4.debug	comp-crypto-debug	crypto,debug
 ./usr/libdata/debug/usr/lib/libcrypto_idea.so.7.0.debug	comp-obsolete		obsolete
 ./usr/libdata/debug/usr/lib/libcrypto_mdc2.so.7.0.debug	comp-obsolete		obsolete
 ./usr/libdata/debug/usr/lib/libcrypto_rc5.so.7.0.debug	comp-crypto-debug	crypto,crypto_rc5,debug
@@ -251,7 +253,7 @@
 ./usr/libdata/debug/usr/lib/libsl.so.5.0.debug		comp-krb5-debug	kerberos,debug
 ./usr/libdata/debug/usr/lib/libsqlite3.so.1.2.debug	comp-sys-debug	debug
 ./usr/libdata/debug/usr/lib/libssh.so.23.0.debug	comp-secsh-debug	crypto,debug
-./usr/libdata/debug/usr/lib/libssl.so.10.4.debug		comp-crypto-debug	crypto,debug
+./usr/libdata/debug/usr/lib/libssl.so.10.5.debug		comp-crypto-debug	crypto,debug
 ./usr/libdata/debug/usr/lib/libstdc++.so.5.0.debug	comp-sys-debug	gcc=3,cxx,debug,libstdcxx
 ./usr/libdata/debug/usr/lib/libstdc++.so.7.0.debug	comp-sys-debug	gcc=4,cxx,debug,libstdcxx
 ./usr/libdata/debug/usr/lib/libstdc++.so.7.1.debug	comp-sys-debug	gcc=45,cxx,debug,libstdcxx
