@@ -1973,7 +1973,7 @@ intr_get_available(kcpuset_t *cpuset)
 	}
 }
 
-char *
+const char *
 intr_get_devname(void *ich)
 {
 	struct intrsource *isp;

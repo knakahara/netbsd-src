@@ -73,7 +73,7 @@ void		*intr_get_handler(const char *);
 uint64_t	intr_get_count(void *, u_int);
 void		intr_get_assigned(void *, kcpuset_t *);
 void		intr_get_available(kcpuset_t *);
-char		*intr_get_devname(void *);
+const char	*intr_get_devname(void *);
 int		intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
 int		intr_construct_intrids(const kcpuset_t *, char ***, int *);
 void		intr_destruct_intrids(char **, int);
