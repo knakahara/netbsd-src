@@ -3408,11 +3408,21 @@ wm_alloc_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 {
 	int msix_count;
 	int min_msix_count = 3; /* (1 txqueue) + (1 rxqueue) + (1 linkstatus) */
-	int want_msix_count = ncpu < sc->sc_max_nrxqueues ? ncpu * 2 + 1 : WM_MAX_INTRS;
+	int want_msix_count;
 	int error;
 
 	if (wm_disable_msix)
 		return EINVAL;
+
+	/*
+	 * XXXX
+	 * Should the case that WM_MAX_RXQUEUES does not equal to WM_MAX_TXQUEUES
+	 * be supported?
+	 */
+	if (ncpu < max(sc->sc_max_nrxqueues, sc->sc_max_ntxqueues))
+		want_msix_count = ncpu * 2 + 1;
+	else
+		want_msix_count = WM_MAX_INTRS;
 
 	msix_count = pci_msix_count(pa);
 	if (msix_count == 0) {
@@ -3427,8 +3437,8 @@ wm_alloc_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 		sc->sc_ntxqueues = (msix_count - 1) / 2;
 		sc->sc_nrxqueues = (msix_count - 1) / 2;
 	} else {
-		sc->sc_ntxqueues = WM_MAX_TXQUEUES;
-		sc->sc_nrxqueues = WM_MAX_RXQUEUES;
+		sc->sc_ntxqueues = (want_msix_count - 1) / 2;
+		sc->sc_nrxqueues = (want_msix_count - 1) / 2;
 	}
 #ifndef WM_MPSAFE
 	sc->sc_ntxqueues = 1;
