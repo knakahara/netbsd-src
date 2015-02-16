@@ -158,13 +158,13 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 
 	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0) {
 		aprint_normal("PCI host bridge does not support MSI.\n");
-		return 1;
+		return ENODEV;
 	}
 
 	msi_pic = construct_msi_pic(pa);
 	if (msi_pic == NULL) {
 		aprint_normal("cannot allocate MSI pic.\n");
-		return 1;
+		return EINVAL;
 	}
 
 	while (*count > 0) {
@@ -172,7 +172,7 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 		if (vectors == NULL) {
 			if (exact) {
 				aprint_normal("cannot allocate MSI vectors.\n");
-				return 1;
+				return ENOMEM;
 			} else {
 				(*count) >>= 1; /* MSI must be power of 2. */
 				continue;
@@ -182,7 +182,7 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	}
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI vectors.\n");
-		return 1;
+		return ENOMEM;
 	}
 
 	for (i = 0; i < *count; i++) {
@@ -193,7 +193,7 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	if (error) {
 		pci_msi_free_vectors(msi_pic, *count);
 		destruct_msi_pic(msi_pic);
-		return 1;
+		return EINVAL;
 	}
 
 	*ihps = vectors;
@@ -263,19 +263,19 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, u_int *table_indexes,
 	if ((pa->pa_flags & PCI_FLAGS_MSI_OKAY) == 0 ||
 	    (pa->pa_flags & PCI_FLAGS_MSIX_OKAY) == 0) {
 		aprint_normal("PCI host bridge does not support MSI-X.\n");
-		return 1;
+		return ENODEV;
 	}
 
 	msix_pic = construct_msix_pic(pa);
 	if (msix_pic == NULL)
-		return 1;
+		return EINVAL;
 
 	while (*count > 0) {
 		vectors = pci_msi_alloc_vectors(msix_pic, table_indexes, count);
 		if (vectors == NULL) {
 			if (exact) {
 				aprint_normal("cannot allocate MSI-X vectors.\n");
-				return 1;
+				return ENOMEM;
 			} else {
 				(*count)--;
 				continue;
@@ -285,7 +285,7 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, u_int *table_indexes,
 	}
 	if (vectors == NULL) {
 		aprint_normal("cannot allocate MSI-X vectors.\n");
-		return 1;
+		return ENOMEM;
 	}
 
 	for (i = 0; i < *count; i++) {
@@ -296,7 +296,7 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, u_int *table_indexes,
 	if (error) {
 		pci_msi_free_vectors(msix_pic, *count);
 		destruct_msix_pic(msix_pic);
-		return 1;
+		return EINVAL;
 	}
 
 	*ihps = vectors;
@@ -386,16 +386,16 @@ pci_msi_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 
 	if (*count < 1) {
 		aprint_normal("invalid count: %d\n", *count);
-		return 1;
+		return EINVAL;
 	}
 	if (((*count - 1) & *count) != 0) {
 		aprint_normal("count %d must be power of 2.\n", *count);
-		return 1;
+		return EINVAL;
 	}
 
 	hw_max = pci_msi_count(pa);
 	if (hw_max == 0)
-		return 1;
+		return ENODEV;
 
 	if (*count > hw_max) {
 		aprint_normal("cut off MSI count to %d\n", hw_max);
@@ -412,20 +412,20 @@ pci_msi_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int co
 
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
-		return 1;
+		return EINVAL;
 	}
 	if (((count - 1) & count) != 0) {
 		aprint_normal("count %d must be power of 2.\n", count);
-		return 1;
+		return EINVAL;
 	}
 
 	hw_max = pci_msi_count(pa);
 	if (hw_max == 0)
-		return 1;
+		return ENODEV;
 
 	if (count > hw_max) {
 		aprint_normal("over hardware max MSI count %d\n", hw_max);
-		return 1;
+		return EINVAL;
 	}
 
 	return pci_msi_alloc_exact_md(ihps, count, pa);
@@ -505,12 +505,12 @@ pci_msix_alloc(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int *count)
 
 	if (*count < 1) {
 		aprint_normal("invalid count: %d\n", *count);
-		return 1;
+		return EINVAL;
 	}
 
 	hw_max = pci_msix_count(pa);
 	if (hw_max == 0)
-		return 1;
+		return ENODEV;
 
 	if (*count > hw_max) {
 		aprint_normal("cut off MSI-X count to %d\n", hw_max);
@@ -527,16 +527,16 @@ pci_msix_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int c
 
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
-		return 1;
+		return EINVAL;
 	}
 
 	hw_max = pci_msix_count(pa);
 	if (hw_max == 0)
-		return 1;
+		return ENODEV;
 
 	if (count > hw_max) {
 		aprint_normal("over hardware max MSI-X count %d\n", hw_max);
-		return 1;
+		return EINVAL;
 	}
 
 	return pci_msix_alloc_exact_md(ihps, count, pa);
@@ -551,16 +551,16 @@ pci_msix_alloc_map(struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
-		return 1;
+		return EINVAL;
 	}
 
 	hw_max = pci_msix_count(pa);
 	if (hw_max == 0)
-		return 1;
+		return ENODEV;
 
 	if (count > hw_max) {
 		aprint_normal("over hardware max MSI-X count %d\n", hw_max);
-		return 1;
+		return EINVAL;
 	}
 
 	/* check not to duplicate table_index */
@@ -570,12 +570,12 @@ pci_msix_alloc_map(struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 		if (temp >= hw_max) {
 			aprint_normal("table index is over hardware max MSI-X index %d\n",
 			    hw_max - 1);
-			return 1;
+			return EINVAL;
 		}
 		for (j = i + 1; j < count; j++) {
 			if (temp == table_indexes[j]) {
 				aprint_normal("MSI-X table index duplicated\n");
-				return 1;
+				return EINVAL;
 			}
 		}
 	}
