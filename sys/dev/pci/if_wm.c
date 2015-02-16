@@ -3544,7 +3544,7 @@ wm_setup_msix(struct wm_softc *sc, struct pci_attach_args *pa)
 		txq = &sc->sc_txq[i];
 
 		intrstr = pci_intr_string(pc, *intr, intrbuf, sizeof(intrbuf));
-		snprintf(xnamebuf, 32, "%s: tx%d", device_xname(sc->sc_dev), intr_idx);
+		snprintf(xnamebuf, 32, "%s: tx%d", device_xname(sc->sc_dev), i);
 #ifdef WM_MPSAFE
 		pci_intr_setattr(pc, intr, PCI_INTR_MPSAFE, true);
 #endif
