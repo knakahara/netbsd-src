@@ -56,20 +56,6 @@ struct msipic {
 
 	int mp_devid;
 	int mp_veccnt;
-	/*
-	 * MSI vectors are simple sequential number 0 to mp_veccnt - 1.
-	 * So, MSI does *not* use "mp_msixtable". it is always NULL.
-	 *
-	 * The other hand, MSI-X vectors is complex because MSI-X can use
-	 * "remap". So, MSI-X use "mp_msixtable" which mange MSI-X table
-	 * index and MSI-X handle.
-	 * mp_msixtablei's index means MSI-X handle's "vecid"(=MSI_INT_VEC(pih))
-	 * mp_msixtablei[i] value means MSI-X table index
-	 * If device driver does "remap" msix, the index and the value
-	 * combination change. Furthermore, it may change mp_msixtablei size,
-	 * if the device driver "remap" to sparse index.
-	 */
-	int *mp_msixtablei;
 
 	struct pci_attach_args mp_pa;
 	bus_space_tag_t mp_bstag;
@@ -243,11 +229,7 @@ msix_get_table_index(struct pic *pic, int vecid)
 	KASSERT(pic->pic_msipic != NULL);
 	KASSERT(pic->pic_type == PIC_MSIX);
 
-#if 1
 	return vecid;
-#else
-	return pic->pic_msipic->mp_msixtablei[vecid];
-#endif
 }
 
 static struct pci_attach_args *
@@ -588,44 +570,15 @@ destruct_msix_pic(struct pic *msix_pic)
 	bus_space_unmap(msipic->mp_bstag, msipic->mp_bshandle,
 	    msipic->mp_bssize);
 
-	if (msipic->mp_msixtablei != NULL)
-		kmem_free(msipic->mp_msixtablei,
-		    sizeof(msipic->mp_msixtablei[0]) * msipic->mp_veccnt);
-	msipic->mp_msixtablei = NULL;
-
 	destruct_common_msi_pic(msix_pic);
 }
 
 int
 set_msi_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 {
-	int i;
-	int *vecs;
-
 	KASSERT(is_msi_pic(msi_pic));
 
-	if (msi_pic->pic_type == PIC_MSI) {
-		aprint_normal("MSI ignore vecs parameter.\n");
-		vecs = NULL;
-	}
-	else if (msi_pic->pic_type == PIC_MSIX) {
-		vecs = kmem_zalloc(sizeof(int) * (count), KM_SLEEP);
-		if (vecs == NULL) {
-			aprint_normal("cannot allocate MSI-X vector table.\n");
-			return 1;
-		}
-
-		for (i = 0; i < count; i++) {
-			vecs[i] = MSI_INT_VEC(pihs[i]);
-		}
-	}
-	else {
-		aprint_normal("invalid MSI type.\n");
-		return 1;
-	}
-
 	msi_pic->pic_msipic->mp_veccnt = count;
-	msi_pic->pic_msipic->mp_msixtablei = vecs;
 	return 0;
 }
 
