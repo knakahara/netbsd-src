@@ -84,6 +84,10 @@
 #include <net/dlt.h>
 #include <net/pfil.h>
 #ifdef _KERNEL
+#ifdef _KERNEL_OPT
+#include "opt_net_mpsafe.h"
+#endif /* _KERNEL_OPT */
+
 #include <net/pktqueue.h>
 #endif
 
