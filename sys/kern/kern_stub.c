@@ -161,21 +161,21 @@ __weak_alias(intr_destruct_intrids, eopnotsupp);
  * should be not stub but kernel option?
  */
 __weak_alias(pci_msi_count, nullop);
-__weak_alias(pci_msi_alloc, nullop);
-__weak_alias(pci_msi_alloc_exact, nullop);
+__weak_alias(pci_msi_alloc, eopnotsupp);
+__weak_alias(pci_msi_alloc_exact, eopnotsupp);
 __weak_alias(pci_msi_establish, nullop);
 __weak_alias(pci_msi_establish_xname, nullop);
 __weak_alias(pci_msi_disestablish, voidop);
 __weak_alias(pci_msi_release, voidop);
 __weak_alias(pci_msix_count, nullop);
-__weak_alias(pci_msix_alloc, nullop);
-__weak_alias(pci_msix_alloc_exact, nullop);
+__weak_alias(pci_msix_alloc, eopnotsupp);
+__weak_alias(pci_msix_alloc_exact, eopnotsupp);
 __weak_alias(pci_msix_establish, nullop);
 __weak_alias(pci_msix_establish_xname, nullop);
 __weak_alias(pci_msix_disestablish, voidop);
 __weak_alias(pci_msix_release, voidop);
 __weak_alias(pci_intr_establish_xname, nullop);
-__weak_alias(pci_intr_alloc, nullop);
+__weak_alias(pci_intr_alloc, eopnotsupp);
 __weak_alias(pci_any_intr_disestablish, voidop);
 __weak_alias(pci_any_intr_release, voidop);
 
