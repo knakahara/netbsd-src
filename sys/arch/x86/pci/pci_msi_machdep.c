@@ -547,6 +547,7 @@ pci_msix_alloc_map(struct pci_attach_args *pa, pci_intr_handle_t **ihps,
     u_int *table_indexes, int count)
 {
 	int hw_max;
+	int i, j;
 
 	if (count < 1) {
 		aprint_normal("invalid count: %d\n", count);
@@ -560,6 +561,23 @@ pci_msix_alloc_map(struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 	if (count > hw_max) {
 		aprint_normal("over hardware max MSI-X count %d\n", hw_max);
 		return 1;
+	}
+
+	/* check not to duplicate table_index */
+	for (i = 0; i < count; i++) {
+		u_int temp = table_indexes[i];
+
+		if (temp >= hw_max) {
+			aprint_normal("table index is over hardware max MSI-X index %d\n",
+			    hw_max - 1);
+			return 1;
+		}
+		for (j = i + 1; j < count; j++) {
+			if (temp == table_indexes[j]) {
+				aprint_normal("MSI-X table index duplicated\n");
+				return 1;
+			}
+		}
 	}
 
 	return pci_msix_alloc_map_md(ihps, table_indexes, count, pa);
