@@ -90,7 +90,7 @@ pci_msi_calculate_handle(struct pic *msi_pic, int vector)
 }
 
 static pci_intr_handle_t *
-pci_msi_alloc_vectors(struct pic *msi_pic, int *count)
+pci_msi_alloc_vectors(struct pic *msi_pic, uint *table_indexes, int *count)
 {
 	struct intrsource *isp;
 	const char *intrstr;
@@ -107,7 +107,15 @@ pci_msi_alloc_vectors(struct pic *msi_pic, int *count)
 
 	mutex_enter(&cpu_lock);
 	for (i = 0; i < *count; i++) {
-		pih = pci_msi_calculate_handle(msi_pic, i);
+		u_int table_index;
+		if (table_indexes == NULL)
+			table_index = i;
+		else {
+			KASSERT(table_indexes[i] < 2048);
+			table_index = table_indexes[i];
+		}
+
+		pih = pci_msi_calculate_handle(msi_pic, table_index);
 
 		intrstr = pci_msi_string(NULL, pih, intrstr_buf, sizeof(intrstr_buf));
 		isp = intr_allocate_io_intrsource(intrstr);
@@ -160,7 +168,7 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 	}
 
 	while (*count > 0) {
-		vectors = pci_msi_alloc_vectors(msi_pic, count);
+		vectors = pci_msi_alloc_vectors(msi_pic, NULL, count);
 		if (vectors == NULL) {
 			if (exact) {
 				aprint_normal("cannot allocate MSI vectors.\n");
@@ -245,8 +253,8 @@ pci_msi_common_disestablish(pci_chipset_tag_t pc, void *cookie)
 }
 
 static int
-pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
-    struct pci_attach_args *pa, bool exact)
+pci_msix_alloc_md_common(pci_intr_handle_t **ihps, u_int *table_indexes,
+    int *count, struct pci_attach_args *pa, bool exact)
 {
 	int i, error;
 	struct pic *msix_pic;
@@ -263,7 +271,7 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 		return 1;
 
 	while (*count > 0) {
-		vectors = pci_msi_alloc_vectors(msix_pic, count);
+		vectors = pci_msi_alloc_vectors(msix_pic, table_indexes, count);
 		if (vectors == NULL) {
 			if (exact) {
 				aprint_normal("cannot allocate MSI-X vectors.\n");
@@ -298,13 +306,20 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 static int
 pci_msix_alloc_md(pci_intr_handle_t **ihps, int *count, struct pci_attach_args *pa)
 {
-	return pci_msix_alloc_md_common(ihps, count, pa, false);
+	return pci_msix_alloc_md_common(ihps, NULL, count, pa, false);
 }
 
 static int
 pci_msix_alloc_exact_md(pci_intr_handle_t **ihps, int count, struct pci_attach_args *pa)
 {
-	return pci_msix_alloc_md_common(ihps, &count, pa, true);
+	return pci_msix_alloc_md_common(ihps, NULL, &count, pa, true);
+}
+
+static int
+pci_msix_alloc_map_md(pci_intr_handle_t **ihps, u_int *table_indexes, int count,
+    struct pci_attach_args *pa)
+{
+	return pci_msix_alloc_md_common(ihps, table_indexes, &count, pa, true);
 }
 
 static void
@@ -553,6 +568,29 @@ pci_msix_alloc_exact(struct pci_attach_args *pa, pci_intr_handle_t **ihps, int c
 	}
 
 	return pci_msix_alloc_exact_md(ihps, count, pa);
+}
+
+int
+pci_msix_alloc_map(struct pci_attach_args *pa, pci_intr_handle_t **ihps,
+    u_int *table_indexes, int count)
+{
+	int hw_max;
+
+	if (count < 1) {
+		aprint_normal("invalid count: %d\n", count);
+		return 1;
+	}
+
+	hw_max = pci_msix_count(pa);
+	if (hw_max == 0)
+		return 1;
+
+	if (count > hw_max) {
+		aprint_normal("over hardware max MSI-X count %d\n", hw_max);
+		return 1;
+	}
+
+	return pci_msix_alloc_map_md(ihps, table_indexes, count, pa);
 }
 
 void
