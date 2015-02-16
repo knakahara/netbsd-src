@@ -170,6 +170,7 @@ __weak_alias(pci_msi_release, voidop);
 __weak_alias(pci_msix_count, nullop);
 __weak_alias(pci_msix_alloc, eopnotsupp);
 __weak_alias(pci_msix_alloc_exact, eopnotsupp);
+__weak_alias(pci_msix_alloc_map, eopnotsupp);
 __weak_alias(pci_msix_establish, nullop);
 __weak_alias(pci_msix_establish_xname, nullop);
 __weak_alias(pci_msix_disestablish, voidop);
