@@ -243,7 +243,11 @@ msix_get_table_index(struct pic *pic, int vecid)
 	KASSERT(pic->pic_msipic != NULL);
 	KASSERT(pic->pic_type == PIC_MSIX);
 
+#if 1
+	return vecid;
+#else
 	return pic->pic_msipic->mp_msixtablei[vecid];
+#endif
 }
 
 static struct pci_attach_args *
