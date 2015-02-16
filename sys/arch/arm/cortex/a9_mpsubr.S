@@ -1,4 +1,4 @@
-/*	$NetBSD: a9_mpsubr.S,v 1.26 2014/12/02 22:57:08 matt Exp $	*/
+/*	$NetBSD: a9_mpsubr.S,v 1.28 2015/02/07 17:14:32 jmcneill Exp $	*/
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -365,7 +365,12 @@ cortex_init:
 	// Step 1a, invalidate the all cache tags in all ways on the SCU.
 	//
 	XPUTC(#65)
+#if defined(ARM_CBAR)
+	movw	r3, #:lower16:ARM_CBAR
+	movt	r3, #:upper16:ARM_CBAR
+#else
 	mrc	p15, 4, r3, c15, c0, 0		// read cbar
+#endif
 #ifdef __ARMEB__
 	setend	le
 #endif
@@ -419,7 +424,12 @@ cortex_init:
 	//
 	// Step 3, enable the SCU
 	//
+#if defined(ARM_CBAR)
+	movw	r3, #:lower16:ARM_CBAR
+	movt	r3, #:upper16:ARM_CBAR
+#else
 	mrc	p15, 4, r3, c15, c0, 0		// read cbar
+#endif
 #ifdef __ARMEB__
 	setend	le
 #endif
@@ -445,7 +455,7 @@ cortex_init:
 
 	// For the A7, SMP must be on ldrex/strex to work.
 	//
-#if defined(MULTIPROCESSOR) || defined(CPU_CORTEXA7) || defined(CPU_CORTEXA9) || defined(CPU_CORTEXA17)
+#if defined(MULTIPROCESSOR) || defined(CPU_CORTEXA5) || defined(CPU_CORTEXA7) || defined(CPU_CORTEXA9) || defined(CPU_CORTEXA17)
 #if defined(CPU_CORTEXA5) || defined(CPU_CORTEXA7) || defined(CPU_CORTEXA9) || defined(CPU_CORTEXA17)
 	//
 	// Step 4a, set ACTLR.SMP=1
