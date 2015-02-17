@@ -351,15 +351,8 @@ destruct_msi_pic(struct pic *msi_pic)
 static void
 msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
 {
-	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
-	pcitag_t tag = pa->pa_tag;
-	pcireg_t reg;
-	uint64_t table_off;
 	uint64_t entry_base;
 	uint32_t vecctl;
-	pcireg_t tbl;
-	int off;
 
 	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
 	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
@@ -370,13 +363,7 @@ msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
 		panic("%s: invalid MSI-X table index, devid=%d vecid=%d",
 		    __func__, msi_get_devid(pic), pin);
 
-	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, &reg) == 0)
-		panic("%s: no msix capability", __func__);
-	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
-	table_off = tbl & PCI_MSIX_TBLOFFSET_MASK;
-
-	entry_base = table_off +
-		PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
+	entry_base = PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
 
 	vecctl = bus_space_read_4(bstag, bshandle,
 	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL);
@@ -409,9 +396,8 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
 	pci_chipset_tag_t pc = pa->pa_pc;
 	pcitag_t tag = pa->pa_tag;
-	uint64_t table_off;
 	uint64_t entry_base;
-	pcireg_t tbl, addr, data, ctl;
+	pcireg_t addr, data, ctl;
 	int off;
 
 	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
@@ -423,13 +409,7 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 		panic("%s: invalid MSI-X table index, devid=%d vecid=%d",
 		    __func__, msi_get_devid(pic), pin);
 
-	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
-		panic("%s: no msix capability", __func__);
-	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
-	table_off = tbl & PCI_MSIX_TBLOFFSET_MASK;
-
-	entry_base = table_off +
-		PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
+	entry_base = PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
 
 	/*
 	 * see OpenBSD's cpu_attach().
@@ -450,6 +430,9 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 	bus_space_write_4(bstag, bshandle,
 	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL, 0);
 	BUS_SPACE_WRITE_FLUSH(bstag, bshandle);
+
+	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
+		panic("%s: no msix capability", __func__);
 
 	ctl = pci_conf_read(pc, tag, off + PCI_MSIX_CTL);
 
