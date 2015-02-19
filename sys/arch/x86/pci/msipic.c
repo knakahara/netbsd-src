@@ -49,6 +49,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
 
+#define MSIPIC_NAME_LEN 16
+
 struct msipic {
 	int mp_bus;
 	int mp_dev;
@@ -56,6 +58,8 @@ struct msipic {
 
 	int mp_devid;
 	int mp_veccnt;
+
+	char mp_pic_name[MSIPIC_NAME_LEN];
 
 	struct pci_attach_args mp_pa;
 	bus_space_tag_t mp_bstag;
@@ -321,7 +325,6 @@ msi_delroute(struct pic *pic, struct cpu_info *ci,
 }
 
 static struct pic msi_pic_tmpl = {
-	.pic_name = "msi",
 	.pic_type = PIC_MSI,
 	.pic_vecbase = 0,
 	.pic_apicid = 0,
@@ -337,7 +340,21 @@ static struct pic msi_pic_tmpl = {
 struct pic *
 construct_msi_pic(struct pci_attach_args *pa)
 {
-	return construct_common_msi_pic(pa, &msi_pic_tmpl);
+	struct pic *msi_pic;
+	char pic_name_buf[MSIPIC_NAME_LEN];
+
+	msi_pic = construct_common_msi_pic(pa, &msi_pic_tmpl);
+	if (msi_pic == NULL) {
+		aprint_normal("cannot allocate MSI pic.\n");
+		return NULL;
+	}
+
+	memset(pic_name_buf, 0, MSIPIC_NAME_LEN);
+	snprintf(pic_name_buf, MSIPIC_NAME_LEN, "msi%d", msi_pic->pic_msipic->mp_devid);
+	strncpy(msi_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPIC_NAME_LEN);
+	msi_pic->pic_name = msi_pic->pic_msipic->mp_pic_name;
+
+	return msi_pic;
 }
 
 void
@@ -448,7 +465,6 @@ msix_delroute(struct pic *pic, struct cpu_info *ci,
 }
 
 static struct pic msix_pic_tmpl = {
-	.pic_name = "msix",
 	.pic_type = PIC_MSIX,
 	.pic_vecbase = 0,
 	.pic_apicid = 0,
@@ -475,12 +491,18 @@ construct_msix_pic(struct pci_attach_args *pa)
 	u_int memtype;
 	int off, bir, bar, err;
 	struct pic *msix_pic;
+	char pic_name_buf[MSIPIC_NAME_LEN];
 
 	msix_pic = construct_common_msi_pic(pa, &msix_pic_tmpl);
 	if (msix_pic == NULL) {
 		aprint_normal("cannot allocate MSI-X pic.\n");
 		return NULL;
 	}
+
+	memset(pic_name_buf, 0, MSIPIC_NAME_LEN);
+	snprintf(pic_name_buf, MSIPIC_NAME_LEN, "msix%d", msix_pic->pic_msipic->mp_devid);
+	strncpy(msix_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPIC_NAME_LEN);
+	msix_pic->pic_name = msix_pic->pic_msipic->mp_pic_name;
 
 	table_nentry = pci_msix_count(pa);
 	if (table_nentry == 0) {
