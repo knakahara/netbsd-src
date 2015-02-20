@@ -80,6 +80,8 @@ extern void platform_init(void);
 
 #include <x86/x86/tsc.h>
 
+#include <x86/pci/msipic.h>
+
 /*
  * Determine i/o configuration for a machine.
  */
@@ -95,6 +97,8 @@ cpu_configure(void)
 #endif
 
 	x86_64_proc0_tss_ldt_init();
+
+	msipic_init();
 
 	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("configure: mainbus not configured");

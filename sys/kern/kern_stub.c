@@ -149,6 +149,20 @@ __weak_alias(kobj_renamespace, nullop);
 
 __weak_alias(intr_distribute, eopnotsupp);
 
+__weak_alias(pci_msi_count, nullop);
+__weak_alias(pci_msi_alloc, eopnotsupp);
+__weak_alias(pci_msi_alloc_exact, eopnotsupp);
+__weak_alias(pci_msi_establish, nullop);
+__weak_alias(pci_msi_disestablish, voidop);
+__weak_alias(pci_msi_release, voidop);
+__weak_alias(pci_msix_count, nullop);
+__weak_alias(pci_msix_alloc, eopnotsupp);
+__weak_alias(pci_msix_alloc_exact, eopnotsupp);
+__weak_alias(pci_msix_alloc_map, eopnotsupp);
+__weak_alias(pci_msix_establish, nullop);
+__weak_alias(pci_msix_disestablish, voidop);
+__weak_alias(pci_msix_release, voidop);
+
 /*
  * Scheduler activations system calls.  These need to remain until libc's
  * major version is bumped.

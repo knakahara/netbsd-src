@@ -176,6 +176,8 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <dev/pci/ppbreg.h>
 #endif
 
+#include <x86/pci/msipic.h>
+
 #ifdef DDB
 #include <ddb/db_output.h>
 #endif
@@ -433,6 +435,22 @@ create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 {
 	int ih;
 
+	if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX) {
+		uint64_t pih;
+		int dev, vec;
+
+		dev = msi_get_devid(pic);
+		vec = pin;
+		pih = __SHIFTIN((uint64_t)dev, MSI_INT_DEV_MASK) |
+			__SHIFTIN((uint64_t)vec, MSI_INT_VEC_MASK) | APIC_INT_VIA_MSI;
+		if (pic->pic_type == PIC_MSI)
+			MSI_INT_MAKE_MSI(pih);
+		else if (pic->pic_type == PIC_MSIX)
+			MSI_INT_MAKE_MSIX(pih);
+
+		return pci_msi_string(NULL, pih, buf, len);
+	}
+
 	/*
 	 * If the device is pci, "legacy_irq" is alway -1. Least 8 bit of "ih"
 	 * is only used in intr_string() to show the irq number.
@@ -526,6 +544,7 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 
 	kmem_free(isp->is_saved_evcnt,
 	    sizeof(*(isp->is_saved_evcnt)) * ncpu);
+
 	kmem_free(isp, sizeof(*isp));
 }
 
@@ -563,13 +582,18 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		KASSERT(CPU_IS_PRIMARY(ci));
 		slot = pin;
 	} else {
+		int start = 0;
 		slot = -1;
+
+		/* avoid reserved slots for legacy interrupts. */
+		if (CPU_IS_PRIMARY(ci) && is_msi_pic(pic))
+			start = NUM_LEGACY_IRQS;
 
 		/*
 		 * intr_allocate_slot has checked for an existing mapping.
 		 * Now look for a free slot.
 		 */
-		for (i = 0; i < MAX_INTR_SOURCES ; i++) {
+		for (i = start; i < MAX_INTR_SOURCES ; i++) {
 			if (ci->ci_isources[i] == NULL) {
 				slot = i;
 				break;
@@ -582,10 +606,16 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
+		const char *via;
+
 		isp = chained;
 		KASSERT(isp != NULL);
+		if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX)
+			via = "vec";
+		else
+			via = "pin";
 		snprintf(isp->is_evname, sizeof (isp->is_evname),
-		    "pin %d", pin);
+		    "%s %d", via, pin);
 		evcnt_attach_dynamic(&isp->is_evcnt, EVCNT_TYPE_INTR, NULL,
 		    pic->pic_name, isp->is_evname);
 		isp->is_active_cpu = ci->ci_cpuid;
@@ -850,6 +880,12 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	/* allocate intrsource pool, if not yet. */
 	chained = intr_get_io_intrsource(intrstr);
 	if (chained == NULL) {
+		if (is_msi_pic(pic)) {
+			mutex_exit(&cpu_lock);
+			printf("%s: %s has no intrsource\n", __func__, intrstr);
+			return NULL;
+		}
+
 		chained = intr_allocate_io_intrsource(intrstr);
 		if (chained == NULL) {
 			mutex_exit(&cpu_lock);
@@ -1077,11 +1113,9 @@ intr_disestablish(struct intrhand *ih)
 		where = xc_unicast(0, intr_disestablish_xcall, ih, NULL, ci);
 		xc_wait(where);
 	}	
-
-	if (intr_num_handlers(isp) < 1) {
+	if (!is_msi_pic(isp->is_pic) && intr_num_handlers(isp) < 1) {
 		intr_free_io_intrsource_direct(isp);
 	}
-
 	mutex_exit(&cpu_lock);
 
 	kmem_free(ih, sizeof(*ih));

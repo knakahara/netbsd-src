@@ -112,11 +112,10 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include <machine/mpacpi.h>
 #endif
 
-#define	MPSAFE_MASK	0x80000000
-
 int
-pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
+pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *pihp)
 {
+	int *ihp = (int *)pihp; /* IRQ interrupts use lower 32bit only */
 	int pin = pa->pa_intrpin;
 	int line = pa->pa_intrline;
 	pci_chipset_tag_t ipc, pc = pa->pa_pc;
@@ -128,7 +127,7 @@ pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_MAP) == 0)
 			continue;
-		return (*ipc->pc_ov->ov_intr_map)(ipc->pc_ctx, pa, ihp);
+		return (*ipc->pc_ov->ov_intr_map)(ipc->pc_ctx, pa, pihp);
 	}
 
 	if (pin == 0) {
@@ -227,6 +226,9 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 {
 	pci_chipset_tag_t ipc;
 
+	if (INT_VIA_MSI(ih))
+		return pci_msi_string(pc, ih, buf, len);
+
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)
 			continue;
@@ -292,7 +294,7 @@ pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	}
 
 	pic = &i8259_pic;
-	pin = irq = (ih & ~MPSAFE_MASK);
+	pin = irq = ((int)ih & ~MPSAFE_MASK);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
 #if NIOAPIC > 0
@@ -330,6 +332,7 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 	intr_disestablish(cookie);
 }
 
+#if 0
 #if NIOAPIC > 0
 /*
  * experimental support for MSI, does support a single vector,
@@ -432,4 +435,5 @@ pci_msi_disestablish(void *ih)
 	intr_disestablish(msih->ih);
 	free(msih, M_DEVBUF);
 }
+#endif
 #endif
