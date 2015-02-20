@@ -86,6 +86,7 @@ __KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.98 2013/11/08 03:12:48 christos Exp $"
 #include <arch/x86/pci/pci_addr_fixup.h>
 #endif
 #endif
+#include <archx86/pci/msipic.h>
 #endif
 
 void	mainbus_childdetached(device_t, device_t);
@@ -227,6 +228,8 @@ mainbus_attach(device_t parent, device_t self, void *aux)
 #endif
 
 #if NPCI > 0
+	msipic_init();
+
 	/*
 	 * ACPI needs to be able to access PCI configuration space.
 	 */

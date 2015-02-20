@@ -41,6 +41,7 @@
  * Types provided to machine-independent PCI code
  * See also i82093var.h to find out pci_intr_handle_t's bitfield.
  */
+
 typedef intr_handle_t pci_intr_handle_t;
 
 #include <x86/pci_machdep_common.h>

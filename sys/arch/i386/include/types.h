@@ -129,6 +129,10 @@ typedef	volatile unsigned char		__cpu_simple_lock_t;
 
 #if defined(_KERNEL)
 #define	__HAVE_RAS
+
+#if !defined(XEN)
+#define __HAVE_PCI_MSI_MSIX
+#endif
 #endif
 
 #endif	/* _I386_MACHTYPES_H_ */

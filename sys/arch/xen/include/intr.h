@@ -154,6 +154,8 @@ splraiseipl(ipl_cookie_t icookie)
 
 struct pcibus_attach_args;
 
+typedef int intr_handle_t;
+
 #ifdef MULTIPROCESSOR
 int intr_biglock_wrapper(void *);
 #endif
@@ -163,7 +165,7 @@ int x86_nmi(void);
 
 void *intr_establish(int, struct pic *, int, int, int, int (*)(void *), void *, bool);
 void intr_disestablish(struct intrhand *);
-const char *intr_string(int);
+const char *intr_string(intr_handle_t);
 void cpu_intr_init(struct cpu_info *);
 int xen_intr_map(int *, int);
 #ifdef INTRDEBUG

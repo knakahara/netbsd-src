@@ -103,6 +103,7 @@ typedef	volatile unsigned char		__cpu_simple_lock_t;
 #define	__HAVE_MM_MD_DIRECT_MAPPED_IO
 #define	__HAVE_MM_MD_DIRECT_MAPPED_PHYS
 #define	__HAVE_CPU_UAREA_ROUTINES
+#define	__HAVE_PCI_MSI_MSIX
 #endif
 #endif
 
