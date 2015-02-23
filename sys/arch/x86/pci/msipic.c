@@ -67,7 +67,6 @@ struct msipic {
 	bus_size_t mp_bssize;
 	struct pic *mp_pic;
 
-	kmutex_t mp_lock;
 	LIST_ENTRY(msipic) mp_list;
 };
 
@@ -182,7 +181,6 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	    &msipic->mp_bus, &msipic->mp_dev, &msipic->mp_fun);
 	memcpy(&msipic->mp_pa, pa, sizeof(msipic->mp_pa));
 	msipic->mp_devid = devid;
-	mutex_init(&msipic->mp_lock, MUTEX_DEFAULT, IPL_NONE);
 	/*
 	 * pci_msi_alloc() must be called only ont time in the device driver.
 	 */
