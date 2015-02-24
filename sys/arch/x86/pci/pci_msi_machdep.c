@@ -132,7 +132,7 @@ pci_msi_alloc_vectors(struct pic *msi_pic, uint *table_indexes, int *count)
 }
 
 static void
-pci_msi_free_vectors(struct pic *msi_pic, int count)
+pci_msi_free_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 {
 	const char *intrstr;
 	char intrstr_buf[INTRID_LEN + 1];
@@ -146,6 +146,8 @@ pci_msi_free_vectors(struct pic *msi_pic, int count)
 		intr_free_io_intrsource(intrstr);
 	}
 	mutex_exit(&cpu_lock);
+
+	kmem_free(pihs, sizeof(*pihs) * count);
 }
 
 static int
@@ -191,7 +193,7 @@ pci_msi_alloc_md_common(pci_intr_handle_t **ihps, int *count,
 
 	error = set_msi_vectors(msi_pic, NULL, *count);
 	if (error) {
-		pci_msi_free_vectors(msi_pic, *count);
+		pci_msi_free_vectors(msi_pic, vectors, *count);
 		destruct_msi_pic(msi_pic);
 		return EINVAL;
 	}
@@ -224,7 +226,7 @@ pci_msi_release_md(pci_intr_handle_t **pihs, int count)
 	if (pic == NULL)
 		return;
 
-	pci_msi_free_vectors(pic, count);
+	pci_msi_free_vectors(pic, vectors, count);
 	destruct_msi_pic(pic);
 }
 
@@ -294,7 +296,7 @@ pci_msix_alloc_md_common(pci_intr_handle_t **ihps, u_int *table_indexes,
 
 	error = set_msi_vectors(msix_pic, vectors, *count);
 	if (error) {
-		pci_msi_free_vectors(msix_pic, *count);
+		pci_msi_free_vectors(msix_pic, vectors, *count);
 		destruct_msix_pic(msix_pic);
 		return EINVAL;
 	}
@@ -333,7 +335,7 @@ pci_msix_release_md(pci_intr_handle_t **pihs, int count)
 	if (pic == NULL)
 		return;
 
-	pci_msi_free_vectors(pic, count);
+	pci_msi_free_vectors(pic, vectors, count);
 	destruct_msix_pic(pic);
 }
 
