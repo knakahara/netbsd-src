@@ -163,18 +163,18 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	if (devid == -1)
 		return NULL;
 
-	pic = kmem_zalloc(sizeof(*pic), KM_SLEEP);
+	pic = kmem_alloc(sizeof(*pic), KM_SLEEP);
 	if (pic == NULL) {
 		return NULL;
 	}
-	memcpy(pic, pic_tmpl, sizeof(*pic));
 
 	msipic = kmem_zalloc(sizeof(*msipic), KM_SLEEP);
 	if (msipic == NULL) {
-		kmem_free(pic, sizeof(*msipic));
+		kmem_free(pic, sizeof(*pic));
 		return NULL;
 	}
 
+	memcpy(pic, pic_tmpl, sizeof(*pic));
 	pic->pic_msipic = msipic;
 	msipic->mp_pic = pic;
 	pci_decompose_tag(pc, tag,
