@@ -430,14 +430,27 @@ intr_scan_bus(int bus, int pin, int *handle)
  * by MI code and intrctl(8).
  */
 static const char *
-create_intrid(int pin, struct pic *pic, char *buf, size_t len)
+create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 {
 	int ih;
 
-	ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
-		((pin << APIC_INT_PIN_SHIFT) & APIC_INT_PIN_MASK);
-	if (pic->pic_type == PIC_IOAPIC) {
-		ih |= APIC_INT_VIA_APIC;
+	/*
+	 * If the device is pci, "legacy_irq" is alway -1. Least 8 bit of "ih"
+	 * is only used in intr_string() to show the irq number.
+	 * If the device is "legacy"(such as floppy), "legacy_irq" is the
+	 * reserved irq number. Furthermore, least 8 bit of "ih" is used as
+	 * the real irq number.
+	 */
+	if (pic->pic_type == PIC_I8259) {
+		KASSERT(legacy_irq != -1);
+		ih = legacy_irq;
+	} else {
+		ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
+			((pin << APIC_INT_PIN_SHIFT) & APIC_INT_PIN_MASK);
+		if (pic->pic_type == PIC_IOAPIC) {
+			ih |= APIC_INT_VIA_APIC;
+		}
+		ih |= pin;
 	}
 	KASSERT(ih != 0);
 
@@ -861,7 +874,8 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 		return NULL;
 	}
 
-	intrstr = create_intrid(pin, pic, intrstr_buf, sizeof(intrstr_buf));
+	intrstr = create_intrid(legacy_irq, pic, pin, intrstr_buf,
+	    sizeof(intrstr_buf));
 	KASSERT(intrstr != NULL);
 
 	mutex_enter(&cpu_lock);
