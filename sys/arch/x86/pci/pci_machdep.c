@@ -219,7 +219,7 @@ const struct {
 #define _dme(vend, prod) \
 	{ PCI_QUIRK_DISABLE_MSI, PCI_ID_CODE(vend, prod) }
 #define _dmxe(vend, prod) \
-	{ PCI_QUIRK_DISABLE_MSI, PCI_ID_CODE(vend, prod) }
+	{ PCI_QUIRK_DISABLE_MSIX, PCI_ID_CODE(vend, prod) }
 #define _emve(vend, prod) \
 	{ PCI_QUIRK_ENABLE_MSI_VM, PCI_ID_CODE(vend, prod) }
 const struct {
