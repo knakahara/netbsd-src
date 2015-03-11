@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_verifiedexec.c,v 1.134 2014/04/15 06:14:55 maxv Exp $	*/
+/*	$NetBSD: kern_veriexec.c,v 1.1 2015/02/13 17:50:48 maxv Exp $	*/
 
 /*-
  * Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_verifiedexec.c,v 1.134 2014/04/15 06:14:55 maxv Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_veriexec.c,v 1.1 2015/02/13 17:50:48 maxv Exp $");
 
 #include "opt_veriexec.h"
 

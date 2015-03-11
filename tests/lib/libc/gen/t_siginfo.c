@@ -1,4 +1,4 @@
-/* $NetBSD: t_siginfo.c,v 1.27 2014/12/29 18:36:27 martin Exp $ */
+/* $NetBSD: t_siginfo.c,v 1.29 2015/02/17 09:47:08 isaki Exp $ */
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -311,7 +311,8 @@ ATF_TC_BODY(sigfpe_flt, tc)
 		atf_tc_skip("Test does not run correctly under QEMU");
 #if defined(__powerpc__)
 	atf_tc_skip("Test not valid on powerpc");
-#elif defined(__arm__) && !__SOFTFP__	/*
+#elif defined(__arm__) && !__SOFTFP__
+	/*
 	 * Some NEON fpus do not implement IEEE exception handling,
 	 * skip these tests if running on them and compiled for
 	 * hard float.
@@ -464,6 +465,10 @@ ATF_TC_BODY(sigbus_adraln, tc)
 	if (val == 0)
 		atf_tc_skip("No SIGBUS signal for unaligned accesses");
 #endif
+
+	/* m68k (except sun2) never issue SIGBUS (PR lib/49653) */
+	if (strcmp(MACHINE_ARCH, "m68k") == 0)
+		atf_tc_skip("No SIGBUS signal for unaligned accesses");
 
 	sa.sa_flags = SA_SIGINFO;
 	sa.sa_sigaction = sigbus_action;

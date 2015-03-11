@@ -1,4 +1,4 @@
-/*	$NetBSD: if_wm.c,v 1.310 2015/01/29 02:59:17 msaitoh Exp $	*/
+/*	$NetBSD: if_wm.c,v 1.313 2015/02/16 00:25:52 msaitoh Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002, 2003, 2004 Wasabi Systems, Inc.
@@ -81,7 +81,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.310 2015/01/29 02:59:17 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.313 2015/02/16 00:25:52 msaitoh Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_net_mpsafe.h"
@@ -350,6 +350,10 @@ struct wm_softc {
 	int sc_rev;			/* MAC revision */
 	wm_phy_type sc_phytype;		/* PHY type */
 	uint32_t sc_mediatype;		/* Media type (Copper, Fiber, SERDES)*/
+#define	WM_MEDIATYPE_UNKNOWN		0x00
+#define	WM_MEDIATYPE_FIBER		0x01
+#define	WM_MEDIATYPE_COPPER		0x02
+#define	WM_MEDIATYPE_SERDES		0x03 /* Internal SERDES */
 	int sc_funcid;			/* unit number of the chip (0 to 3) */
 	int sc_flags;			/* flags; see below */
 	int sc_if_flags;		/* last if_flags */
@@ -589,6 +593,7 @@ static void	wm_set_pcie_completion_timeout(struct wm_softc *);
 static void	wm_get_auto_rd_done(struct wm_softc *);
 static void	wm_lan_init_done(struct wm_softc *);
 static void	wm_get_cfg_done(struct wm_softc *);
+static void	wm_initialize_hardware_bits(struct wm_softc *);
 static void	wm_reset(struct wm_softc *);
 static int	wm_add_rxbuf(struct wm_softc *, struct wm_rxqueue *, int);
 static void	wm_rxdrain_all(struct wm_softc *);
@@ -769,10 +774,10 @@ static const struct wm_product {
 	const char		*wmp_name;
 	wm_chip_type		wmp_type;
 	uint32_t		wmp_flags;
-#define	WMP_F_UNKNOWN		0x00
-#define	WMP_F_FIBER		0x01
-#define	WMP_F_COPPER		0x02
-#define	WMP_F_SERDES		0x03 /* Internal SERDES */
+#define	WMP_F_UNKNOWN		WM_MEDIATYPE_UNKNOWN
+#define	WMP_F_FIBER		WM_MEDIATYPE_FIBER
+#define	WMP_F_COPPER		WM_MEDIATYPE_COPPER
+#define	WMP_F_SERDES		WM_MEDIATYPE_SERDES
 #define WMP_MEDIATYPE(x)	((x) & 0x03)
 } wm_products[] = {
 	{ PCI_VENDOR_INTEL,	PCI_PRODUCT_INTEL_82542,
@@ -2009,7 +2014,6 @@ wm_init_rx_queues(struct wm_softc *sc)
  * match, attach, detach, init, start, stop, ioctl, watchdog and so on.
  */
 
-
 /* Lookup supported device table */
 static const struct wm_product *
 wm_lookup(const struct pci_attach_args *pa)
@@ -2391,6 +2395,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	case WM_T_82541_2:
 	case WM_T_82547:
 	case WM_T_82547_2:
+		sc->sc_flags |= WM_F_LOCK_EECD;
 		reg = CSR_READ(sc, WMREG_EECD);
 		if (reg & EECD_EE_TYPE) {
 			/* SPI */
@@ -2406,7 +2411,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 				sc->sc_nvm_addrbits = 6;
 			}
 		}
-		sc->sc_flags |= WM_F_LOCK_EECD;
 		break;
 	case WM_T_82571:
 	case WM_T_82572:
@@ -2483,7 +2487,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	case WM_T_82571:
 	case WM_T_82572:
 		reg = CSR_READ(sc, WMREG_SWSM2);
-		if ((reg & SWSM2_LOCK) != 0) {
+		if ((reg & SWSM2_LOCK) == 0) {
 			CSR_WRITE(sc, WMREG_SWSM2, reg | SWSM2_LOCK);
 			force_clear_smbi = true;
 		} else
@@ -2746,10 +2750,10 @@ wm_attach(device_t parent, device_t self, void *aux)
 		wm_gmii_mediainit(sc, wmp->wmp_product);
 	} else if (sc->sc_type < WM_T_82543 ||
 	    (CSR_READ(sc, WMREG_STATUS) & STATUS_TBIMODE) != 0) {
-		if (sc->sc_mediatype & WMP_F_COPPER) {
+		if (sc->sc_mediatype == WM_MEDIATYPE_COPPER) {
 			aprint_error_dev(sc->sc_dev,
 			    "WARNING: TBIMODE set on 1000BASE-T product!\n");
-			sc->sc_mediatype = WMP_F_FIBER;
+			sc->sc_mediatype = WM_MEDIATYPE_FIBER;
 		}
 		wm_tbi_mediainit(sc);
 	} else {
@@ -2766,45 +2770,45 @@ wm_attach(device_t parent, device_t self, void *aux)
 			switch (link_mode) {
 			case CTRL_EXT_LINK_MODE_1000KX:
 				aprint_verbose_dev(sc->sc_dev, "1000KX\n");
-				sc->sc_mediatype = WMP_F_SERDES;
+				sc->sc_mediatype = WM_MEDIATYPE_SERDES;
 				break;
 			case CTRL_EXT_LINK_MODE_SGMII:
 				if (wm_sgmii_uses_mdio(sc)) {
 					aprint_verbose_dev(sc->sc_dev,
 					    "SGMII(MDIO)\n");
 					sc->sc_flags |= WM_F_SGMII;
-					sc->sc_mediatype = WMP_F_COPPER;
+					sc->sc_mediatype = WM_MEDIATYPE_COPPER;
 					break;
 				}
 				aprint_verbose_dev(sc->sc_dev, "SGMII(I2C)\n");
 				/*FALLTHROUGH*/
 			case CTRL_EXT_LINK_MODE_PCIE_SERDES:
 				sc->sc_mediatype = wm_sfp_get_media_type(sc);
-				if (sc->sc_mediatype == WMP_F_UNKNOWN) {
+				if (sc->sc_mediatype == WM_MEDIATYPE_UNKNOWN) {
 					if (link_mode
 					    == CTRL_EXT_LINK_MODE_SGMII) {
 						sc->sc_mediatype
-						    = WMP_F_COPPER;
+						    = WM_MEDIATYPE_COPPER;
 						sc->sc_flags |= WM_F_SGMII;
 					} else {
 						sc->sc_mediatype
-						    = WMP_F_SERDES;
+						    = WM_MEDIATYPE_SERDES;
 						aprint_verbose_dev(sc->sc_dev,
 						    "SERDES\n");
 					}
 					break;
 				}
-				if (sc->sc_mediatype == WMP_F_SERDES)
+				if (sc->sc_mediatype == WM_MEDIATYPE_SERDES)
 					aprint_verbose_dev(sc->sc_dev,
 					    "SERDES\n");
 
 				/* Change current link mode setting */
 				reg &= ~CTRL_EXT_LINK_MODE_MASK;
 				switch (sc->sc_mediatype) {
-				case WMP_F_COPPER:
+				case WM_MEDIATYPE_COPPER:
 					reg |= CTRL_EXT_LINK_MODE_SGMII;
 					break;
-				case WMP_F_SERDES:
+				case WM_MEDIATYPE_SERDES:
 					reg |= CTRL_EXT_LINK_MODE_PCIE_SERDES;
 					break;
 				default:
@@ -2815,7 +2819,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 			case CTRL_EXT_LINK_MODE_GMII:
 			default:
 				aprint_verbose_dev(sc->sc_dev, "Copper\n");
-				sc->sc_mediatype = WMP_F_COPPER;
+				sc->sc_mediatype = WM_MEDIATYPE_COPPER;
 				break;
 			}
 
@@ -2826,16 +2830,16 @@ wm_attach(device_t parent, device_t self, void *aux)
 				reg &= ~CTRL_EXT_I2C_ENA;
 			CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
 
-			if (sc->sc_mediatype == WMP_F_COPPER)
+			if (sc->sc_mediatype == WM_MEDIATYPE_COPPER)
 				wm_gmii_mediainit(sc, wmp->wmp_product);
 			else
 				wm_tbi_mediainit(sc);
 			break;
 		default:
-			if (sc->sc_mediatype & WMP_F_FIBER)
+			if (sc->sc_mediatype == WM_MEDIATYPE_FIBER)
 				aprint_error_dev(sc->sc_dev,
 				    "WARNING: TBIMODE clear on 1000BASE-X product!\n");
-			sc->sc_mediatype = WMP_F_COPPER;
+			sc->sc_mediatype = WM_MEDIATYPE_COPPER;
 			wm_gmii_mediainit(sc, wmp->wmp_product);
 		}
 	}
@@ -4338,6 +4342,200 @@ wm_get_cfg_done(struct wm_softc *sc)
 	}
 }
 
+/* Init hardware bits */
+void
+wm_initialize_hardware_bits(struct wm_softc *sc)
+{
+	uint32_t tarc0, tarc1, reg;
+	
+	/* For 82571 variant, 80003 and ICHs */
+	if (((sc->sc_type >= WM_T_82571) && (sc->sc_type <= WM_T_82583))
+	    || (sc->sc_type >= WM_T_80003)) {
+
+		/* Transmit Descriptor Control 0 */
+		reg = CSR_READ(sc, WMREG_TXDCTL(0));
+		reg |= TXDCTL_COUNT_DESC;
+		CSR_WRITE(sc, WMREG_TXDCTL(0), reg);
+
+		/* Transmit Descriptor Control 1 */
+		reg = CSR_READ(sc, WMREG_TXDCTL(1));
+		reg |= TXDCTL_COUNT_DESC;
+		CSR_WRITE(sc, WMREG_TXDCTL(1), reg);
+
+		/* TARC0 */
+		tarc0 = CSR_READ(sc, WMREG_TARC0);
+		switch (sc->sc_type) {
+		case WM_T_82571:
+		case WM_T_82572:
+		case WM_T_82573:
+		case WM_T_82574:
+		case WM_T_82583:
+		case WM_T_80003:
+			/* Clear bits 30..27 */
+			tarc0 &= ~__BITS(30, 27);
+			break;
+		default:
+			break;
+		}
+
+		switch (sc->sc_type) {
+		case WM_T_82571:
+		case WM_T_82572:
+			tarc0 |= __BITS(26, 23); /* TARC0 bits 23-26 */
+
+			tarc1 = CSR_READ(sc, WMREG_TARC1);
+			tarc1 &= ~__BITS(30, 29); /* Clear bits 30 and 29 */
+			tarc1 |= __BITS(26, 24); /* TARC1 bits 26-24 */
+			/* 8257[12] Errata No.7 */
+			tarc1 |= __BIT(22); /* TARC1 bits 22 */
+
+			/* TARC1 bit 28 */
+			if ((CSR_READ(sc, WMREG_TCTL) & TCTL_MULR) != 0)
+				tarc1 &= ~__BIT(28);
+			else
+				tarc1 |= __BIT(28);
+			CSR_WRITE(sc, WMREG_TARC1, tarc1);
+
+			/*
+			 * 8257[12] Errata No.13
+			 * Disable Dyamic Clock Gating.
+			 */
+			reg = CSR_READ(sc, WMREG_CTRL_EXT);
+			reg &= ~CTRL_EXT_DMA_DYN_CLK;
+			CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
+			break;
+		case WM_T_82573:
+		case WM_T_82574:
+		case WM_T_82583:
+			if ((sc->sc_type == WM_T_82574)
+			    || (sc->sc_type == WM_T_82583))
+				tarc0 |= __BIT(26); /* TARC0 bit 26 */
+
+			/* Extended Device Control */
+			reg = CSR_READ(sc, WMREG_CTRL_EXT);
+			reg &= ~__BIT(23);	/* Clear bit 23 */
+			reg |= __BIT(22);	/* Set bit 22 */
+			CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
+
+			/* Device Control */
+			sc->sc_ctrl &= ~__BIT(29);	/* Clear bit 29 */
+			CSR_WRITE(sc, WMREG_CTRL, sc->sc_ctrl);
+
+			/* PCIe Control Register */
+			if ((sc->sc_type == WM_T_82574)
+			    || (sc->sc_type == WM_T_82583)) {
+				/*
+				 * Document says this bit must be set for
+				 * proper operation.
+				 */
+				reg = CSR_READ(sc, WMREG_GCR);
+				reg |= __BIT(22);
+				CSR_WRITE(sc, WMREG_GCR, reg);
+
+				/*
+				 * Apply workaround for hardware errata
+				 * documented in errata docs Fixes issue where
+				 * some error prone or unreliable PCIe
+				 * completions are occurring, particularly
+				 * with ASPM enabled. Without fix, issue can
+				 * cause Tx timeouts.
+				 */
+				reg = CSR_READ(sc, WMREG_GCR2);
+				reg |= __BIT(0);
+				CSR_WRITE(sc, WMREG_GCR2, reg);
+			}
+			break;
+		case WM_T_80003:
+			/* TARC0 */
+			if ((sc->sc_mediatype == WM_MEDIATYPE_FIBER)
+			    || (sc->sc_mediatype == WM_MEDIATYPE_SERDES))
+				tarc0 &= ~__BIT(20); /* Clear bits 20 */
+
+			/* TARC1 bit 28 */
+			tarc1 = CSR_READ(sc, WMREG_TARC1);
+			if ((CSR_READ(sc, WMREG_TCTL) & TCTL_MULR) != 0)
+				tarc1 &= ~__BIT(28);
+			else
+				tarc1 |= __BIT(28);
+			CSR_WRITE(sc, WMREG_TARC1, tarc1);
+			break;
+		case WM_T_ICH8:
+		case WM_T_ICH9:
+		case WM_T_ICH10:
+		case WM_T_PCH:
+		case WM_T_PCH2:
+		case WM_T_PCH_LPT:
+			/* TARC 0 */
+			if (sc->sc_type == WM_T_ICH8) {
+				/* Set TARC0 bits 29 and 28 */
+				tarc0 |= __BITS(29, 28);
+			}
+			/* Set TARC0 bits 23,24,26,27 */
+			tarc0 |= __BITS(27, 26) | __BITS(24, 23);
+
+			/* CTRL_EXT */
+			reg = CSR_READ(sc, WMREG_CTRL_EXT);
+			reg |= __BIT(22);	/* Set bit 22 */
+			/*
+			 * Enable PHY low-power state when MAC is at D3
+			 * w/o WoL
+			 */
+			if (sc->sc_type >= WM_T_PCH)
+				reg |= CTRL_EXT_PHYPDEN;
+			CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
+
+			/* TARC1 */
+			tarc1 = CSR_READ(sc, WMREG_TARC1);
+			/* bit 28 */
+			if ((CSR_READ(sc, WMREG_TCTL) & TCTL_MULR) != 0)
+				tarc1 &= ~__BIT(28);
+			else
+				tarc1 |= __BIT(28);
+			tarc1 |= __BIT(24) | __BIT(26) | __BIT(30);
+			CSR_WRITE(sc, WMREG_TARC1, tarc1);
+
+			/* Device Status */
+			if (sc->sc_type == WM_T_ICH8) {
+				reg = CSR_READ(sc, WMREG_STATUS);
+				reg &= ~__BIT(31);
+				CSR_WRITE(sc, WMREG_STATUS, reg);
+
+			}
+
+			/*
+			 * Work-around descriptor data corruption issue during
+			 * NFS v2 UDP traffic, just disable the NFS filtering
+			 * capability.
+			 */
+			reg = CSR_READ(sc, WMREG_RFCTL);
+			reg |= WMREG_RFCTL_NFSWDIS | WMREG_RFCTL_NFSRDIS;
+			CSR_WRITE(sc, WMREG_RFCTL, reg);
+			break;
+		default:
+			break;
+		}
+		CSR_WRITE(sc, WMREG_TARC0, tarc0);
+
+		/*
+		 * 8257[12] Errata No.52 and some others.
+		 * Avoid RSS Hash Value bug.
+		 */
+		switch (sc->sc_type) {
+		case WM_T_82571:
+		case WM_T_82572:
+		case WM_T_82573:
+		case WM_T_80003:
+		case WM_T_ICH8:
+			reg = CSR_READ(sc, WMREG_RFCTL);
+			reg |= WMREG_RFCTL_NEWIPV6EXDIS |WMREG_RFCTL_IPV6EXDIS;
+			CSR_WRITE(sc, WMREG_RFCTL, reg);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 /*
  * wm_reset:
  *
@@ -4393,6 +4591,7 @@ wm_reset(struct wm_softc *sc)
 		sc->sc_pba = PBA_20K;
 		break;
 	case WM_T_ICH8:
+		/* Workaround for a bit corruption issue in FIFO memory */
 		sc->sc_pba = PBA_8K;
 		CSR_WRITE(sc, WMREG_PBS, PBA_16K);
 		break;
@@ -4876,15 +5075,12 @@ wm_init_locked(struct ifnet *ifp)
 		break;
 	}
 
+	/* Init hardware bits */
+	wm_initialize_hardware_bits(sc);
+
 	/* Reset the PHY. */
 	if (sc->sc_flags & WM_F_HAS_MII)
 		wm_gmii_reset(sc);
-
-	reg = CSR_READ(sc, WMREG_CTRL_EXT);
-	/* Enable PHY low-power state when MAC is at D3 w/o WoL */
-	if ((sc->sc_type == WM_T_PCH) || (sc->sc_type == WM_T_PCH2)
-	    || (sc->sc_type == WM_T_PCH_LPT))
-		CSR_WRITE(sc, WMREG_CTRL_EXT, reg | CTRL_EXT_PHYPDEN);
 
 	wm_init_tx_queues(sc);
 
@@ -4992,8 +5188,8 @@ wm_init_locked(struct ifnet *ifp)
 		reg |= RXCSUM_IPV6OFL | RXCSUM_TUOFL;
 	CSR_WRITE(sc, WMREG_RXCSUM, reg);
 
-	/* Set up the interrupt registers */
-        CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
+	/* Set up the interrupt registers. */
+	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 
 	if (sc->sc_intr_type == WM_IT_MSIX)
 		wm_init_msix(sc);
@@ -8957,7 +9153,7 @@ wm_check_for_link(struct wm_softc *sc)
 	uint32_t status;
 	uint32_t sig;
 
-	if (sc->sc_mediatype & WMP_F_SERDES) {
+	if (sc->sc_mediatype == WM_MEDIATYPE_SERDES) {
 		sc->sc_tbi_linkup = 1;
 		return 0;
 	}
@@ -9056,7 +9252,7 @@ wm_tbi_mediainit(struct wm_softc *sc)
 	 */
 	sc->sc_ctrl |= CTRL_SWDPIO(0);
 	sc->sc_ctrl &= ~CTRL_SWDPIO(1);
-	if (sc->sc_mediatype & WMP_F_SERDES)
+	if (sc->sc_mediatype == WM_MEDIATYPE_SERDES)
 		sc->sc_ctrl &= ~CTRL_LRST;
 
 	CSR_WRITE(sc, WMREG_CTRL, sc->sc_ctrl);
@@ -9136,7 +9332,7 @@ wm_tbi_mediachange(struct ifnet *ifp)
 	uint32_t status;
 	int i;
 
-	if (sc->sc_mediatype & WMP_F_SERDES)
+	if (sc->sc_mediatype == WM_MEDIATYPE_SERDES)
 		return 0;
 
 	if ((sc->sc_type == WM_T_82571) || (sc->sc_type == WM_T_82572)
@@ -9266,7 +9462,7 @@ wm_tbi_check_link(struct wm_softc *sc)
 
 	KASSERT(WM_CORE_LOCKED(sc)); /* lock for link */
 
-	if (sc->sc_mediatype & WMP_F_SERDES) {
+	if (sc->sc_mediatype == WM_MEDIATYPE_SERDES) {
 		sc->sc_tbi_linkup = 1;
 		return;
 	}
@@ -9355,7 +9551,7 @@ wm_sfp_get_media_type(struct wm_softc *sc)
 	uint32_t ctrl_ext;
 	uint8_t val = 0;
 	int timeout = 3;
-	uint32_t mediatype = WMP_F_UNKNOWN;
+	uint32_t mediatype = WM_MEDIATYPE_UNKNOWN;
 	int rv = -1;
 
 	ctrl_ext = CSR_READ(sc, WMREG_CTRL_EXT);
@@ -9393,13 +9589,13 @@ wm_sfp_get_media_type(struct wm_softc *sc)
 	}
 
 	if ((val & (SFF_SFP_ETH_FLAGS_1000SX | SFF_SFP_ETH_FLAGS_1000LX)) != 0)
-		mediatype = WMP_F_SERDES;
+		mediatype = WM_MEDIATYPE_SERDES;
 	else if ((val & SFF_SFP_ETH_FLAGS_1000T) != 0){
 		sc->sc_flags |= WM_F_SGMII;
-		mediatype = WMP_F_COPPER;
+		mediatype = WM_MEDIATYPE_COPPER;
 	} else if ((val & SFF_SFP_ETH_FLAGS_100FX) != 0){
 		sc->sc_flags |= WM_F_SGMII;
-		mediatype = WMP_F_SERDES;
+		mediatype = WM_MEDIATYPE_SERDES;
 	}
 
 out:
@@ -10892,8 +11088,8 @@ wm_enable_wakeup(struct wm_softc *sc)
 	}
 
 	/* Keep the laser running on fiber adapters */
-	if (((sc->sc_mediatype & WMP_F_FIBER) != 0)
-	    || (sc->sc_mediatype & WMP_F_SERDES) != 0) {
+	if ((sc->sc_mediatype == WM_MEDIATYPE_FIBER)
+	    || (sc->sc_mediatype == WM_MEDIATYPE_SERDES)) {
 		reg = CSR_READ(sc, WMREG_CTRL_EXT);
 		reg |= CTRL_EXT_SWDPIN(3);
 		CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
@@ -11144,7 +11340,7 @@ wm_reset_init_script_82575(struct wm_softc *sc)
 {
 	/*
 	 * remark: this is untested code - we have no board without EEPROM
-	 *  same setup as mentioned int the freeBSD driver for the i82575
+	 *  same setup as mentioned int the FreeBSD driver for the i82575
 	 */
 
 	/* SerDes configuration via SERDESCTRL */

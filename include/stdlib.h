@@ -1,4 +1,4 @@
-/*	$NetBSD: stdlib.h,v 1.112 2015/01/18 17:56:09 christos Exp $	*/
+/*	$NetBSD: stdlib.h,v 1.115 2015/02/17 20:33:40 joerg Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -125,6 +125,7 @@ unsigned long
 	 strtoul(const char * __restrict, char ** __restrict, int);
 #ifdef _OPENBSD_SOURCE
 long long strtonum(const char *, long long, long long, const char **);
+void	*reallocarray(void *, size_t, size_t);
 #endif
 int	 system(const char *);
 
@@ -337,6 +338,8 @@ int	 l64a_r(long, char *, int);
 
 size_t	shquote(const char *, char *, size_t);
 size_t	shquotev(int, char * const *, char *, size_t);
+
+int	reallocarr(void *, size_t, size_t);
 #endif /* _NETBSD_SOURCE */
 #endif /* _POSIX_C_SOURCE || _XOPEN_SOURCE || _NETBSD_SOURCE */
 

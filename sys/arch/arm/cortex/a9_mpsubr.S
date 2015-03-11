@@ -1,4 +1,4 @@
-/*	$NetBSD: a9_mpsubr.S,v 1.26 2014/12/02 22:57:08 matt Exp $	*/
+/*	$NetBSD: a9_mpsubr.S,v 1.30 2015/03/04 17:02:17 skrll Exp $	*/
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -207,9 +207,11 @@ arm_cpuinit:
 #endif
 	mcr	p15, 0, r1, c2, c0, 2	// TTBCR write
 
+#if !defined(CPU_CORTEXA5)
 	XPUTC(#73)
 	mov	r1, #0
 	mcr	p15, 0, r1, c8, c7, 0	// TLBIALL (just this core)
+#endif
 
 	XPUTC(#74)
 	mov	r1, #0			// get KERNEL_PID
@@ -365,7 +367,12 @@ cortex_init:
 	// Step 1a, invalidate the all cache tags in all ways on the SCU.
 	//
 	XPUTC(#65)
+#if defined(ARM_CBAR)
+	movw	r3, #:lower16:ARM_CBAR
+	movt	r3, #:upper16:ARM_CBAR
+#else
 	mrc	p15, 4, r3, c15, c0, 0		// read cbar
+#endif
 #ifdef __ARMEB__
 	setend	le
 #endif
@@ -419,7 +426,12 @@ cortex_init:
 	//
 	// Step 3, enable the SCU
 	//
+#if defined(ARM_CBAR)
+	movw	r3, #:lower16:ARM_CBAR
+	movt	r3, #:upper16:ARM_CBAR
+#else
 	mrc	p15, 4, r3, c15, c0, 0		// read cbar
+#endif
 #ifdef __ARMEB__
 	setend	le
 #endif
@@ -445,7 +457,7 @@ cortex_init:
 
 	// For the A7, SMP must be on ldrex/strex to work.
 	//
-#if defined(MULTIPROCESSOR) || defined(CPU_CORTEXA7) || defined(CPU_CORTEXA9) || defined(CPU_CORTEXA17)
+#if defined(MULTIPROCESSOR) || defined(CPU_CORTEXA5) || defined(CPU_CORTEXA7) || defined(CPU_CORTEXA9) || defined(CPU_CORTEXA17)
 #if defined(CPU_CORTEXA5) || defined(CPU_CORTEXA7) || defined(CPU_CORTEXA9) || defined(CPU_CORTEXA17)
 	//
 	// Step 4a, set ACTLR.SMP=1
@@ -506,6 +518,10 @@ cortex_mpfault:
 // Secondary processors come here after exiting the SKU ROM.
 // Switches to kernel's endian almost immediately.
 //
+
+	.global	cortex_mpstart
+	.type	cortex_mpstart,%object
+
 cortex_mpstart:
 #ifndef MULTIPROCESSOR
 	//

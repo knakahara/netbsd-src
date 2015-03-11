@@ -59,7 +59,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /*$FreeBSD: src/sys/dev/ixgbe/ixgbe.c,v 1.51 2011/04/25 23:34:21 jfv Exp $*/
-/*$NetBSD: ixgbe.c,v 1.15 2015/01/13 03:11:34 msaitoh Exp $*/
+/*$NetBSD: ixgbe.c,v 1.21 2015/02/24 14:49:28 msaitoh Exp $*/
 
 #include "opt_inet.h"
 
@@ -106,8 +106,10 @@ static ixgbe_vendor_info_t ixgbe_vendor_info_array[] =
 	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_T3_LOM, 0, 0, 0},
 	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_COMBO_BACKPLANE, 0, 0, 0},
 	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_BACKPLANE_FCOE, 0, 0, 0},
+	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_SF2, 0, 0, 0},
 	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_FCOE, 0, 0, 0},
-	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_DELL, 0, 0, 0},
+	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599EN_SFP, 0, 0, 0},
+	{IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_SF_QP, 0, 0, 0},
 	/* required last entry */
 	{0, 0, 0, 0, 0}
 };
@@ -2710,13 +2712,19 @@ ixgbe_config_link(struct adapter *adapter)
 	sfp = ixgbe_is_sfp(hw);
 
 	if (sfp) { 
+		void *ip;
+
 		if (hw->phy.multispeed_fiber) {
 			hw->mac.ops.setup_sfp(hw);
 			ixgbe_enable_tx_laser(hw);
-			softint_schedule(adapter->msf_si);
+			ip = adapter->msf_si;
 		} else {
-			softint_schedule(adapter->mod_si);
+			ip = adapter->mod_si;
 		}
+
+		kpreempt_disable();
+		softint_schedule(ip);
+		kpreempt_enable();
 	} else {
 		if (hw->mac.ops.check_link)
 			err = ixgbe_check_link(hw, &autoneg,
@@ -3180,10 +3188,8 @@ ixgbe_free_transmit_structures(struct adapter *adapter)
 	struct tx_ring *txr = adapter->tx_rings;
 
 	for (int i = 0; i < adapter->num_queues; i++, txr++) {
-		IXGBE_TX_LOCK(txr);
 		ixgbe_free_transmit_buffers(txr);
 		ixgbe_dma_free(adapter, &txr->txdma);
-		IXGBE_TX_UNLOCK(txr);
 		IXGBE_TX_LOCK_DESTROY(txr);
 	}
 	free(adapter->tx_rings, M_DEVBUF);
@@ -3935,11 +3941,15 @@ ixgbe_setup_receive_ring(struct rx_ring *rxr)
 	/* Free current RX buffer structs and their mbufs */
 	ixgbe_free_receive_ring(rxr);
 
+	IXGBE_RX_UNLOCK(rxr);
+
 	/* Now reinitialize our supply of jumbo mbufs.  The number
 	 * or size of jumbo mbufs may have changed.
 	 */
 	ixgbe_jcl_reinit(&adapter->jcl_head, rxr->ptag->dt_dmat,
 	    2 * adapter->num_rx_desc, adapter->rx_mbuf_sz);
+
+	IXGBE_RX_LOCK(rxr);
 
 	/* Configure header split? */
 	if (ixgbe_header_split)
@@ -4226,6 +4236,7 @@ ixgbe_free_receive_structures(struct adapter *adapter)
 #endif /* LRO */
 		/* Free the ring memory as well */
 		ixgbe_dma_free(adapter, &rxr->rxdma);
+		IXGBE_RX_LOCK_DESTROY(rxr);
 	}
 
 	free(adapter->rx_rings, M_DEVBUF);

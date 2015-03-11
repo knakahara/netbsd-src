@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1201 2015/01/31 19:14:45 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1208 2015/03/10 06:01:03 taca Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -113,8 +113,8 @@ Notes:
 bc includes dc, both of which are in the NetBSD tree.
 
 Package:	bind [named and utils]
-Version:	9.10.1-P1
-Current Vers:	9.10.1-P1
+Version:	9.10.1-P2
+Current Vers:	9.10.1-P2
 Maintainer:	Paul Vixie <vixie@vix.com>
 Archive Site:	ftp://ftp.isc.org/isc/bind9/
 Home Page:	http://www.isc.org/software/bind/
@@ -290,7 +290,7 @@ src/lib/libc/db/db2netbsd.
 
 Package:	dhcp
 Version:	4.3.0
-Current Vers:	4.3.0
+Current Vers:	4.3.2
 Maintainer:	mellon
 Archive Site:	ftp://ftp.isc.org/isc/dhcp/
 Home Page:	http://www.isc.org/software/dhcp/
@@ -316,6 +316,31 @@ Location:	external/bsd/dhcpcd/dist
 Notes:
 Please submit all changes to the author.
 The distribution doesn't include the Linux specific bits or build system.
+
+Package:       drm
+Version:       Linux 3.15
+Current Vers:  ?
+Maintainer:    Intel, AMD, Linux kernel developers
+Archive Site:  git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+Home Page:     http://dri.freedesktop.org/
+Mailing List:  dri-devel@lists.freedesktop.org
+Responsible:   riastradh
+License:       BSD
+Location:      sys/external/bsd/drm2/dist
+Notes:
+Graphics drivers.   Talk to riastradh@ about updates.  When importing
+from Linux, we map
+       drivers/gpu/drm	       ->      sys/external/bsd/drm2/dist/drm
+       include/drm	       ->      sys/external/bsd/drm2/dist/include/drm
+       include/uapi/drm	       ->      sys/external/bsd/drm2/dist/uapi/drm
+GPL sources are excluded.  In the future, we may import them into
+external/gpl2/drm2 and build them as kernel modules.  Nouveau sources
+(drivers/gpu/drm/nouveau in Linux) must first be processed with the
+script sys/external/bsd/drm2/nouveau/nouveau2netbsd, about which see
+the source for details.
+Vendor tag:    LINUX
+Release tag:   linux-X-Y(-rcZ)-drm-bsd
+	(nouveau got reimported as linux-3-15-drm-bsd-reimport-nouveau)
 
 Package:	gmake
 Version:	3.81
@@ -426,7 +451,7 @@ Before importing a new version of external/gpl3/gcc:
 
 Package:	gdb
 Version:	7.7.1
-Current Vers:	7.8.2
+Current Vers:	7.9
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
@@ -507,10 +532,10 @@ for import.
 Package:	heimdal
 Version:	1.5.3
 Current Vers:	1.5.3
-Maintainer:	Heimdal <heimdal@pdc.kth.se>
-Archive Site:	ftp://ftp.pdc.kth.se/pub/heimdal/src/
-Home Page:	http://www.pdc.kth.se/heimdal/
-Mailing List:	heimdal-discuss@pdc.kth.se
+Maintainer:	Heimdal <heimdal@h5l.org>
+Archive Site:	ftp://ftp.h5l.org/pub/heimdal/src/
+Home Page:	http://www.h5l.org/
+Mailing List:	heimdal-discuss@sics.se
 Responsible:	joda, lha
 License:	BSD
 Location:	crypto/external/bsd/heimdal/dist
@@ -1115,8 +1140,8 @@ and more. Vern's ping is gone. We are too different from everyone else
 now to do a new import.
 
 Package:	Postfix
-Version:	2.11.3
-Current Vers:	2.11.3
+Version:	2.11.4
+Current Vers:	3.0
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
 Home Page:	http://www.postfix.org/
