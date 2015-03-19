@@ -207,6 +207,8 @@ static int intr_find_pcibridge(int, pcitag_t *, pci_chipset_tag_t *);
 #endif
 #endif
 
+static const char *legacy_intr_string(int, char *, size_t, struct pic *);
+
 /*
  * Fill in default interrupt table (in case of spurious interrupt
  * during configuration of kernel), setup interrupt control unit
@@ -437,13 +439,12 @@ create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 	/*
 	 * If the device is pci, "legacy_irq" is alway -1. Least 8 bit of "ih"
 	 * is only used in intr_string() to show the irq number.
-	 * If the device is "legacy"(such as floppy), "legacy_irq" is the
-	 * reserved irq number. Furthermore, least 8 bit of "ih" is used as
-	 * the real irq number.
+	 * If the device is "legacy"(such as floppy), it should not use
+	 * intr_string().
 	 */
 	if (pic->pic_type == PIC_I8259) {
-		KASSERT(legacy_irq != -1);
 		ih = legacy_irq;
+		return legacy_intr_string(ih, buf, len, pic);
 	} else {
 		ih = ((pic->pic_apicid << APIC_INT_APIC_SHIFT) & APIC_INT_APIC_MASK) |
 			((pin << APIC_INT_PIN_SHIFT) & APIC_INT_PIN_MASK);
@@ -451,10 +452,8 @@ create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 			ih |= APIC_INT_VIA_APIC;
 		}
 		ih |= pin;
+		return intr_string(ih, buf, len);
 	}
-	KASSERT(ih != 0);
-
-	return intr_string(ih, buf, len);
 }
 
 /*
@@ -1134,6 +1133,23 @@ intr_disestablish(struct intrhand *ih)
 
 	kmem_free(ih, sizeof(*ih));
 }
+
+static const char *
+legacy_intr_string(int ih, char *buf, size_t len, struct pic *pic)
+{
+	int legacy_irq;
+
+	KASSERT(pic->pic_type == PIC_I8259);
+	KASSERT(APIC_IRQ_ISLEGACY(ih));
+
+	legacy_irq = APIC_IRQ_LEGACY_IRQ(ih);
+	KASSERT(legacy_irq >= 0 && legacy_irq < 16);
+
+	snprintf(buf, len, "%s pin %d", pic->pic_name, legacy_irq);
+
+	return buf;
+}
+
 
 const char *
 intr_string(int ih, char *buf, size_t len)
