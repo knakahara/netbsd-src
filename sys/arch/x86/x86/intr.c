@@ -486,7 +486,7 @@ intr_get_io_intrsource(const char *intrid)
 
 	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		KASSERT(isp->is_intrid != NULL);
-		if (strncmp(intrid, isp->is_intrid, INTRID_LEN) == 0) {
+		if (strncmp(intrid, isp->is_intrid, INTRIDBUF - 1) == 0) {
 			return isp;
 		}
 	}
@@ -889,7 +889,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 #endif /* MULTIPROCESSOR */
 	uint64_t where;
 	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
+	char intrstr_buf[INTRIDBUF];
 
 #ifdef DIAGNOSTIC
 	if (legacy_irq != -1 && (legacy_irq < 0 || legacy_irq > 15))
@@ -2056,17 +2056,17 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		if (!intr_is_affinity_intrsource(isp, cpuset))
 			continue;
 
-		ids[i] = kmem_zalloc(INTRID_LEN + 1, KM_SLEEP);
+		ids[i] = kmem_zalloc(INTRIDBUF, KM_SLEEP);
 		if (ids[i] == NULL) {
 			int j;
 			for (j = i - 1; j >= 0; j--) {
-				kmem_free(ids[j], INTRID_LEN + 1);
+				kmem_free(ids[j], INTRIDBUF);
 			}
 			kmem_free(ids, sizeof(char*) * (*count));
 			return ENOMEM;
 		}
 
-		strncpy(ids[i], isp->is_intrid, INTRID_LEN + 1);
+		strncpy(ids[i], isp->is_intrid, INTRIDBUF);
 		i++;
 	}
 
@@ -2080,7 +2080,7 @@ intr_destruct_intrids(char **intrids, int count)
 	int i;
 
 	for (i = 0; i < count; i++)
-		kmem_free(intrids[i], INTRID_LEN + 1);
+		kmem_free(intrids[i], INTRIDBUF);
 
 	kmem_free(intrids, sizeof(char*) * count);
 }

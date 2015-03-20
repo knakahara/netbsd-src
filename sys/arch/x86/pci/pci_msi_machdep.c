@@ -94,7 +94,7 @@ pci_msi_alloc_vectors(struct pic *msi_pic, uint *table_indexes, int *count)
 {
 	struct intrsource *isp;
 	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
+	char intrstr_buf[INTRIDBUF];
 	pci_intr_handle_t *vectors;
 	pci_intr_handle_t pih;
 	int i;
@@ -135,7 +135,7 @@ static void
 pci_msi_free_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 {
 	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
+	char intrstr_buf[INTRIDBUF];
 	pci_intr_handle_t pih;
 	int i;
 

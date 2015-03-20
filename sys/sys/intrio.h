@@ -34,7 +34,7 @@
 #include <sys/sched.h>
 
 struct intr_set {
-	char intrid[INTRID_LEN + 1];
+	char intrid[INTRIDBUF];
 	cpuset_t *cpuset;
 	size_t cpuset_size;
 };

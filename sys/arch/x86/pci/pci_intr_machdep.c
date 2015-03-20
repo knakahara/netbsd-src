@@ -225,7 +225,7 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
 {
 	struct intrsource *isp;
 	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
+	char intrstr_buf[INTRIDBUF];
 	pci_intr_handle_t *handle;
 
 	handle = kmem_zalloc(sizeof(*handle), KM_SLEEP);
@@ -261,7 +261,7 @@ void
 pci_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
 {
 	const char *intrstr;
-	char intrstr_buf[INTRID_LEN + 1];
+	char intrstr_buf[INTRIDBUF];
 
 	if (pih == NULL)
 		return;
