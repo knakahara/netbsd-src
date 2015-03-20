@@ -610,10 +610,16 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 	isp = ci->ci_isources[slot];
 	if (isp == NULL) {
+		const char *via;
+
 		isp = chained;
 		KASSERT(isp != NULL);
+		if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX)
+			via = "vec";
+		else
+			via = "pin";
 		snprintf(isp->is_evname, sizeof (isp->is_evname),
-		    "pin %d", pin);
+		    "%s %d", via, pin);
 		evcnt_attach_dynamic(&isp->is_evcnt, EVCNT_TYPE_INTR, NULL,
 		    pic->pic_name, isp->is_evname);
 		isp->is_active_cpu = ci->ci_cpuid;
