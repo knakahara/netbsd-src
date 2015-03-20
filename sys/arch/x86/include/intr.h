@@ -92,7 +92,7 @@ struct intrsource {
 	int is_idtvec;
 	int is_minlevel;
 	char is_evname[32];		/* event counter name */
-	char is_intrid[INTRID_LEN + 1];	/* intrid created by create_intrid() */
+	char is_intrid[INTRIDBUF];	/* intrid created by create_intrid() */
 	char *is_xname;			/* device name */
 	cpuid_t is_active_cpu;		/* active cpuid */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
