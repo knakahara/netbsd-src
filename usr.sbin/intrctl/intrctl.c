@@ -32,6 +32,7 @@ __RCSID("$NetBSD$");
 #include <sys/param.h>
 #include <sys/sysctl.h>
 #include <sys/intrio.h>
+#include <sys/types.h>
 
 #include <err.h>
 #include <errno.h>
@@ -39,10 +40,13 @@ __RCSID("$NetBSD$");
 #include <limits.h>
 #include <paths.h>
 #include <sched.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "intrctl_io.h"
 
 __dead static void	usage(void);
 
@@ -106,26 +110,36 @@ usage(void)
 static void
 intr_list(int argc, char **argv)
 {
-	int error;
-	size_t buf_size;
-	char *list;
+	int i, ncpus;
+	void *handle;
+	struct intr_list_line *illine;
 
-	error = sysctlbyname("kern.intr.list", NULL, &buf_size, NULL, 0);
-	if (error < 0)
-		err(EXIT_FAILURE, "sysctl kern.intr.list listsize");
+	handle = intrctl_io_alloc();
+	if (handle == NULL)
+		err(EXIT_FAILURE, "intrctl_io_alloc");
 
-	list = malloc(buf_size);
-	if (list == NULL)
-		err(EXIT_FAILURE, "malloc(buf_size)");
+	/* header */
+	ncpus = intrctl_io_ncpus(handle);
+	printf("interrupt id\t");
+	for (i = 0; i < ncpus; i++) {
+		printf("  CPU#%02u\t", i);
+	}
+	printf("device name(s)\n");
 
-	error = sysctlbyname("kern.intr.list", list, &buf_size, NULL, 0);
-	if (error < 0) {
-		free(list);
-		err(EXIT_FAILURE, "sysctl kern.intr.list list");
+	/* body */
+	illine = intrctl_io_firstline(handle);
+	for (; illine != NULL; illine = intrctl_io_nextline(handle, illine)) {
+		printf("%s\t", illine->ill_intrid);
+		for (i = 0; i < ncpus; i++) {
+			struct intr_list_line_cpu *illc = &illine->ill_cpu[i];
+			printf("%8" PRIu64 "%c\t", illc->illc_count,
+			    illc->illc_assigned ? '*' : ' ');
+		}
+
+		printf("%s\n", illine->ill_xname);
 	}
 
-	printf("%s", list);
-	free(list);
+	intrctl_io_free(handle);
 }
 
 static void
@@ -146,9 +160,9 @@ intr_affinity(int argc, char **argv)
 			index = strtoul(optarg, NULL, 10);
 			break;
 		case 'i':
-			if (strnlen(optarg, ARG_MAX) > INTRID_LEN)
+			if (strnlen(optarg, ARG_MAX) > INTRIDBUF)
 				usage();
-			strlcpy(iset.intrid, optarg, INTRID_LEN);
+			strlcpy(iset.intrid, optarg, INTRIDBUF);
 			break;
 		default:
 			usage();

@@ -1,7 +1,7 @@
 /*	$NetBSD$	*/
 
 /*
- * Copyright (c) 2014 Internet Initiative Japan Inc.
+ * Copyright (c) 2015 Internet Initiative Japan Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,45 +26,19 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _SYS_INTRIO_H_
-#define _SYS_INTRIO_H_
+#ifndef _INTRCTL_INTRCTL_IO_H_
+#define _INTRCTL_INTRCTL_IO_H_
 
-#include <sys/types.h>
-#include <sys/intr.h>
-#include <sys/sched.h>
+#include <sys/cdefs.h>
+__RCSID("$NetBSD$");
 
-#define INTR_LIST_VERSION 1
+#include <sys/intrio.h>
 
-struct intr_set {
-	char intrid[INTRIDBUF];
-	cpuset_t *cpuset;
-	size_t cpuset_size;
-};
+void *intrctl_io_alloc(void);
+void intrctl_io_free(void *);
+int intrctl_io_ncpus(void *);
+int intrctl_io_nintrs(void *);
+struct intr_list_line *intrctl_io_firstline(void *);
+struct intr_list_line *intrctl_io_nextline(void *, struct intr_list_line *);
 
-struct intr_list_line_cpu {
-	bool illc_assigned;
-	uint64_t illc_count;
-};
-
-struct intr_list_line {
-	char ill_intrid[INTRIDBUF];
-	char ill_xname[INTRDEVNAMEBUF];
-	struct intr_list_line_cpu ill_cpu[1];
-};
-
-struct intr_list {
-	int il_version; /* Version number of this struct. */
-	int il_ncpus;
-	int il_nintrs;
-	size_t il_bufsize;
-
-	size_t il_linesize;
-	off_t il_lineoffset;
-/*
- * struct intr_list_header il_header;
- * struct intr_list_line il_lines[1];
- *
- */
-};
-
-#endif /* !_SYS_INTRIO_H_ */
+#endif /* !_INTRCTL_INTRCTL_IO_H_ */

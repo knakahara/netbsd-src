@@ -162,116 +162,117 @@ intr_avert_intr(u_int cpu_idx)
 	return error;
 }
 
+static size_t
+intr_list_line_size(void)
+{
+
+	return sizeof(struct intr_list_line) +
+		sizeof(struct intr_list_line_cpu) * (ncpu - 1);
+}
+
+static size_t
+intr_list_size(void)
+{
+	char **ids;
+	int error, nids;
+	size_t ilsize = 0;
+
+	/* buffer header */
+	ilsize += sizeof(struct intr_list);
+
+	/* il_line body */
+	mutex_enter(&cpu_lock);
+	error = intr_construct_intrids(kcpuset_running, &ids, &nids);
+	mutex_exit(&cpu_lock);
+	if (error)
+		return 0;
+	ilsize += intr_list_line_size() * nids;
+
+	intr_destruct_intrids(ids, nids);
+	return ilsize;
+}
+
 /*
  * Set intrctl list to "data", and return list bytes (include '\0').
  * If error occured, return <0.
  * If "data" == NULL, simply return list bytes.
  */
-#define INTR_LIST_LINE 1024
 static int
 intr_list(char *data, int length)
 {
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-	void *ich;
+	struct intr_list *il;
+	struct intr_list_line *illine;
 	kcpuset_t *assigned, *avail;
-	char *buf, *cur, *end;
+	void *ich;
+	char *buf;
 	char **ids;
-	uint64_t intr_count;
+	size_t ilsize;
 	u_int cpu_idx;
-	int nids, intr_idx, ret;
-	int bufsize = 0;
-	bool sizeonly;
+	int nids, intr_idx, ret, line_size;
 
-	if (data == NULL) {
-		buf = kmem_zalloc(INTR_LIST_LINE, KM_SLEEP);
-		if (buf == NULL)
-			return -ENOMEM;
-		length = INTR_LIST_LINE;
-		sizeonly = true;
-	} else {
-		if (length <= 0)
-			return -EINVAL;
-		buf = data;
-		sizeonly = false;
-	}
+	ilsize = intr_list_size();
+	if (ilsize == 0)
+		return -ENOMEM;
 
-	cur = buf;
-	end = buf + length;
+	if (data == NULL)
+		return ilsize;
 
-#define FILL_BUF(_label, _fmt, ...) do{				\
-		ret = snprintf(cur, end - cur, _fmt, ## __VA_ARGS__);    \
-		if (ret < 0) {                                          \
-			ret = -EIO;					\
-			goto _label;					\
-		}                                                       \
-		bufsize += ret;						\
-		if (!sizeonly) {					\
-			if (cur + ret >= end) {				\
-				ret =  -ENOBUFS;			\
-				goto _label;				\
-			}						\
-			cur += ret;					\
-		}							\
-	}while(0)
+	if (length < ilsize)
+		return -ENOMEM;
 
+	buf = data;
+	il = (struct intr_list *)buf;
 
-	FILL_BUF(out0, " interrupt name");
+	illine = (struct intr_list_line *)((char *)il + sizeof(struct intr_list));
+	il->il_lineoffset = (off_t)illine - (off_t)il;
 
 	kcpuset_create(&avail, true);
 	intr_get_available(avail);
-	for (CPU_INFO_FOREACH(cii, ci)) {
-		char intr_enable;
-		if (kcpuset_isset(avail, cpu_index(ci)))
-			intr_enable = '+';
-		else
-			intr_enable = '-';
-
-		FILL_BUF(out1, "\tCPU#%02u(%c)", cpu_index(ci), intr_enable);
-	}
-	FILL_BUF(out1, "\n");
+	kcpuset_create(&assigned, true);
 
 	mutex_enter(&cpu_lock);
+
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
 	if (ret != 0) {
 		DPRINTF(("%s: intr_construct_intrids() failed\n", __func__));
 		ret = -ret;
-		goto out2;
+		goto out;
 	}
 
-	kcpuset_create(&assigned, true);
+	line_size = intr_list_line_size();
 	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
-		FILL_BUF(out3, " %s", ids[intr_idx]);
-
 		ich = intr_get_handler(ids[intr_idx]);
+
+		strncpy(illine->ill_intrid, ids[intr_idx], INTRIDBUF);
+		strncpy(illine->ill_xname, intr_get_devname(ich), INTRDEVNAMEBUF);
+
 		intr_get_assigned(ich, assigned);
-		for (cpu_idx = 0; cpu_idx < ncpuonline; cpu_idx++) {
-			intr_count = intr_get_count(ich, cpu_idx);
-			if (kcpuset_isset(assigned, cpu_idx))
-				FILL_BUF(out3, "\t%8" PRIu64 "*", intr_count);
-			else
-				FILL_BUF(out3, "\t%8" PRIu64, intr_count);
+		for (cpu_idx = 0; cpu_idx < ncpu; cpu_idx++) {
+			struct intr_list_line_cpu *illcpu =
+				&illine->ill_cpu[cpu_idx];
+
+			illcpu->illc_assigned =
+				kcpuset_isset(assigned, cpu_idx) ? true : false;
+			illcpu->illc_count = intr_get_count(ich, cpu_idx);
 		}
 
-		FILL_BUF(out3, "\t%s\n", intr_get_devname(ich));
+		illine = (struct intr_list_line *)((char *)illine + line_size);
 	}
+	ret = ilsize;
 
-	ret = bufsize + 1; /* add '\0' */
+	il->il_version = INTR_LIST_VERSION;
+	il->il_ncpus = ncpu;
+	il->il_nintrs = nids;
+	il->il_linesize = line_size;
+	il->il_bufsize = ilsize;
 
- out3:
-	kcpuset_destroy(assigned);
 	intr_destruct_intrids(ids, nids);
- out2:
+ out:
 	mutex_exit(&cpu_lock);
- out1:
+	kcpuset_destroy(assigned);
 	kcpuset_destroy(avail);
-	if (sizeonly) {
-		kmem_free(buf, INTR_LIST_LINE);
-	}
- out0:
-	return ret;
 
-#undef FULL_BUF
+	return ret;
 }
 
 /*
@@ -307,7 +308,7 @@ intr_list_sysctl(SYSCTLFN_ARGS)
 	if (ret < 0)
 		return -ret;
 
-	return copyoutstr(buf, oldp, *oldlenp, NULL);
+	return copyout(buf, oldp, *oldlenp);
 }
 
 /*
