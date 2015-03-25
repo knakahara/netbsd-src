@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1496 2015/03/02 21:55:45 christos Exp $
+# $NetBSD: mi,v 1.1498 2015/03/22 09:57:42 ast Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -2114,6 +2114,7 @@
 ./usr/share/man/cat5/master.passwd.0		man-sys-catman		.cat
 ./usr/share/man/cat5/memcache_table.0		man-postfix-catman	postfix,.cat
 ./usr/share/man/cat5/mixerctl.conf.0		man-audio-catman	.cat
+./usr/share/man/cat5/modules.conf.0		man-sys-catman		.cat
 ./usr/share/man/cat5/moduli.0			man-secsh-catman	crypto,.cat
 ./usr/share/man/cat5/monthly.0			man-sys-catman		.cat
 ./usr/share/man/cat5/monthly.conf.0		man-sys-catman		.cat
@@ -2946,6 +2947,7 @@
 ./usr/share/man/cat8/sdpd.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/security.0			man-obsolete		obsolete
 ./usr/share/man/cat8/sendmail.0			man-obsolete		obsolete
+./usr/share/man/cat8/service.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/services_mkdb.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/sesd.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/setencstat.0		man-sysutil-catman	.cat
@@ -5081,6 +5083,7 @@
 ./usr/share/man/html5/master.passwd.html	man-sys-htmlman		html
 ./usr/share/man/html5/memcache_table.html		man-postfix-htmlman	postfix,html
 ./usr/share/man/html5/mixerctl.conf.html	man-audio-htmlman	html
+./usr/share/man/html5/modules.conf.html		man-sys-htmlman		html
 ./usr/share/man/html5/moduli.html		man-secsh-htmlman	crypto,html
 ./usr/share/man/html5/monthly.conf.html		man-sys-htmlman		html
 ./usr/share/man/html5/monthly.html		man-sys-htmlman		html
@@ -5745,6 +5748,7 @@
 ./usr/share/man/html8/scsictl.html		man-sysutil-htmlman	html
 ./usr/share/man/html8/sdpd.html			man-sysutil-htmlman	html
 ./usr/share/man/html8/security.html		man-obsolete		obsolete
+./usr/share/man/html8/service.html		man-sysutil-htmlman	html
 ./usr/share/man/html8/services_mkdb.html	man-sysutil-htmlman	html
 ./usr/share/man/html8/sesd.html			man-sysutil-htmlman	html
 ./usr/share/man/html8/setencstat.html		man-sysutil-htmlman	html
@@ -7998,6 +8002,7 @@
 ./usr/share/man/man5/master.passwd.5		man-sys-man		.man
 ./usr/share/man/man5/memcache_table.5		man-postfix-man		postfix,.man
 ./usr/share/man/man5/mixerctl.conf.5		man-audio-man		.man
+./usr/share/man/man5/modules.conf.5		man-sys-man		.man
 ./usr/share/man/man5/moduli.5			man-secsh-man		crypto,.man
 ./usr/share/man/man5/monthly.5			man-sys-man		.man
 ./usr/share/man/man5/monthly.conf.5		man-sys-man		.man
@@ -8832,6 +8837,7 @@
 ./usr/share/man/man8/sdpd.8			man-sysutil-man		.man
 ./usr/share/man/man8/security.8			man-obsolete		obsolete
 ./usr/share/man/man8/sendmail.8			man-obsolete		obsolete
+./usr/share/man/man8/service.8			man-sysutil-man		.man
 ./usr/share/man/man8/services_mkdb.8		man-sysutil-man		.man
 ./usr/share/man/man8/sesd.8			man-sysutil-man		.man
 ./usr/share/man/man8/setencstat.8		man-sysutil-man		.man

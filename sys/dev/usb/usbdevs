@@ -1,4 +1,4 @@
-$NetBSD: usbdevs,v 1.691 2015/03/08 02:16:46 christos Exp $
+$NetBSD: usbdevs,v 1.693 2015/03/17 08:14:30 macallan Exp $
 
 /*
  * Copyright (c) 1998-2004 The NetBSD Foundation, Inc.
@@ -577,6 +577,7 @@ vendor AVERATEC		0x50c2	Averatec
 vendor SWEEX		0x5173	Sweex
 vendor ONSPEC2		0x55aa	OnSpec Electronic Inc.
 vendor ZINWELL		0x5a57	Zinwell
+vendor INGENIC 		0x601a	Ingenic Semiconductor Ltd.
 vendor SITECOM		0x6189	Sitecom
 vendor SPRINGERDESIGN	0x6400	Springer Design, Inc.
 vendor ARKMICROCHIPS	0x6547	ArkMicroChips
@@ -1749,6 +1750,7 @@ product HTC ANDROID		0x0ffe	Android
 /* Huawei Technologies products */
 product HUAWEI MOBILE		0x1001	Huawei Mobile
 product HUAWEI E220		0x1003	Huawei E220
+product HUAWEI U8150		0x1037	Huawei U8150
 product HUAWEI EM770W		0x1404	Huawei EM770W
 product HUAWEI E1750		0x140c	Huawei E1750
 product HUAWEI E1750INIT	0x1446	Huawei E1750 USB CD

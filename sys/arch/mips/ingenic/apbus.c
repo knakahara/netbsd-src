@@ -1,4 +1,4 @@
-/*	$NetBSD: apbus.c,v 1.7 2015/03/09 13:24:21 macallan Exp $ */
+/*	$NetBSD: apbus.c,v 1.11 2015/03/25 11:25:10 macallan Exp $ */
 
 /*-
  * Copyright (c) 2014 Michael Lorenz
@@ -29,7 +29,7 @@
 /* catch-all for on-chip peripherals */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: apbus.c,v 1.7 2015/03/09 13:24:21 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: apbus.c,v 1.11 2015/03/25 11:25:10 macallan Exp $");
 
 #include "locators.h"
 #define	_MIPS_BUS_DMA_PRIVATE
@@ -62,14 +62,30 @@ struct mips_bus_dma_tag	apbus_dmat = {
 	._dmatag_ops = _BUS_DMATAG_OPS_INITIALIZER,
 };
 
-static const char *apbus_devs[] = {
-	"dwctwo",
-	"ohci",
-	"ehci",
-	"dme",
-	"jzgpio",
-	"jzfb",
-	NULL
+typedef struct apbus_dev {
+	const char *name;
+	bus_addr_t addr;
+	uint32_t irq;
+} apbus_dev_t;
+
+static const apbus_dev_t apbus_devs[] = {
+	{ "dwctwo",	JZ_DWC2_BASE,   21},
+	{ "ohci",	JZ_OHCI_BASE,    5 },
+	{ "ehci",	JZ_EHCI_BASE,   20},
+	{ "dme",	JZ_DME_BASE,    -1},	/* irq via gpio abuse */
+	{ "jzgpio",	JZ_GPIO_A_BASE, 17},
+	{ "jzgpio",	JZ_GPIO_B_BASE, 16},
+	{ "jzgpio",	JZ_GPIO_C_BASE, 15},
+	{ "jzgpio",	JZ_GPIO_D_BASE, 14},
+	{ "jzgpio",	JZ_GPIO_E_BASE, 13},
+	{ "jzgpio",	JZ_GPIO_F_BASE, 12},
+	{ "jziic",	JZ_SMB0_BASE,   60},
+	{ "jziic",	JZ_SMB1_BASE,   59},
+	{ "jziic",	JZ_SMB2_BASE,   58},
+	{ "jziic",	JZ_SMB3_BASE,   57},
+	{ "jziic",	JZ_SMB4_BASE,   56},
+	{ "jzfb",	-1,           -1},
+	{ NULL,		-1,           -1}
 };
 
 void
@@ -97,7 +113,7 @@ apbus_match(device_t parent, cfdata_t match, void *aux)
 void
 apbus_attach(device_t parent, device_t self, void *aux)
 {
-	uint32_t reg;
+	uint32_t reg, mpll, m, n, p, mclk, pclk, pdiv;
 	aprint_normal("\n");
 
 	/* should have been called early on */
@@ -109,21 +125,67 @@ apbus_attach(device_t parent, device_t self, void *aux)
 	printf("REIM: %08x\n", MFC0(12, 4));
 	printf("ID: %08x\n", MFC0(15, 1));
 #endif
+	/* assuming we're using MPLL */
+	mpll = readreg(JZ_CPMPCR);
+	m = (mpll & JZ_PLLM_M) >> JZ_PLLM_S;
+	n = (mpll & JZ_PLLN_M) >> JZ_PLLN_S;
+	p = (mpll & JZ_PLLP_M) >> JZ_PLLP_S;
 
-	/* enable USB clocks */
+	/* assuming 48MHz EXTCLK */
+	mclk = (48000 * (m + 1) / (n + 1)) / (p + 1);
+
+	reg = readreg(JZ_CPCCR);
+	pdiv = (reg & JZ_PDIV_M) >> JZ_PDIV_S;
+	pclk = mclk / pdiv;
+#ifdef INGENIC_DEBUG
+	printf("mclk %d kHz\n", mclk);
+	printf("pclk %d kHz\n", pclk);
+#endif
+
+	/* enable clocks */
 	reg = readreg(JZ_CLKGR1);
+	reg &= ~(1 << 0);	/* SMB3 clock */
 	reg &= ~(1 << 8);	/* OTG1 clock */
 	reg &= ~(1 << 11);	/* AHB_MON clock */
+	reg &= ~(1 << 12);	/* SMB4 clock */
 	writereg(JZ_CLKGR1, reg);
 
 	reg = readreg(JZ_CLKGR0);
+	reg &= ~(1 << 2);	/* OTG0 clock */
+	reg &= ~(1 << 5);	/* SMB0 clock */
+	reg &= ~(1 << 6);	/* SMB1 clock */
 	reg &= ~(1 << 24);	/* UHC clock */
+	reg &= ~(1 << 25);	/* SMB2 clock */
 	writereg(JZ_CLKGR0, reg);
 
 	/* wake up the USB part */
 	reg = readreg(JZ_OPCR);
 	reg |= OPCR_SPENDN0 | OPCR_SPENDN1;
 	writereg(JZ_OPCR, reg);
+
+	/* setup GPIOs for I2C buses */
+	/* iic0 */
+	gpio_as_dev0(3, 30);
+	gpio_as_dev0(3, 31);
+	/* iic1 */
+	gpio_as_dev0(4, 30);
+	gpio_as_dev0(4, 31);
+	/* iic2 */
+	gpio_as_dev2(5, 16);
+	gpio_as_dev2(5, 17);
+	/* iic3 */
+	gpio_as_dev1(3, 10);
+	gpio_as_dev1(3, 11);
+	/* iic4 */
+	/* make sure these aren't SMB4 */
+	gpio_as_dev3(4, 3);
+	gpio_as_dev3(4, 4);
+	/* these are supposed to be connected to the RTC */
+	gpio_as_dev1(4, 12);
+	gpio_as_dev1(4, 13);
+	/* these can be DDC2 or SMB4, set them to DDC2 */
+	gpio_as_dev0(5, 24);
+	gpio_as_dev0(5, 25);
 
 #ifdef INGENIC_DEBUG
 	printf("JZ_CLKGR0 %08x\n", readreg(JZ_CLKGR0));
@@ -135,12 +197,14 @@ apbus_attach(device_t parent, device_t self, void *aux)
 	printf("JZ_UHCCDR %08x\n", readreg(JZ_UHCCDR));
 #endif
 
-	for (const char **adv = apbus_devs; *adv != NULL; adv++) {
+	for (const apbus_dev_t *adv = apbus_devs; adv->name != NULL; adv++) {
 		struct apbus_attach_args aa;
-		aa.aa_name = *adv;
-		aa.aa_addr = 0;
+		aa.aa_name = adv->name;
+		aa.aa_addr = adv->addr;
+		aa.aa_irq  = adv->irq;
 		aa.aa_dmat = &apbus_dmat;
 		aa.aa_bst = apbus_memt;
+		aa.aa_pclk = pclk;
 
 		(void) config_found_ia(self, "apbus", &aa, apbus_print);
 	}
@@ -151,12 +215,13 @@ apbus_print(void *aux, const char *pnp)
 {
 	struct apbus_attach_args *aa = aux;
 
-	if (pnp)
+	if (pnp) {
 		aprint_normal("%s at %s", aa->aa_name, pnp);
-
-	if (aa->aa_addr)
+	}
+	if (aa->aa_addr != -1)
 		aprint_normal(" addr 0x%" PRIxBUSADDR, aa->aa_addr);
-
+	if ((pnp == NULL) && (aa->aa_irq != -1))
+		aprint_normal(" irq %d", aa->aa_irq);
 	return (UNCONF);
 }
 
