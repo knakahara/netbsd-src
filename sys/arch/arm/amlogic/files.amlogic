@@ -1,4 +1,4 @@
-#	$NetBSD: files.amlogic,v 1.6 2015/03/07 21:34:25 jmcneill Exp $
+#	$NetBSD: files.amlogic,v 1.9 2015/03/22 17:28:22 jmcneill Exp $
 #
 # Configuration info for Amlogic ARM Peripherals
 #
@@ -26,6 +26,10 @@ device	amlogiccom
 attach	amlogiccom at amlogicio with amlogic_com
 file	arch/arm/amlogic/amlogic_com.c		amlogic_com needs-flag
 
+# Framebuffer console
+attach	genfb at amlogicio with amlogic_genfb
+file	arch/arm/amlogic/amlogic_genfb.c	amlogic_genfb needs-flag
+
 # SDHC
 device	amlogicsdhc: sdmmcbus
 attach	amlogicsdhc at amlogicio with amlogic_sdhc
@@ -44,6 +48,11 @@ device	amlogicrng
 attach	amlogicrng at amlogicio with amlogic_rng
 file	arch/arm/amlogic/amlogic_rng.c		amlogic_rng
 
+# RTC
+device	amlogicrtc
+attach	amlogicrtc at amlogicio with amlogic_rtc
+file	arch/arm/amlogic/amlogic_rtc.c		amlogic_rtc
+
 # Console parameters
 defparam opt_amlogic.h			CONADDR
 defparam opt_amlogic.h			CONSPEED
@@ -51,3 +60,6 @@ defparam opt_amlogic.h			CONMODE
 
 # Memory parameters
 defparam opt_amlogic.h			MEMSIZE
+
+# CPU parameters
+defparam opt_amlogic.h			CPUFREQ
