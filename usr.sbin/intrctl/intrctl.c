@@ -107,6 +107,8 @@ usage(void)
 	/* NOTREACHED */
 }
 
+static int intrctl_io_alloc_retry_count = 4;
+
 static void
 intr_list(int argc, char **argv)
 {
@@ -114,7 +116,7 @@ intr_list(int argc, char **argv)
 	void *handle;
 	struct intr_list_line *illine;
 
-	handle = intrctl_io_alloc();
+	handle = intrctl_io_alloc(intrctl_io_alloc_retry_count);
 	if (handle == NULL)
 		err(EXIT_FAILURE, "intrctl_io_alloc");
 
