@@ -38,10 +38,14 @@ __RCSID("$NetBSD$");
 
 #include "intrctl_io.h"
 
+/*
+ * To support increasing the number of interrupts (devices are dynamically
+ * attached), retry sysctl(3) "retry" times.
+ */
 void *
-intrctl_io_alloc(void)
+intrctl_io_alloc(int retry)
 {
-	int error;
+	int i, error;
 	size_t buf_size;
 	void *buf;
 
@@ -57,14 +61,27 @@ intrctl_io_alloc(void)
 		return NULL;
 	}
 
-	error = sysctlbyname("kern.intr.list", buf, &buf_size, NULL, 0);
-	if (error < 0) {
-		free(buf);
-		fprintf(stderr, "sysctl kern.intr.list list");
-		return NULL;
-	}
+	for (i = 0; i < retry; i++) {
+		error = sysctlbyname("kern.intr.list", buf, &buf_size, NULL, 0);
+		if (error >= 0)
+			return buf;
+		else if (error == -ENOMEM) {
+			void *temp;
 
-	return buf;
+			temp = realloc(buf, buf_size);
+			if (temp == NULL) {
+				free(buf);
+				return NULL;
+			}
+			buf = temp;
+		}
+		else {
+			free(buf);
+			fprintf(stderr, "sysctl kern.intr.list list");
+			return NULL;
+		}
+	}
+	return NULL;
 }
 
 void
