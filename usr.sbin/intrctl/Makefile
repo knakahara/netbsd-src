@@ -4,6 +4,6 @@
 
 PROG=	intrctl
 MAN=	intrctl.8
-SRCS=	intrctl.c
+SRCS=	intrctl.c intrctl_io.c
 
 .include <bsd.prog.mk>
