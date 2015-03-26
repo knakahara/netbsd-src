@@ -32,6 +32,8 @@
 #ifndef _SYS_INTR_H_
 #define	_SYS_INTR_H_
 
+#define INTRIDBUF 64
+
 #ifdef _KERNEL
 
 #include <sys/types.h>

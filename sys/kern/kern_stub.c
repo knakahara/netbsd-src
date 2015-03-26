@@ -147,6 +147,8 @@ __weak_alias(userconf_prompt, voidop);
 
 __weak_alias(kobj_renamespace, nullop);
 
+__weak_alias(pci_intr_distribute, eopnotsupp);
+
 /*
  * Scheduler activations system calls.  These need to remain until libc's
  * major version is bumped.
