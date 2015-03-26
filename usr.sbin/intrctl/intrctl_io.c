@@ -45,19 +45,17 @@ __RCSID("$NetBSD$");
 void *
 intrctl_io_alloc(int retry)
 {
-	int i, error;
 	size_t buf_size;
+	int i, error;
 	void *buf;
 
 	error = sysctlbyname("kern.intr.list", NULL, &buf_size, NULL, 0);
 	if (error < 0) {
-		fprintf(stderr, "sysctl kern.intr.list listsize");
 		return NULL;
 	}
 
 	buf = malloc(buf_size);
 	if (buf == NULL) {
-		fprintf(stderr, "malloc(buf_size)");
 		return NULL;
 	}
 
@@ -74,10 +72,8 @@ intrctl_io_alloc(int retry)
 				return NULL;
 			}
 			buf = temp;
-		}
-		else {
+		} else {
 			free(buf);
-			fprintf(stderr, "sysctl kern.intr.list list");
 			return NULL;
 		}
 	}
@@ -118,11 +114,12 @@ intrctl_io_firstline(void *handle)
 struct intr_list_line *
 intrctl_io_nextline(void *handle, struct intr_list_line *cur)
 {
+	struct intr_list *list;
+	struct intr_list_line *next;
 	size_t line_size;
 	char *buf_end;
-	struct intr_list_line *next;
-	struct intr_list *list = handle;
 
+	list = handle;
 	buf_end = (char *)list + list->il_bufsize;
 
 	line_size = list->il_linesize;
