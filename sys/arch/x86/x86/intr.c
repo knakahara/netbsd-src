@@ -514,7 +514,7 @@ intr_allocate_io_intrsource(const char *intrid)
 		return NULL;
 	}
 
-	pep = kmem_zalloc(sizeof(*pep) * ncpuonline, KM_SLEEP);
+	pep = kmem_zalloc(sizeof(*pep) * ncpu, KM_SLEEP);
 	if (pep == NULL) {
 		kmem_free(isp, sizeof(*isp));
 		return NULL;
@@ -548,7 +548,7 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
 	}
 	kmem_free(isp->is_saved_evcnt,
-	    sizeof(*(isp->is_saved_evcnt)) * ncpuonline);
+	    sizeof(*(isp->is_saved_evcnt)) * ncpu);
 	kmem_free(isp, sizeof(*isp));
 }
 
@@ -1457,7 +1457,7 @@ intr_save_evcnt(struct intrsource *source, cpuid_t cpuid)
 	curcnt = source->is_evcnt.ev_count;
 	pep = source->is_saved_evcnt;
 
-	for (i = 0; i < ncpuonline; i++) {
+	for (i = 0; i < ncpu; i++) {
 		if (pep[i].cpuid == cpuid) {
 			pep[i].count = curcnt;
 			break;
@@ -1476,7 +1476,7 @@ intr_restore_evcnt(struct intrsource *source, cpuid_t cpuid)
 
 	pep = source->is_saved_evcnt;
 
-	for (i = 0; i < ncpuonline; i++) {
+	for (i = 0; i < ncpu; i++) {
 		if (pep[i].cpuid == cpuid) {
 			source->is_evcnt.ev_count = pep[i].count;
 			break;
@@ -1968,7 +1968,7 @@ intr_get_count(void *ich, u_int cpu_idx)
 	cpuid = ci->ci_cpuid;
 
 	isp = ich;
-	for (i = 0; i < ncpuonline; i++) {
+	for (i = 0; i < ncpu; i++) {
 		pep = isp->is_saved_evcnt[i];
 		if (cpuid == pep.cpuid) {
 			if (isp->is_active_cpu == pep.cpuid) {
