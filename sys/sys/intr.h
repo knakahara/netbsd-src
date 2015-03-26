@@ -32,11 +32,15 @@
 #ifndef _SYS_INTR_H_
 #define	_SYS_INTR_H_
 
+#define INTRIDBUF 64
+
 #ifdef _KERNEL
 
 #include <sys/types.h>
 
 struct cpu_info;
+struct kcpuset;
+typedef struct kcpuset	kcpuset_t;
 
 /* Public interface. */
 void	*softint_establish(u_int, void (*)(void *), void *);
@@ -56,6 +60,8 @@ void	softint_init_md(lwp_t *, u_int, uintptr_t *);
 void	softint_trigger(uintptr_t);
 #endif
 void	softint_dispatch(lwp_t *, int);
+
+int	intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
 
 /* Flags for softint_establish(). */
 #define	SOFTINT_BIO	0x0000

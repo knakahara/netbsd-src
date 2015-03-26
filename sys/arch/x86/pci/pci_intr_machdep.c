@@ -79,9 +79,11 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/systm.h>
+#include <sys/cpu.h>
 #include <sys/errno.h>
 #include <sys/device.h>
 #include <sys/intr.h>
+#include <sys/kmem.h>
 #include <sys/malloc.h>
 
 #include <dev/pci/pcivar.h>
