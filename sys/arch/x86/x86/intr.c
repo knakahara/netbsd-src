@@ -524,7 +524,6 @@ intr_allocate_io_intrsource(const char *intrid)
 		pep->cpuid = ci->ci_cpuid;
 		pep++;
 	}
-	isp->is_xname = NULL;
 	strncpy(isp->is_intrid, intrid, sizeof(isp->is_intrid));
 
 	SIMPLEQ_INSERT_TAIL(&io_interrupt_sources, isp, is_list);
@@ -543,10 +542,9 @@ intr_free_io_intrsource_direct(struct intrsource *isp)
 	SIMPLEQ_REMOVE(&io_interrupt_sources, isp, intrsource, is_list);
 
 	/* Is this interrupt established? */
-	if (isp->is_xname != NULL) {
+	if (isp->is_evname[0] != '\0')
 		evcnt_detach(&isp->is_evcnt);
-		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
-	}
+
 	kmem_free(isp->is_saved_evcnt,
 	    sizeof(*(isp->is_saved_evcnt)) * ncpu);
 	kmem_free(isp, sizeof(*isp));
@@ -797,35 +795,12 @@ intr_findpic(int num)
  * Append device name to intrsource. If device A and device B share IRQ number,
  * the device name of the interrupt id is "device A, device B".
  */
-static int
+static void
 intr_append_intrsource_xname(struct intrsource *isp, const char *xname)
 {
-	char *new;
-	size_t len;
-
-	/* 16 is same as device_xname(struct device) */
-	KASSERT(strlen(xname) < 16);
-
-	if (isp->is_xname == NULL) {
-		len = strlen(xname);
-		new = kmem_zalloc(len + 1, KM_SLEEP);
-		if (new == NULL)
-			return ENOMEM;
-
-		strncpy(new, xname, len);
-		isp->is_xname = new;
-		return 0;
-	} else {
-		len = strlen(isp->is_xname) + strlen(xname) + 2;
-		new = kmem_zalloc(len + 1, KM_SLEEP);
-		if (new == NULL)
-			return ENOMEM;
-
-		snprintf(new, len + 1, "%s, %s", isp->is_xname, xname);
-		kmem_free(isp->is_xname, strlen(isp->is_xname) + 1);
-		isp->is_xname = new;
-		return 0;
-	}
+	if (isp->is_xname[0] != '\0')
+		strncat(isp->is_xname, ", ", sizeof(isp->is_xname));
+	strncat(isp->is_xname, xname, sizeof(isp->is_xname));
 }
 
 /*
@@ -960,17 +935,7 @@ intr_establish_xname(int legacy_irq, struct pic *pic, int pin, int type, int lev
 
 	source->is_pin = pin;
 	source->is_pic = pic;
-	error = intr_append_intrsource_xname(source, xname);
-	if (error) {
-		intr_source_free(ci, slot, pic, idt_vec);
-		intr_free_io_intrsource_direct(chained);
-		mutex_exit(&cpu_lock);
-		kmem_free(ih, sizeof(*ih));
-		printf("%s: pic %s pin %d: can't set device name: %s\n",
-		       __func__, pic->pic_name, pin, xname);
-		return NULL;
-	}
-
+	intr_append_intrsource_xname(source, xname);
 	switch (source->is_type) {
 	case IST_NONE:
 		source->is_type = type;

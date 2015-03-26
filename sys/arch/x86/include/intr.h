@@ -93,7 +93,7 @@ struct intrsource {
 	int is_minlevel;
 	char is_evname[32];		/* event counter name */
 	char is_intrid[INTRIDBUF];	/* intrid created by create_intrid() */
-	char *is_xname;			/* device name */
+	char is_xname[INTRDEVNAMEBUF];	/* device names */
 	cpuid_t is_active_cpu;		/* active cpuid */
 	struct percpu_evcnt *is_saved_evcnt;	/* interrupt count of deactivated cpus */
 	SIMPLEQ_ENTRY(intrsource) is_list;	/* link of intrsources */
