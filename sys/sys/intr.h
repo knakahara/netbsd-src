@@ -32,7 +32,6 @@
 #ifndef _SYS_INTR_H_
 #define	_SYS_INTR_H_
 
-#define INTR_LIST_BUFSIZE 4096
 #define INTRIDBUF 64
 #define INTRDEVNAMEBUF 256
 

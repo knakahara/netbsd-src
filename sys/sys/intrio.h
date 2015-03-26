@@ -49,7 +49,7 @@ struct intr_list_line_cpu {
 struct intr_list_line {
 	char ill_intrid[INTRIDBUF];
 	char ill_xname[INTRDEVNAMEBUF];
-	struct intr_list_line_cpu ill_cpu[1];
+	struct intr_list_line_cpu ill_cpu[1]; /* Array size is overwritten to ncpu. */
 };
 
 struct intr_list {
@@ -61,9 +61,7 @@ struct intr_list {
 	size_t il_linesize;
 	off_t il_lineoffset;
 /*
- * struct intr_list_header il_header;
- * struct intr_list_line il_lines[1];
- *
+ * struct intr_list_line il_lines[interrupt_num] must be followed here.
  */
 };
 

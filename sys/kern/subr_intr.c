@@ -63,8 +63,7 @@ intr_shield_xcall(void *arg1, void *arg2)
 {
 	struct cpu_info *ci;
 	struct schedstate_percpu *spc;
-	int shield;
-	int s;
+	int s, shield;
 
 	ci = arg1;
 	shield = (int)(intptr_t)arg2;
@@ -124,9 +123,7 @@ intr_avert_intr(u_int cpu_idx)
 	kcpuset_t *cpuset;
 	void *ich;
 	char **ids;
-	int nids;
-	int error;
-	int i;
+	int error, i, nids;
 
 	KASSERT(mutex_owned(&cpu_lock));
 
@@ -162,6 +159,9 @@ intr_avert_intr(u_int cpu_idx)
 	return error;
 }
 
+/*
+ * Return actual intr_list_line size. intr_list_line size is variable by ncpu.
+ */
 static size_t
 intr_list_line_size(void)
 {
@@ -173,9 +173,11 @@ intr_list_line_size(void)
 static size_t
 intr_list_size(void)
 {
-	char **ids;
+	size_t ilsize;
 	int error, nids;
-	size_t ilsize = 0;
+	char **ids;
+
+	ilsize = 0;
 
 	/* buffer header */
 	ilsize += sizeof(struct intr_list);
@@ -193,22 +195,20 @@ intr_list_size(void)
 }
 
 /*
- * Set intrctl list to "data", and return list bytes (include '\0').
+ * Set intrctl list to "data", and return list structure bytes.
  * If error occured, return <0.
- * If "data" == NULL, simply return list bytes.
+ * If "data" == NULL, simply return list structure bytes.
  */
 static int
-intr_list(char *data, int length)
+intr_list(void *data, int length)
 {
 	struct intr_list *il;
 	struct intr_list_line *illine;
 	kcpuset_t *assigned, *avail;
-	void *ich;
-	char *buf;
-	char **ids;
 	size_t ilsize;
 	u_int cpu_idx;
 	int nids, intr_idx, ret, line_size;
+	char **ids;
 
 	ilsize = intr_list_size();
 	if (ilsize == 0)
@@ -220,8 +220,7 @@ intr_list(char *data, int length)
 	if (length < ilsize)
 		return -ENOMEM;
 
-	buf = data;
-	il = (struct intr_list *)buf;
+	il = (struct intr_list *)data;
 
 	illine = (struct intr_list_line *)((char *)il + sizeof(struct intr_list));
 	il->il_lineoffset = (off_t)illine - (off_t)il;
@@ -234,15 +233,26 @@ intr_list(char *data, int length)
 
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
 	if (ret != 0) {
+		mutex_exit(&cpu_lock);
 		DPRINTF(("%s: intr_construct_intrids() failed\n", __func__));
 		ret = -ret;
 		goto out;
 	}
 
 	line_size = intr_list_line_size();
-	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
-		ich = intr_get_handler(ids[intr_idx]);
+	/* ensure interrupts are not added after above intr_list_size(). */
+	if (ilsize < sizeof(struct intr_list) + line_size * nids) {
+		mutex_exit(&cpu_lock);
+		intr_destruct_intrids(ids, nids);
+		DPRINTF(("%s: interrupts are added during execution.\n", __func__));
+		ret = -ENOMEM;
+		goto out;
+	}
 
+	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
+		void *ich;
+
+		ich = intr_get_handler(ids[intr_idx]);
 		strncpy(illine->ill_intrid, ids[intr_idx], INTRIDBUF);
 		strncpy(illine->ill_xname, intr_get_devname(ich), INTRDEVNAMEBUF);
 
@@ -258,8 +268,10 @@ intr_list(char *data, int length)
 
 		illine = (struct intr_list_line *)((char *)illine + line_size);
 	}
-	ret = ilsize;
 
+	mutex_exit(&cpu_lock);
+
+	ret = ilsize;
 	il->il_version = INTR_LIST_VERSION;
 	il->il_ncpus = ncpu;
 	il->il_nintrs = nids;
@@ -268,7 +280,6 @@ intr_list(char *data, int length)
 
 	intr_destruct_intrids(ids, nids);
  out:
-	mutex_exit(&cpu_lock);
 	kcpuset_destroy(assigned);
 	kcpuset_destroy(avail);
 
@@ -281,24 +292,23 @@ intr_list(char *data, int length)
 static int
 intr_list_sysctl(SYSCTLFN_ARGS)
 {
-	int listsize;
 	int ret;
-	char *buf;
+	void *buf;
+
+	if (oldlenp == NULL)
+		return EINVAL;
 
 	if (oldp == NULL) {
-		listsize = intr_list(NULL, 0);
-		if (listsize < 0)
-			return EINVAL;
+		ret = intr_list(NULL, 0);
+		if (ret < 0)
+			return -ret;
 
-		if (oldlenp == NULL)
-			return EINVAL;
-
-		*oldlenp = listsize;
+		*oldlenp = ret;
 		return 0;
 	}
 
 	if (*oldlenp == 0)
-		return EINVAL;
+		return ENOMEM;
 
 	buf = kmem_zalloc(*oldlenp, KM_SLEEP);
 	if (buf == NULL)
@@ -318,10 +328,10 @@ static int
 intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 {
 	struct sysctlnode node;
-	int error;
 	struct intr_set *iset;
 	cpuset_t *ucpuset;
 	kcpuset_t *kcpuset;
+	int error;
 	void *ich;
 
 	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
@@ -365,11 +375,11 @@ static int
 intr_intr_sysctl(SYSCTLFN_ARGS)
 {
 	struct sysctlnode node;
-	int error;
-	u_int cpu_idx;
 	struct intr_set *iset;
 	cpuset_t *ucpuset;
 	kcpuset_t *kcpuset;
+	int error;
+	u_int cpu_idx;
 
 	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
 	    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
@@ -408,11 +418,11 @@ static int
 intr_nointr_sysctl(SYSCTLFN_ARGS)
 {
 	struct sysctlnode node;
-	int error;
-	u_int cpu_idx;
 	struct intr_set *iset;
 	cpuset_t *ucpuset;
 	kcpuset_t *kcpuset;
+	int error;
+	u_int cpu_idx;
 
 	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_CPU,
 	    KAUTH_REQ_SYSTEM_CPU_SETSTATE, NULL, NULL, NULL);
@@ -448,7 +458,6 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 	kcpuset_destroy(kcpuset);
 	return error;
 }
-
 
 SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 {

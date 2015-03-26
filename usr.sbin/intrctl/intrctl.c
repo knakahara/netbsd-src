@@ -112,9 +112,9 @@ static int intrctl_io_alloc_retry_count = 4;
 static void
 intr_list(int argc, char **argv)
 {
+	struct intr_list_line *illine;
 	int i, ncpus;
 	void *handle;
-	struct intr_list_line *illine;
 
 	handle = intrctl_io_alloc(intrctl_io_alloc_retry_count);
 	if (handle == NULL)
@@ -150,8 +150,7 @@ intr_affinity(int argc, char **argv)
 	struct intr_set iset;
 	cpuset_t *cpuset;
 	unsigned long index;
-	int ch;
-	int error;
+	int ch, error;
 
 	index = ULONG_MAX;
 	memset(&iset.intrid, 0, sizeof(iset.intrid));
@@ -197,8 +196,7 @@ intr_intr(int argc, char **argv)
 	struct intr_set iset;
 	cpuset_t *cpuset;
 	unsigned long index;
-	int ch;
-	int error;
+	int ch, error;
 
 	index = ULONG_MAX;
 
@@ -238,8 +236,7 @@ intr_nointr(int argc, char **argv)
 	struct intr_set iset;
 	cpuset_t *cpuset;
 	unsigned long index;
-	int ch;
-	int error;
+	int ch, error;
 
 	index = ULONG_MAX;
 
