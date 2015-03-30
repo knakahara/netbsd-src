@@ -339,6 +339,7 @@ wmimsi* 	at acpiwmibus?		# MSI WMI mappings
 pci*	at mainbus? bus ?
 pci*	at pchb? bus ?
 pci*	at ppb? bus ?
+#options 	PCI_MSI_MSIX
 
 # PCI bridges
 pchb*	at pci? dev ? function ?	# PCI-Host bridges

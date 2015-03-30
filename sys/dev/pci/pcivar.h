@@ -279,7 +279,9 @@ int pci_find_rom(const struct pci_attach_args *, bus_space_tag_t,
 	    int, bus_space_handle_t *, bus_size_t *);
 
 int pci_get_capability(pci_chipset_tag_t, pcitag_t, int, int *, pcireg_t *);
+#ifdef PCI_MSI_MSIX /* defined in <machine/pci_machdep.h> */
 int pci_get_ht_capability(pci_chipset_tag_t, pcitag_t, int, int *, pcireg_t *);
+#endif
 
 /*
  * Helper functions for autoconfiguration.

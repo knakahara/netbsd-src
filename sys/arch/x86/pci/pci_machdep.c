@@ -110,6 +110,7 @@ __KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.69 2014/11/07 12:48:21 christos Ex
 #include "opt_acpi.h"
 #include "opt_ddb.h"
 #include "opt_mpbios.h"
+#include "opt_pci_msi_msix.h"
 #include "opt_puc.h"
 #include "opt_vga.h"
 #include "pci.h"
@@ -212,6 +213,7 @@ const struct {
 #undef _tag
 #undef _qe
 
+#ifdef PCI_MSI_MSIX
 #define PCI_QUIRK_DISABLE_MSI	1 /* Neigher MSI nor MSI-X work */
 #define PCI_QUIRK_DISABLE_MSIX	2 /* MSI-X does not work */
 #define PCI_QUIRK_ENABLE_MSI_VM	3 /* Older chipset in VM where MSI and MSI-X works */
@@ -260,6 +262,7 @@ const struct {
 #undef _dme
 #undef _dmxe
 #undef _emve
+#endif /* PCI_MSI_MSIX */
 
 /*
  * PCI doesn't have any special needs; just use the generic versions
@@ -421,6 +424,7 @@ pci_conf_select(uint32_t sel)
 	}
 }
 
+#ifdef PCI_MSI_MSIX
 static int
 pci_has_msi_quirk(pcireg_t id, int type)
 {
@@ -434,13 +438,16 @@ pci_has_msi_quirk(pcireg_t id, int type)
 
 	return 0;
 }
+#endif
 
 void
 pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 {
+#ifdef PCI_MSI_MSIX
 	pci_chipset_tag_t pc = pba->pba_pc;
 	pcitag_t tag;
 	pcireg_t id, class;
+#endif
 
 	if (pba->pba_bus == 0)
 		aprint_normal(": configuration mode %d", pci_mode);
@@ -451,6 +458,7 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 	mpacpi_pci_attach_hook(parent, self, pba);
 #endif
 
+#ifdef PCI_MSI_MSIX
 	/*
 	 * In order to decide whether the system supports MSI we look
 	 * at the host bridge, which should be device 0 function 0 on
@@ -500,6 +508,7 @@ pci_attach_hook(device_t parent, device_t self, struct pcibus_attach_args *pba)
 		pba->pba_flags &= ~PCI_FLAGS_MSI_OKAY;
 		pba->pba_flags &= ~PCI_FLAGS_MSIX_OKAY;
 	}
+#endif /* PCI_MSI_MSIX */
 }
 
 int

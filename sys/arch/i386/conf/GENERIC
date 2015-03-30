@@ -421,6 +421,7 @@ pci*	at mainbus? bus ?
 pci*	at pchb? bus ?
 pci*	at ppb? bus ?
 pci*	at elansc? bus ?
+#options 	PCI_MSI_MSIX
 
 # Configure PCI using BIOS information
 #options 	PCIBIOS			# PCI BIOS support

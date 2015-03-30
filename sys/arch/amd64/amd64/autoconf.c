@@ -50,6 +50,7 @@ __KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.24 2012/11/08 02:00:44 chs Exp $");
 
 #include "opt_multiprocessor.h"
 #include "opt_intrdebug.h"
+#include "opt_pci_msi_msix.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -80,7 +81,9 @@ extern void platform_init(void);
 
 #include <x86/x86/tsc.h>
 
+#ifdef PCI_MSI_MSIX
 #include <x86/pci/msipic.h>
+#endif
 
 /*
  * Determine i/o configuration for a machine.
@@ -98,7 +101,9 @@ cpu_configure(void)
 
 	x86_64_proc0_tss_ldt_init();
 
+#ifdef PCI_MSI_MSIX
 	msipic_init();
+#endif
 
 	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("configure: mainbus not configured");

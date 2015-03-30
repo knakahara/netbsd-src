@@ -93,6 +93,7 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 #include "acpica.h"
 #include "opt_mpbios.h"
 #include "opt_acpi.h"
+#include "opt_pci_msi_msix.h"
 
 #include <machine/i82489reg.h>
 
@@ -220,71 +221,16 @@ bad:
 	return 1;
 }
 
-int
-pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
-{
-	struct intrsource *isp;
-	pci_intr_handle_t *handle;
-	int error;
-	char intrstr_buf[INTRIDBUF];
-	const char *intrstr;
-
-	handle = kmem_zalloc(sizeof(*handle), KM_SLEEP);
-	if (handle == NULL) {
-		aprint_normal("cannot allocate pci_intr_handle_t\n");
-		return ENOMEM;
-	}
-
-	if (pci_intr_map(pa, handle) != 0) {
-		aprint_normal("cannot set up pci_intr_handle_t\n");
-		error = EINVAL;
-		goto error;
-	}
-
-	intrstr = pci_intr_string(pa->pa_pc, *handle,
-	    intrstr_buf, sizeof(intrstr_buf));
-	mutex_enter(&cpu_lock);
-	isp = intr_allocate_io_intrsource(intrstr);
-	mutex_exit(&cpu_lock);
-	if (isp == NULL) {
-		aprint_normal("can't allocate io_intersource\n");
-		error = ENOMEM;
-		goto error;
-	}
-
-	*pih = handle;
-	return 0;
-
-error:
-	kmem_free(handle, sizeof(*handle));
-	return error;
-}
-
-void
-pci_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
-{
-	char intrstr_buf[INTRIDBUF];
-	const char *intrstr;
-
-	if (pih == NULL)
-		return;
-
-	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
-	mutex_enter(&cpu_lock);
-	intr_free_io_intrsource(intrstr);
-	mutex_exit(&cpu_lock);
-
-	kmem_free(pih, sizeof(*pih));
-}
-
 const char *
 pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
     size_t len)
 {
 	pci_chipset_tag_t ipc;
 
+#ifdef PCI_MSI_MSIX
 	if (INT_VIA_MSI(ih))
 		return pci_msi_string(pc, ih, buf, len);
+#endif
 
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)
@@ -389,8 +335,8 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 	intr_disestablish(cookie);
 }
 
-#if 0
 #if NIOAPIC > 0
+#ifndef PCI_MSI_MSIX
 /*
  * experimental support for MSI, does support a single vector,
  * no MSI-X, 8-bit APIC IDs
@@ -492,5 +438,62 @@ pci_msi_disestablish(void *ih)
 	intr_disestablish(msih->ih);
 	free(msih, M_DEVBUF);
 }
-#endif
+#else /* PCI_MSI_MSIX */
+int
+pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
+{
+	struct intrsource *isp;
+	pci_intr_handle_t *handle;
+	int error;
+	char intrstr_buf[INTRIDBUF];
+	const char *intrstr;
+
+	handle = kmem_zalloc(sizeof(*handle), KM_SLEEP);
+	if (handle == NULL) {
+		aprint_normal("cannot allocate pci_intr_handle_t\n");
+		return ENOMEM;
+	}
+
+	if (pci_intr_map(pa, handle) != 0) {
+		aprint_normal("cannot set up pci_intr_handle_t\n");
+		error = EINVAL;
+		goto error;
+	}
+
+	intrstr = pci_intr_string(pa->pa_pc, *handle,
+	    intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	isp = intr_allocate_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+	if (isp == NULL) {
+		aprint_normal("can't allocate io_intersource\n");
+		error = ENOMEM;
+		goto error;
+	}
+
+	*pih = handle;
+	return 0;
+
+error:
+	kmem_free(handle, sizeof(*handle));
+	return error;
+}
+
+void
+pci_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
+{
+	char intrstr_buf[INTRIDBUF];
+	const char *intrstr;
+
+	if (pih == NULL)
+		return;
+
+	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	intr_free_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+
+	kmem_free(pih, sizeof(*pih));
+}
+#endif /* PCI_MSI_MSIX */
 #endif

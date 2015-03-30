@@ -34,6 +34,8 @@
 #ifndef _X86_I82093VAR_H_
 #define _X86_I82093VAR_H_
 
+#include "opt_pci_msi_msix.h"
+
 #include <sys/device.h>
 #include <machine/apicvar.h>
 
@@ -68,18 +70,26 @@ struct ioapic_softc {
  * (ih&0xff0000)>>16 -> ioapic id.
  * (ih&0x00ff00)>>8 -> ioapic pin.
  *
+ * If PCI_MSI_MSIX defined:
  * (ih&0x000ff80000000000)>>43 -> MSI/MSI-X device id.
  * (ih&0x000007ff00000000)>>32 -> MSI/MSI-X vector id in a device.
  */
 #define	MPSAFE_MASK		0x80000000
-
 #define APIC_INT_VIA_APIC	0x10000000
+#ifdef PCI_MSI_MSIX
 #define APIC_INT_VIA_MSI	0x20000000
+#endif
 #define APIC_INT_APIC_MASK	0x00ff0000
 #define APIC_INT_APIC_SHIFT	16
 #define APIC_INT_PIN_MASK	0x0000ff00
 #define APIC_INT_PIN_SHIFT	8
 
+#ifndef PCI_MSI_MSIX
+#define APIC_IRQ_APIC(x) ((x & APIC_INT_APIC_MASK) >> APIC_INT_APIC_SHIFT)
+#define APIC_IRQ_PIN(x) ((x & APIC_INT_PIN_MASK) >> APIC_INT_PIN_SHIFT)
+#define APIC_IRQ_ISLEGACY(x) (!((x) & APIC_INT_VIA_APIC))
+#define APIC_IRQ_LEGACY_IRQ(x) ((x) & 0xff)
+#else /* PCI_MSI_MSIX */
 #define APIC_IRQ_APIC(x) (((int)(x) & APIC_INT_APIC_MASK) >> APIC_INT_APIC_SHIFT)
 #define APIC_IRQ_PIN(x) (((int)(x) & APIC_INT_PIN_MASK) >> APIC_INT_PIN_SHIFT)
 #define APIC_IRQ_ISLEGACY(x) (!((int)(x) & APIC_INT_VIA_APIC))
@@ -96,6 +106,7 @@ struct ioapic_softc {
 #define MSI_INT_MAKE_MSIX(x) ((x) |= MSI_INT_MSIX)
 #define MSI_INT_DEV(x) __SHIFTOUT((x), MSI_INT_DEV_MASK)
 #define MSI_INT_VEC(x) __SHIFTOUT((x), MSI_INT_VEC_MASK)
+#endif /* PCI_MSI_MSIX */
 
 void ioapic_print_redir(struct ioapic_softc *, const char *, int);
 void ioapic_format_redir(char *, const char *, int, uint32_t, uint32_t);

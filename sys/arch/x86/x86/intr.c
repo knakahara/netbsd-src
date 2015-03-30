@@ -138,6 +138,7 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include "opt_intrdebug.h"
 #include "opt_multiprocessor.h"
 #include "opt_acpi.h"
+#include "opt_pci_msi_msix.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -176,7 +177,9 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
 #include <dev/pci/ppbreg.h>
 #endif
 
+#ifdef PCI_MSI_MSIX
 #include <x86/pci/msipic.h>
+#endif
 
 #ifdef DDB
 #include <ddb/db_output.h>
@@ -435,6 +438,7 @@ create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 {
 	int ih;
 
+#ifdef PCI_MSI_MSIX
 	if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX) {
 		uint64_t pih;
 		int dev, vec;
@@ -450,6 +454,7 @@ create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 
 		return pci_msi_string(NULL, pih, buf, len);
 	}
+#endif
 
 	/*
 	 * If the device is pci, "legacy_irq" is alway -1. Least 8 bit of "ih"
@@ -585,10 +590,11 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 		int start = 0;
 		slot = -1;
 
+#ifdef PCI_MSI_MSIX
 		/* avoid reserved slots for legacy interrupts. */
 		if (CPU_IS_PRIMARY(ci) && is_msi_pic(pic))
 			start = NUM_LEGACY_IRQS;
-
+#endif
 		/*
 		 * intr_allocate_slot has checked for an existing mapping.
 		 * Now look for a free slot.
@@ -610,9 +616,11 @@ intr_allocate_slot_cpu(struct cpu_info *ci, struct pic *pic, int pin,
 
 		isp = chained;
 		KASSERT(isp != NULL);
+#ifdef PCI_MSI_MSIX
 		if (pic->pic_type == PIC_MSI || pic->pic_type == PIC_MSIX)
 			via = "vec";
 		else
+#endif
 			via = "pin";
 		snprintf(isp->is_evname, sizeof (isp->is_evname),
 		    "%s %d", via, pin);
@@ -880,12 +888,13 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	/* allocate intrsource pool, if not yet. */
 	chained = intr_get_io_intrsource(intrstr);
 	if (chained == NULL) {
+#ifdef PCI_MSI_MSIX
 		if (is_msi_pic(pic)) {
 			mutex_exit(&cpu_lock);
 			printf("%s: %s has no intrsource\n", __func__, intrstr);
 			return NULL;
 		}
-
+#endif
 		chained = intr_allocate_io_intrsource(intrstr);
 		if (chained == NULL) {
 			mutex_exit(&cpu_lock);
@@ -1113,7 +1122,12 @@ intr_disestablish(struct intrhand *ih)
 		where = xc_unicast(0, intr_disestablish_xcall, ih, NULL, ci);
 		xc_wait(where);
 	}	
-	if (!is_msi_pic(isp->is_pic) && intr_num_handlers(isp) < 1) {
+#ifndef PCI_MSI_MSIX
+	if (intr_num_handlers(isp) < 1)
+#else
+	if (!is_msi_pic(isp->is_pic) && intr_num_handlers(isp) < 1)
+#endif
+	{
 		intr_free_io_intrsource_direct(isp);
 	}
 	mutex_exit(&cpu_lock);

@@ -13,6 +13,9 @@ defflag opt_intrdebug.h	INTRDEBUG
 defflag opt_pcifixup.h	PCI_ADDR_FIXUP PCI_BUS_FIXUP
 			PCI_INTR_FIXUP PCI_INTR_FIXUP_FORCE
 
+# PCI MSI/MSI-X option
+defflag opt_pci_msi_msix.h	PCI_MSI_MSIX
+
 # To be able to test for NetBSD/xen in shared files
 defflag	opt_xen.h		DO_NOT_DEFINE
 
@@ -141,8 +144,9 @@ file	arch/x86/x86/tprof_amdpmi.c	tprof_amdpmi
 file	arch/x86/pci/pci_machdep.c	pci
 #file	arch/x86/pci/pci_ranges.c	pci
 file	arch/x86/pci/pci_intr_machdep.c	pci
-file	arch/x86/pci/pci_msi_machdep.c	pci
-file	arch/x86/pci/msipic.c		pci
+
+file	arch/x86/pci/pci_msi_machdep.c	pci_msi_msix
+file	arch/x86/pci/msipic.c		pci_msi_msix
 
 file	arch/x86/pci/pciide_machdep.c	pciide_common
 

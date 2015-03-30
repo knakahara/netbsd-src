@@ -41,6 +41,8 @@
 #define	__HAVE_PCIIDE_MACHDEP_COMPAT_INTR_DISESTABLISH
 #endif
 
+#include "opt_pci_msi_msix.h"
+
 /*
  * x86-specific PCI structure and type definitions.
  * NOT TO BE USED DIRECTLY BY MACHINE INDEPENDENT CODE.
@@ -110,9 +112,6 @@ void		pci_conf_write(pci_chipset_tag_t, pcitag_t, int,
 		    pcireg_t);
 int		pci_intr_map(const struct pci_attach_args *,
 		    pci_intr_handle_t *);
-int		pci_intr_alloc(const struct pci_attach_args *,
-		    pci_intr_handle_t **);
-void		pci_intr_release(pci_chipset_tag_t, pci_intr_handle_t *);
 const char	*pci_intr_string(pci_chipset_tag_t, pci_intr_handle_t,
 		    char *, size_t);
 const struct evcnt *pci_intr_evcnt(pci_chipset_tag_t, pci_intr_handle_t);
@@ -120,30 +119,35 @@ void		*pci_intr_establish(pci_chipset_tag_t, pci_intr_handle_t,
 		    int, int (*)(void *), void *);
 void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 
+#ifndef PCI_MSI_MSIX
 /* experimental MSI support */
-const char *pci_msi_string(pci_chipset_tag_t, pci_intr_handle_t, char *, size_t);
-int pci_msi_count(struct pci_attach_args *);
-int pci_msi_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
-int pci_msi_alloc_exact(struct pci_attach_args *, pci_intr_handle_t **, int);
-void pci_msi_release(pci_chipset_tag_t, pci_intr_handle_t **, int);
-void *pci_msi_establish(pci_chipset_tag_t, pci_intr_handle_t,
-    int, int (*)(void *), void *);
-void pci_msi_disestablish(pci_chipset_tag_t, void *);
-
-/* experimental MSI-X support */
-int pci_msix_count(struct pci_attach_args *);
-int pci_msix_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
-int pci_msix_alloc_exact(struct pci_attach_args *, pci_intr_handle_t **, int);
-int pci_msix_alloc_map(struct pci_attach_args *, pci_intr_handle_t **, u_int *, int);
-void pci_msix_release(pci_chipset_tag_t, pci_intr_handle_t **, int);
-void *pci_msix_establish(pci_chipset_tag_t, pci_intr_handle_t,
-    int, int (*)(void *), void *);
-void pci_msix_disestablish(pci_chipset_tag_t, void *);
-
-#if 0
 void *pci_msi_establish(struct pci_attach_args *, int, int (*)(void *), void *);
 void pci_msi_disestablish(void *);
-#endif
+#else /* PCI_MSI_MSIX */
+int		pci_intr_alloc(const struct pci_attach_args *,
+		    pci_intr_handle_t **);
+void		pci_intr_release(pci_chipset_tag_t, pci_intr_handle_t *);
+
+/* experimental MSI support */
+const char	*pci_msi_string(pci_chipset_tag_t, pci_intr_handle_t, char *, size_t);
+int		pci_msi_count(struct pci_attach_args *);
+int		pci_msi_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
+int		pci_msi_alloc_exact(struct pci_attach_args *, pci_intr_handle_t **, int);
+void		pci_msi_release(pci_chipset_tag_t, pci_intr_handle_t **, int);
+void		*pci_msi_establish(pci_chipset_tag_t, pci_intr_handle_t,
+		    int, int (*)(void *), void *);
+void		pci_msi_disestablish(pci_chipset_tag_t, void *);
+
+/* experimental MSI-X support */
+int		pci_msix_count(struct pci_attach_args *);
+int		pci_msix_alloc(struct pci_attach_args *, pci_intr_handle_t **, int *);
+int		pci_msix_alloc_exact(struct pci_attach_args *, pci_intr_handle_t **, int);
+int		pci_msix_alloc_map(struct pci_attach_args *, pci_intr_handle_t **, u_int *, int);
+void		pci_msix_release(pci_chipset_tag_t, pci_intr_handle_t **, int);
+void		*pci_msix_establish(pci_chipset_tag_t, pci_intr_handle_t,
+		    int, int (*)(void *), void *);
+void		pci_msix_disestablish(pci_chipset_tag_t, void *);
+#endif /* PCI_MSI_MSIX */
 
 /*
  * ALL OF THE FOLLOWING ARE MACHINE-DEPENDENT, AND SHOULD NOT BE USED

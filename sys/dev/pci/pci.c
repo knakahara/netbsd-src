@@ -274,8 +274,12 @@ pci_probe_device(struct pci_softc *sc, pcitag_t tag,
 {
 	pci_chipset_tag_t pc = sc->sc_pc;
 	struct pci_attach_args pa;
-	pcireg_t id, /* csr, */ pciclass, intr, bhlcr, bar, endbar, cap;
-	int ret, pin, bus, device, function, i, width, off;
+	pcireg_t id, /* csr, */ pciclass, intr, bhlcr, bar, endbar;
+#ifdef PCI_MSI_MSIX /* defined in <machine/pci_machdep.h> */
+	pcireg_t cap;
+	int off;
+#endif
+	int ret, pin, bus, device, function, i, width;
 	int locs[PCICF_NLOCS];
 
 	pci_decompose_tag(pc, tag, &bus, &device, &function);
@@ -406,6 +410,7 @@ pci_probe_device(struct pci_softc *sc, pcitag_t tag,
 	}
 	pa.pa_intrline = PCI_INTERRUPT_LINE(intr);
 
+#ifdef PCI_MSI_MSIX
 	if (pci_get_ht_capability(pc, tag, PCI_HT_CAP_MSIMAP, &off, &cap)) {
 		/*
 		 * XXX Should we enable MSI mapping ourselves on
@@ -431,6 +436,7 @@ pci_probe_device(struct pci_softc *sc, pcitag_t tag,
 			}
 		}
 	}
+#endif
 
 	if (match != NULL) {
 		ret = (*match)(&pa);
@@ -533,6 +539,7 @@ pci_get_capability(pci_chipset_tag_t pc, pcitag_t tag, int capid,
 	return 0;
 }
 
+#ifdef PCI_MSI_MSIX
 int
 pci_get_ht_capability(pci_chipset_tag_t pc, pcitag_t tag, int capid,
     int *offset, pcireg_t *value)
@@ -561,6 +568,7 @@ pci_get_ht_capability(pci_chipset_tag_t pc, pcitag_t tag, int capid,
 
 	return 0;
 }
+#endif /* PCI_MSI_MSIX */
 
 int
 pci_find_device(struct pci_attach_args *pa,
