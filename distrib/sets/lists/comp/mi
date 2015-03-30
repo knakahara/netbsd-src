@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1947 2015/02/17 20:29:20 joerg Exp $
+#	$NetBSD: mi,v 1.1951 2015/03/30 01:25:36 riastradh Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -398,6 +398,8 @@
 ./usr/include/dev/filemon/filemon.h		comp-c-include
 ./usr/include/dev/fssvar.h			comp-c-include
 ./usr/include/dev/hpc/hpcfbio.h			comp-c-include
+./usr/include/dev/hdaudio/hdaudioio.h		comp-c-include
+./usr/include/dev/hdaudio/hdaudioreg.h		comp-c-include
 ./usr/include/dev/i2c/i2c_bus.h			comp-obsolete		obsolete
 ./usr/include/dev/i2c/i2c_eeprom.h		comp-obsolete		obsolete
 ./usr/include/dev/i2c/i2c_io.h			comp-c-include
@@ -614,8 +616,8 @@
 ./usr/include/dev/ofw/openfirmio.h		comp-c-include
 ./usr/include/dev/pci/amrio.h			comp-c-include
 ./usr/include/dev/pci/amrreg.h			comp-c-include
-./usr/include/dev/pci/hdaudio/hdaudioio.h	comp-c-include
-./usr/include/dev/pci/hdaudio/hdaudioreg.h	comp-c-include
+./usr/include/dev/pci/hdaudio/hdaudioio.h	comp-obsolete		obsolete
+./usr/include/dev/pci/hdaudio/hdaudioreg.h	comp-obsolete		obsolete
 ./usr/include/dev/pci/if_devar.h		comp-obsolete		obsolete
 ./usr/include/dev/pci/if_fxpreg.h		comp-obsolete		obsolete
 ./usr/include/dev/pci/if_fxpvar.h		comp-obsolete		obsolete
@@ -9904,6 +9906,7 @@
 ./usr/share/man/cat9/btoc.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/btodb.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/buffercache.0		comp-sys-catman		.cat
+./usr/share/man/cat9/bufferio.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/bufq.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/bus_dma.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/bus_dmamap_create.0	comp-sys-catman		.cat
@@ -10071,8 +10074,8 @@
 ./usr/share/man/cat9/cprng_strong64.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cprng_strong_create.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/cprng_strong_destroy.0	comp-sys-catman		.cat
-./usr/share/man/cat9/cprng_strong_getflags.0	comp-sys-catman		.cat
-./usr/share/man/cat9/cprng_strong_setflags.0	comp-sys-catman		.cat
+./usr/share/man/cat9/cprng_strong_getflags.0	comp-obsolete		obsolete
+./usr/share/man/cat9/cprng_strong_setflags.0	comp-obsolete		obsolete
 ./usr/share/man/cat9/cpu_configure.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_coredump.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_dump.0			comp-sys-catman		.cat
@@ -10556,6 +10559,8 @@
 ./usr/share/man/cat9/nanotime.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/nanouptime.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/need_resched.0		comp-obsolete		obsolete
+./usr/share/man/cat9/nestiobuf_done.0		comp-sys-catman		.cat
+./usr/share/man/cat9/nestiobuf_setup.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/nextrunqueue.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/npf_ncode.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/nullop.0			comp-sys-catman		.cat
@@ -11172,6 +11177,21 @@
 ./usr/share/man/cat9/vwakeup.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/wakeup.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/wdc.0			comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl.0			comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_start.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_stop.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_begin.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_end.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_flush.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_discard.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_add_buf.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_remove_buf.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_resize_buf.0		comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_register_inode.0	comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_unregister_inode.0	comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_register_deallocation.0	comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_jlock_assert.0	comp-sys-catman		.cat
+./usr/share/man/cat9/wapbl_junlock_assert.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/workqueue.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/workqueue_create.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/workqueue_destroy.0	comp-sys-catman		.cat
@@ -16688,6 +16708,7 @@
 ./usr/share/man/html9/btoc.html			comp-sys-htmlman	html
 ./usr/share/man/html9/btodb.html		comp-sys-htmlman	html
 ./usr/share/man/html9/buffercache.html		comp-sys-htmlman	html
+./usr/share/man/html9/bufferio.html		comp-sys-htmlman	html
 ./usr/share/man/html9/bufq.html			comp-sys-htmlman	html
 ./usr/share/man/html9/bus_dma.html		comp-sys-htmlman	html
 ./usr/share/man/html9/bus_dmamap_create.html	comp-sys-htmlman	html
@@ -16850,8 +16871,8 @@
 ./usr/share/man/html9/cprng_strong64.html	comp-sys-htmlman	html
 ./usr/share/man/html9/cprng_strong_create.html	comp-sys-htmlman	html
 ./usr/share/man/html9/cprng_strong_destroy.html	comp-sys-htmlman	html
-./usr/share/man/html9/cprng_strong_getflags.html comp-sys-htmlman	html
-./usr/share/man/html9/cprng_strong_setflags.html comp-sys-htmlman	html
+./usr/share/man/html9/cprng_strong_getflags.html comp-obsolete		obsolete
+./usr/share/man/html9/cprng_strong_setflags.html comp-obsolete		obsolete
 ./usr/share/man/html9/cpu_configure.html	comp-sys-htmlman	html
 ./usr/share/man/html9/cpu_coredump.html		comp-sys-htmlman	html
 ./usr/share/man/html9/cpu_dump.html		comp-sys-htmlman	html
@@ -17313,6 +17334,8 @@
 ./usr/share/man/html9/namei.html		comp-sys-htmlman	html
 ./usr/share/man/html9/nanotime.html		comp-sys-htmlman	html
 ./usr/share/man/html9/nanouptime.html		comp-sys-htmlman	html
+./usr/share/man/html9/nestiobuf_done.html	comp-sys-htmlman	html
+./usr/share/man/html9/nestiobuf_setup.html	comp-sys-htmlman	html
 ./usr/share/man/html9/npf_ncode.html		comp-obsolete		obsolete
 ./usr/share/man/html9/nullop.html		comp-sys-htmlman	html
 ./usr/share/man/html9/old_sysctl.html		comp-sys-htmlman	html
@@ -17881,6 +17904,21 @@
 ./usr/share/man/html9/vwakeup.html		comp-sys-htmlman	html
 ./usr/share/man/html9/wakeup.html		comp-sys-htmlman	html
 ./usr/share/man/html9/wdc.html			comp-sys-htmlman	html
+./usr/share/man/html9/wapbl.html		comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_start.html		comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_stop.html		comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_begin.html		comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_end.html		comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_flush.html		comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_discard.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_add_buf.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_remove_buf.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_resize_buf.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_register_inode.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_unregister_inode.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_register_deallocation.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_jlock_assert.html	comp-sys-htmlman	html
+./usr/share/man/html9/wapbl_junlock_assert.html	comp-sys-htmlman	html
 ./usr/share/man/html9/workqueue.html		comp-sys-htmlman	html
 ./usr/share/man/html9/workqueue_create.html	comp-sys-htmlman	html
 ./usr/share/man/html9/workqueue_destroy.html	comp-sys-htmlman	html
@@ -23580,6 +23618,7 @@
 ./usr/share/man/man9/btoc.9			comp-sys-man		.man
 ./usr/share/man/man9/btodb.9			comp-sys-man		.man
 ./usr/share/man/man9/buffercache.9		comp-sys-man		.man
+./usr/share/man/man9/bufferio.9			comp-sys-man		.man
 ./usr/share/man/man9/bufq.9			comp-sys-man		.man
 ./usr/share/man/man9/bus_dma.9			comp-sys-man		.man
 ./usr/share/man/man9/bus_dmamap_create.9	comp-sys-man		.man
@@ -23747,8 +23786,8 @@
 ./usr/share/man/man9/cprng_strong64.9		comp-sys-man		.man
 ./usr/share/man/man9/cprng_strong_create.9	comp-sys-man		.man
 ./usr/share/man/man9/cprng_strong_destroy.9	comp-sys-man		.man
-./usr/share/man/man9/cprng_strong_getflags.9	comp-sys-man		.man
-./usr/share/man/man9/cprng_strong_setflags.9	comp-sys-man		.man
+./usr/share/man/man9/cprng_strong_getflags.9	comp-obsolete		obsolete
+./usr/share/man/man9/cprng_strong_setflags.9	comp-obsolete		obsolete
 ./usr/share/man/man9/cpu_configure.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_coredump.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_dump.9			comp-sys-man		.man
@@ -24232,6 +24271,8 @@
 ./usr/share/man/man9/nanotime.9			comp-sys-man		.man
 ./usr/share/man/man9/nanouptime.9		comp-sys-man		.man
 ./usr/share/man/man9/need_resched.9		comp-obsolete		obsolete
+./usr/share/man/man9/nestiobuf_done.9		comp-sys-man		.man
+./usr/share/man/man9/nestiobuf_setup.9		comp-sys-man		.man
 ./usr/share/man/man9/nextrunqueue.9		comp-obsolete		obsolete
 ./usr/share/man/man9/npf_ncode.9		comp-obsolete		obsolete
 ./usr/share/man/man9/nullop.9			comp-sys-man		.man
@@ -24847,6 +24888,21 @@
 ./usr/share/man/man9/vwakeup.9			comp-sys-man		.man
 ./usr/share/man/man9/wakeup.9			comp-sys-man		.man
 ./usr/share/man/man9/wdc.9			comp-sys-man		.man
+./usr/share/man/man9/wapbl.9			comp-sys-man		.man
+./usr/share/man/man9/wapbl_start.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_stop.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_begin.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_end.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_flush.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_discard.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_add_buf.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_remove_buf.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_resize_buf.9		comp-sys-man		.man
+./usr/share/man/man9/wapbl_register_inode.9	comp-sys-man		.man
+./usr/share/man/man9/wapbl_unregister_inode.9	comp-sys-man		.man
+./usr/share/man/man9/wapbl_register_deallocation.9	comp-sys-man	.man
+./usr/share/man/man9/wapbl_jlock_assert.9	comp-sys-man		.man
+./usr/share/man/man9/wapbl_junlock_assert.9	comp-sys-man		.man
 ./usr/share/man/man9/workqueue.9		comp-sys-man		.man
 ./usr/share/man/man9/workqueue_create.9		comp-sys-man		.man
 ./usr/share/man/man9/workqueue_destroy.9	comp-sys-man		.man

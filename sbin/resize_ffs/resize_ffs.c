@@ -1,4 +1,4 @@
-/*	$NetBSD: resize_ffs.c,v 1.38 2013/06/23 22:03:34 dholland Exp $	*/
+/*	$NetBSD: resize_ffs.c,v 1.41 2015/03/29 19:33:55 chopps Exp $	*/
 /* From sources sent on February 17, 2003 */
 /*-
  * As its sole author, I explicitly place this code in the public
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: resize_ffs.c,v 1.38 2013/06/23 22:03:34 dholland Exp $");
+__RCSID("$NetBSD: resize_ffs.c,v 1.41 2015/03/29 19:33:55 chopps Exp $");
 
 #include <sys/disk.h>
 #include <sys/disklabel.h>
@@ -152,6 +152,7 @@ static unsigned char *iflags;
 /* global flags */
 int is_ufs2 = 0;
 int needswap = 0;
+int verbose = 0;
 
 static void usage(void) __dead;
 
@@ -2026,22 +2027,23 @@ get_dev_size(char *dev_name)
 	struct dkwedge_info dkw;
 	struct partition *pp;
 	struct disklabel lp;
+	struct stat st;
 	size_t ptn;
 
 	/* Get info about partition/wedge */
-	if (ioctl(fd, DIOCGWEDGEINFO, &dkw) == -1) {
-		if (ioctl(fd, DIOCGDINFO, &lp) == -1)
-			return 0;
-
+	if (ioctl(fd, DIOCGWEDGEINFO, &dkw) != -1)
+		return dkw.dkw_size;
+	if (ioctl(fd, DIOCGDINFO, &lp) != -1) {
 		ptn = strchr(dev_name, '\0')[-1] - 'a';
 		if (ptn >= lp.d_npartitions)
 			return 0;
-
 		pp = &lp.d_partitions[ptn];
 		return pp->p_size;
 	}
+	if (fstat(fd, &st) != -1 && S_ISREG(st.st_mode))
+		return st.st_size / DEV_BSIZE;
 
-	return dkw.dkw_size;
+	return 0;
 }
 
 /*
@@ -2051,6 +2053,7 @@ int
 main(int argc, char **argv)
 {
 	int ch;
+	int CheckOnlyFlag;
 	int ExpertFlag;
 	int SFlag;
 	size_t i;
@@ -2061,15 +2064,22 @@ main(int argc, char **argv)
 	newsize = 0;
 	ExpertFlag = 0;
 	SFlag = 0;
+        CheckOnlyFlag = 0;
 
-	while ((ch = getopt(argc, argv, "s:y")) != -1) {
+	while ((ch = getopt(argc, argv, "cs:vy")) != -1) {
 		switch (ch) {
+                case 'c':
+			CheckOnlyFlag = 1;
+			break;
 		case 's':
 			SFlag = 1;
 			newsize = strtoll(optarg, NULL, 10);
 			if(newsize < 1) {
 				usage();
 			}
+			break;
+		case 'v':
+			verbose = 1;
 			break;
 		case 'y':
 			ExpertFlag = 1;
@@ -2089,7 +2099,7 @@ main(int argc, char **argv)
 
 	special = *argv;
 
-	if (ExpertFlag == 0) {
+	if (ExpertFlag == 0 && CheckOnlyFlag == 0) {
 		printf("It's required to manually run fsck on file system "
 		    "before you can resize it\n\n"
 		    " Did you run fsck on your disk (Yes/No) ? ");
@@ -2164,6 +2174,25 @@ main(int argc, char **argv)
 	 * just once, so being generous is cheap. */
 	memcpy(newsb, oldsb, SBLOCKSIZE);
 	loadcgs();
+
+        if (CheckOnlyFlag) {
+		/* Check to see if the newsize would change the file system. */
+		if (FFS_DBTOFSB(oldsb, newsize) == oldsb->fs_size) {
+			if (verbose) {
+				printf("Wouldn't change: already %" PRId64
+				    " blocks\n", newsize);
+			}
+			exit(1);
+		}
+		if (verbose) {
+			printf("Would change: newsize: %" PRId64 " oldsize: %"
+			    PRId64 " fsdb: %" PRId64 "\n", FFS_DBTOFSB(oldsb, newsize),
+			    (int64_t)oldsb->fs_size,
+			    (int64_t)oldsb->fs_fsbtodb);
+		}
+		exit(0);
+        }
+
 	if (newsize > FFS_FSBTODB(oldsb, oldsb->fs_size)) {
 		grow();
 	} else if (newsize < FFS_FSBTODB(oldsb, oldsb->fs_size)) {
@@ -2182,7 +2211,7 @@ static void
 usage(void)
 {
 
-	(void)fprintf(stderr, "usage: %s [-y] [-s size] special\n",
+	(void)fprintf(stderr, "usage: %s [-cvy] [-s size] special\n",
 	    getprogname());
 	exit(EXIT_FAILURE);
 }

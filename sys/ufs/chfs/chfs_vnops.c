@@ -1,4 +1,4 @@
-/*	$NetBSD: chfs_vnops.c,v 1.24 2015/01/11 17:29:57 hannken Exp $	*/
+/*	$NetBSD: chfs_vnops.c,v 1.27 2015/03/28 19:24:04 maxv Exp $	*/
 
 /*-
  * Copyright (c) 2010 Department of Software Engineering,
@@ -694,13 +694,13 @@ chfs_read(void *v)
 		    bytesinfile);
 
 		if (chfs_lblktosize(chmp, nextlbn) >= ip->size) {
-			error = bread(vp, lbn, size, NOCRED, 0, &bp);
+			error = bread(vp, lbn, size, 0, &bp);
 			dbg("after bread\n");
 		} else {
 			int nextsize = chfs_blksize(chmp, ip, nextlbn);
 			dbg("size: %ld\n", size);
 			error = breadn(vp, lbn,
-			    size, &nextlbn, &nextsize, 1, NOCRED, 0, &bp);
+			    size, &nextlbn, &nextsize, 1, 0, &bp);
 			dbg("after breadN\n");
 		}
 		if (error)
@@ -1310,9 +1310,8 @@ chfs_symlink(void *v)
 
 		uvm_vnp_setsize(vp, len);
 	} else {
-		err = vn_rdwr(UIO_WRITE, vp, target, len, (off_t)0,
-		    UIO_SYSSPACE, IO_NODELOCKED, cnp->cn_cred,
-		    (size_t *)0, NULL);
+		err = ufs_bufio(UIO_WRITE, vp, target, len, (off_t)0,
+		    IO_NODELOCKED, cnp->cn_cred, (size_t *)0, NULL);
 	}
 
 out:
@@ -1454,7 +1453,7 @@ chfs_readlink(void *v)
 		return (0);
 	}
 
-	return (VOP_READ(vp, uio, 0, cred));
+	return (UFS_BUFRD(vp, uio, 0, cred));
 }
 
 /* --------------------------------------------------------------------- */

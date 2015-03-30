@@ -1,4 +1,4 @@
-/*	$NetBSD: ext2fs_vfsops.c,v 1.191 2015/03/17 09:39:29 hannken Exp $	*/
+/*	$NetBSD: ext2fs_vfsops.c,v 1.193 2015/03/28 19:24:04 maxv Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993, 1994
@@ -60,7 +60,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ext2fs_vfsops.c,v 1.191 2015/03/17 09:39:29 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ext2fs_vfsops.c,v 1.193 2015/03/28 19:24:04 maxv Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -156,6 +156,8 @@ static const struct genfs_ops ext2fs_genfsops = {
 static const struct ufs_ops ext2fs_ufsops = {
 	.uo_itimes = ext2fs_itimes,
 	.uo_update = ext2fs_update,
+	.uo_bufrd = ext2fs_bufrd,
+	.uo_bufwr = ext2fs_bufwr,
 };
 
 /* Fill in the inode uid/gid from ext2 halves.  */
@@ -539,7 +541,7 @@ ext2fs_reload(struct mount *mp, kauth_cred_t cred, struct lwp *l)
 	 * Step 2: re-read superblock from disk. Copy in new superblock, and compute
 	 * in-memory values.
 	 */
-	error = bread(devvp, SBLOCK, SBSIZE, NOCRED, 0, &bp);
+	error = bread(devvp, SBLOCK, SBSIZE, 0, &bp);
 	if (error)
 		return error;
 	newfs = (struct ext2fs *)bp->b_data;
@@ -558,7 +560,7 @@ ext2fs_reload(struct mount *mp, kauth_cred_t cred, struct lwp *l)
 		error = bread(devvp ,
 		    EXT2_FSBTODB(fs, fs->e2fs.e2fs_first_dblock +
 		    1 /* superblock */ + i),
-		    fs->e2fs_bsize, NOCRED, 0, &bp);
+		    fs->e2fs_bsize, 0, &bp);
 		if (error) {
 			return (error);
 		}
@@ -589,7 +591,7 @@ ext2fs_reload(struct mount *mp, kauth_cred_t cred, struct lwp *l)
 		 */
 		ip = VTOI(vp);
 		error = bread(devvp, EXT2_FSBTODB(fs, ino_to_fsba(fs, ip->i_number)),
-		    (int)fs->e2fs_bsize, NOCRED, 0, &bp);
+		    (int)fs->e2fs_bsize, 0, &bp);
 		if (error) {
 			vput(vp);
 			break;
@@ -636,7 +638,7 @@ ext2fs_mountfs(struct vnode *devvp, struct mount *mp)
 	ump = NULL;
 
 	/* Read the superblock from disk, and swap it directly. */
-	error = bread(devvp, SBLOCK, SBSIZE, cred, 0, &bp);
+	error = bread(devvp, SBLOCK, SBSIZE, 0, &bp);
 	if (error)
 		goto out;
 	fs = (struct ext2fs *)bp->b_data;
@@ -673,7 +675,7 @@ ext2fs_mountfs(struct vnode *devvp, struct mount *mp)
 		error = bread(devvp,
 		    EXT2_FSBTODB(m_fs, m_fs->e2fs.e2fs_first_dblock +
 		    1 /* superblock */ + i),
-		    m_fs->e2fs_bsize, NOCRED, 0, &bp);
+		    m_fs->e2fs_bsize, 0, &bp);
 		if (error) {
 			kmem_free(m_fs->e2fs_gd,
 			    m_fs->e2fs_ngdb * m_fs->e2fs_bsize);
@@ -942,7 +944,7 @@ ext2fs_loadvnode(struct mount *mp, struct vnode *vp,
 
 	/* Read in the disk contents for the inode, copy into the inode. */
 	error = bread(ump->um_devvp, EXT2_FSBTODB(fs, ino_to_fsba(fs, ino)),
-	    (int)fs->e2fs_bsize, NOCRED, 0, &bp);
+	    (int)fs->e2fs_bsize, 0, &bp);
 	if (error)
 		return error;
 
