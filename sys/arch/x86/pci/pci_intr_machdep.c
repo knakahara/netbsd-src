@@ -220,6 +220,63 @@ bad:
 	return 1;
 }
 
+int
+pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
+{
+	struct intrsource *isp;
+	pci_intr_handle_t *handle;
+	int error;
+	char intrstr_buf[INTRIDBUF];
+	const char *intrstr;
+
+	handle = kmem_zalloc(sizeof(*handle), KM_SLEEP);
+	if (handle == NULL) {
+		aprint_normal("cannot allocate pci_intr_handle_t\n");
+		return ENOMEM;
+	}
+
+	if (pci_intr_map(pa, handle) != 0) {
+		aprint_normal("cannot set up pci_intr_handle_t\n");
+		error = EINVAL;
+		goto error;
+	}
+
+	intrstr = pci_intr_string(pa->pa_pc, *handle,
+	    intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	isp = intr_allocate_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+	if (isp == NULL) {
+		aprint_normal("can't allocate io_intersource\n");
+		error = ENOMEM;
+		goto error;
+	}
+
+	*pih = handle;
+	return 0;
+
+error:
+	kmem_free(handle, sizeof(*handle));
+	return error;
+}
+
+void
+pci_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
+{
+	char intrstr_buf[INTRIDBUF];
+	const char *intrstr;
+
+	if (pih == NULL)
+		return;
+
+	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	intr_free_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+
+	kmem_free(pih, sizeof(*pih));
+}
+
 const char *
 pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
     size_t len)

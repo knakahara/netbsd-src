@@ -162,6 +162,8 @@ __weak_alias(pci_msix_alloc_map, eopnotsupp);
 __weak_alias(pci_msix_establish, nullop);
 __weak_alias(pci_msix_disestablish, voidop);
 __weak_alias(pci_msix_release, voidop);
+__weak_alias(pci_intr_alloc, eopnotsupp);
+__weak_alias(pci_intr_release, voidop);
 
 /*
  * Scheduler activations system calls.  These need to remain until libc's
