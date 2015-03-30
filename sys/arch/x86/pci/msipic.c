@@ -49,17 +49,17 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
 
-#define MSIPIC_NAME_LEN 16
-
+#define MSIPICNAMEBUF 16
+/* Pseudo pic for a MSI/MSI-X device. */
 struct msipic {
 	int mp_bus;
 	int mp_dev;
 	int mp_fun;
 
-	int mp_devid;
-	int mp_veccnt;
+	int mp_devid; /* The device id for the MSI/MSI-X device. */
+	int mp_veccnt; /* The number of MSI/MSI-X vectors. */
 
-	char mp_pic_name[MSIPIC_NAME_LEN];
+	char mp_pic_name[MSIPICNAMEBUF]; /* The MSI/MSI-X device's name. */
 
 	struct pci_attach_args mp_pa;
 	bus_space_tag_t mp_bstag;
@@ -75,45 +75,48 @@ static LIST_HEAD(, msipic) msipic_list =
 	LIST_HEAD_INITIALIZER(msipic_list);
 
 struct dev_seq {
-	bool using;
-	int last_used_bus;
-	int last_used_dev;
-	int last_used_fun;
+	bool ds_using;
+	int ds_last_used_bus;
+	int ds_last_used_dev;
+	int ds_last_used_fun;
 };
+/* The number of MSI/MSI-X devices supported by system. */
 #define NUM_MSI_DEVS 256
 static struct dev_seq dev_seq[NUM_MSI_DEVS];
 
 static int
 allocate_common_msi_devid(struct pci_attach_args *pa)
 {
-	pci_chipset_tag_t pc = pa->pa_pc;
-	pcitag_t tag = pa->pa_tag;
+	pci_chipset_tag_t pc;
+	pcitag_t tag;
 	int bus, dev, fun, i;
 
+	pc = pa->pa_pc;
+	tag = pa->pa_tag;
 	pci_decompose_tag(pc, tag, &bus, &dev, &fun);
 
 	/* if the device was once attached, use same devid */
 	for (i = 0; i < NUM_MSI_DEVS; i++) {
 		/* skip never used dev_seq[i] */
-		if (dev_seq[i].last_used_bus == 0 &&
-		    dev_seq[i].last_used_dev == 0 &&
-		    dev_seq[i].last_used_fun == 0)
+		if (dev_seq[i].ds_last_used_bus == 0 &&
+		    dev_seq[i].ds_last_used_dev == 0 &&
+		    dev_seq[i].ds_last_used_fun == 0)
 			break;
 
-		if (dev_seq[i].last_used_bus == bus &&
-		    dev_seq[i].last_used_dev == dev &&
-		    dev_seq[i].last_used_fun == fun) {
-			dev_seq[i].using = true;
+		if (dev_seq[i].ds_last_used_bus == bus &&
+		    dev_seq[i].ds_last_used_dev == dev &&
+		    dev_seq[i].ds_last_used_fun == fun) {
+			dev_seq[i].ds_using = true;
 			return i;
 		}
 	}
 
 	for (i = 0; i < NUM_MSI_DEVS; i++) {
-		if (dev_seq[i].using == 0) {
-			dev_seq[i].using = true;
-			dev_seq[i].last_used_bus = bus;
-			dev_seq[i].last_used_dev = dev;
-			dev_seq[i].last_used_fun = fun;
+		if (dev_seq[i].ds_using == 0) {
+			dev_seq[i].ds_using = true;
+			dev_seq[i].ds_last_used_bus = bus;
+			dev_seq[i].ds_last_used_dev = dev;
+			dev_seq[i].ds_last_used_fun = fun;
 			return i;
 		}
 	}
@@ -125,15 +128,20 @@ allocate_common_msi_devid(struct pci_attach_args *pa)
 static void
 release_common_msi_devid(int devid)
 {
+
 	if (devid < 0 || NUM_MSI_DEVS <= devid) {
 		aprint_normal("%s: invalid device.\n", __func__);
 		return;
 	}
 
-	dev_seq[devid].using = false;
-	/* keep last_used_* */
+	dev_seq[devid].ds_using = false;
+	/* Keep ds_last_used_* to reuse the same devid for the same device. */
 }
 
+/*
+ * Return the msi_pic whose device is already registered.
+ * If the device is not registered yet, return NULL.
+ */
 struct pic *
 find_msi_pic(int devid)
 {
@@ -155,8 +163,6 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 {
 	struct pic *pic;
 	struct msipic *msipic;
-	pci_chipset_tag_t pc = pa->pa_pc;
-	pcitag_t tag = pa->pa_tag;
 	int devid;
 
 	devid = allocate_common_msi_devid(pa);
@@ -177,12 +183,12 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 	memcpy(pic, pic_tmpl, sizeof(*pic));
 	pic->pic_msipic = msipic;
 	msipic->mp_pic = pic;
-	pci_decompose_tag(pc, tag,
+	pci_decompose_tag(pa->pa_pc, pa->pa_tag,
 	    &msipic->mp_bus, &msipic->mp_dev, &msipic->mp_fun);
 	memcpy(&msipic->mp_pa, pa, sizeof(msipic->mp_pa));
 	msipic->mp_devid = devid;
 	/*
-	 * pci_msi_alloc() must be called only ont time in the device driver.
+	 * pci_msi{,x}_alloc() must be called only once in the device driver.
 	 */
 	KASSERT(find_msi_pic(msipic->mp_devid) == NULL);
 
@@ -211,32 +217,32 @@ destruct_common_msi_pic(struct pic *msi_pic)
 	kmem_free(msi_pic, sizeof(*msi_pic));
 }
 
+/*
+ * The pic is MSI/MSI-X pic or not.
+ */
 bool
 is_msi_pic(struct pic *pic)
 {
+
 	return (pic->pic_msipic != NULL);
 }
 
+/*
+ * Return the MSI/MSI-X device id.
+ */
 int
 msi_get_devid(struct pic *pic)
 {
+
 	KASSERT(is_msi_pic(pic));
 
 	return pic->pic_msipic->mp_devid;
 }
 
-static int
-msix_get_table_index(struct pic *pic, int vecid)
-{
-	KASSERT(pic->pic_msipic != NULL);
-	KASSERT(pic->pic_type == PIC_MSIX);
-
-	return vecid;
-}
-
 static struct pci_attach_args *
 get_msi_pci_attach_args(struct pic *pic)
 {
+
 	KASSERT(pic->pic_msipic != NULL);
 
 	return &pic->pic_msipic->mp_pa;
@@ -247,12 +253,15 @@ get_msi_pci_attach_args(struct pic *pic)
 static void
 msi_set_msictl_enablebit(struct pic *pic, int pin, int flag)
 {
-	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
-	pcitag_t tag = pa->pa_tag;
+	pci_chipset_tag_t pc;
+	struct pci_attach_args *pa;
+	pcitag_t tag;
 	pcireg_t ctl;
 	int off;
 
+	pc = NULL;
+	pa = get_msi_pci_attach_args(pic);
+	tag = pa->pa_tag;
 	/* should use Mask Bits? */
 	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) == 0)
 		panic("%s: no msi capability", __func__);
@@ -269,12 +278,14 @@ msi_set_msictl_enablebit(struct pic *pic, int pin, int flag)
 static void
 msi_hwmask(struct pic *pic, int pin)
 {
+
 	msi_set_msictl_enablebit(pic, pin, MSI_MSICTL_DISABLE);
 }
 
 static void
 msi_hwunmask(struct pic *pic, int pin)
 {
+
 	msi_set_msictl_enablebit(pic, pin, MSI_MSICTL_ENABLE);
 }
 
@@ -282,19 +293,21 @@ static void
 msi_addroute(struct pic *pic, struct cpu_info *ci,
 	     int pin, int vec, int type)
 {
-	pci_chipset_tag_t pc = NULL;
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
-	pcitag_t tag = pa->pa_tag;
+	pci_chipset_tag_t pc;
+	struct pci_attach_args *pa;
+	pcitag_t tag;
 	pcireg_t addr, data, ctl;
 	int off;
 
+	pc = NULL;
+	pa = get_msi_pci_attach_args(pic);
+	tag = pa->pa_tag;
 	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) == 0)
 		panic("%s: no msi capability", __func__);
 
 	/*
-	 * see OpenBSD's cpu_attach().
-	 * OpenBSD's ci->ci_apicid is equal to NetBSD's ci_cpuid.
-	 * What's mean OpenBSD's ci->ci_cpuid? the value is sc->sc_dev.dv_unit.
+	 * "cpuid" for MSI address is local APIC ID. In NetBSD, the ID is
+	 * the same as ci->ci_cpuid.
 	 */
 	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid, LAPIC_MSIADDR_DSTID_MASK);
 	/*if triger mode is edge, it don't care level for trigger mode. */
@@ -302,7 +315,6 @@ msi_addroute(struct pic *pic, struct cpu_info *ci,
 		LAPIC_MSIDATA_TRGMODE_EDGE | LAPIC_MSIDATA_DM_FIXED;
 
 	ctl = pci_conf_read(pc, tag, off + PCI_MSI_CTL);
-
 	if (ctl & PCI_MSI_CTL_64BIT_ADDR) {
 		pci_conf_write(pc, tag, off + PCI_MSI_MADDR64_LO, addr);
 		pci_conf_write(pc, tag, off + PCI_MSI_MADDR64_HI, 0);
@@ -319,9 +331,14 @@ static void
 msi_delroute(struct pic *pic, struct cpu_info *ci,
 	     int pin, int vec, int type)
 {
+
 	msi_hwmask(pic, pin);
 }
 
+/*
+ * Template for MSI pic.
+ * .pic_msipic is set later in construct_msi_pic().
+ */
 static struct pic msi_pic_tmpl = {
 	.pic_type = PIC_MSI,
 	.pic_vecbase = 0,
@@ -335,11 +352,14 @@ static struct pic msi_pic_tmpl = {
 	.pic_ioapic = NULL,
 };
 
+/*
+ * Create pseudo pic for a MSI device.
+ */
 struct pic *
 construct_msi_pic(struct pci_attach_args *pa)
 {
 	struct pic *msi_pic;
-	char pic_name_buf[MSIPIC_NAME_LEN];
+	char pic_name_buf[MSIPICNAMEBUF];
 
 	msi_pic = construct_common_msi_pic(pa, &msi_pic_tmpl);
 	if (msi_pic == NULL) {
@@ -347,39 +367,44 @@ construct_msi_pic(struct pci_attach_args *pa)
 		return NULL;
 	}
 
-	memset(pic_name_buf, 0, MSIPIC_NAME_LEN);
-	snprintf(pic_name_buf, MSIPIC_NAME_LEN, "msi%d", msi_pic->pic_msipic->mp_devid);
-	strncpy(msi_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPIC_NAME_LEN);
+	memset(pic_name_buf, 0, MSIPICNAMEBUF);
+	snprintf(pic_name_buf, MSIPICNAMEBUF, "msi%d", msi_pic->pic_msipic->mp_devid);
+	strncpy(msi_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPICNAMEBUF - 1);
 	msi_pic->pic_name = msi_pic->pic_msipic->mp_pic_name;
 
 	return msi_pic;
 }
 
+/*
+ * Delete pseudo pic for a MSI device.
+ */
 void
 destruct_msi_pic(struct pic *msi_pic)
 {
+
 	destruct_common_msi_pic(msi_pic);
 }
 
 #define MSIX_VECCTL_HWMASK 1
 #define MSIX_VECCTL_HWUNMASK 0
 static void
-msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
+msix_set_vecctl_mask(struct pic *pic, int table_idx, int flag)
 {
+	bus_space_tag_t bstag;
+	bus_space_handle_t bshandle;
 	uint64_t entry_base;
 	uint32_t vecctl;
 
-	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
-	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
-	int table_idx;
-
-	table_idx = msix_get_table_index(pic, pin);
-	if (table_idx < 0)
-		panic("%s: invalid MSI-X table index, devid=%d vecid=%d",
-		    __func__, msi_get_devid(pic), pin);
+	if (table_idx < 0) {
+		aprint_normal("%s: invalid MSI-X table index, devid=%d vecid=%d",
+		    __func__, msi_get_devid(pic), table_idx);
+		return;
+	}
 
 	entry_base = PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
 
+	bstag = pic->pic_msipic->mp_bstag;
+	bshandle = pic->pic_msipic->mp_bshandle;
 	vecctl = bus_space_read_4(bstag, bshandle,
 	    entry_base + PCI_MSIX_TABLE_ENTRY_VECTCTL);
 	if (flag == MSIX_VECCTL_HWMASK)
@@ -393,49 +418,57 @@ msix_set_vecctl_mask(struct pic *pic, int pin, int flag)
 }
 
 static void
-msix_hwmask(struct pic *pic, int pin)
+msix_hwmask(struct pic *pic, int table_idx)
 {
-	msix_set_vecctl_mask(pic, pin, MSIX_VECCTL_HWMASK);
+
+	msix_set_vecctl_mask(pic, table_idx, MSIX_VECCTL_HWMASK);
 }
 
 static void
-msix_hwunmask(struct pic *pic, int pin)
+msix_hwunmask(struct pic *pic, int table_idx)
 {
-	msix_set_vecctl_mask(pic, pin, MSIX_VECCTL_HWUNMASK);
+
+	msix_set_vecctl_mask(pic, table_idx, MSIX_VECCTL_HWUNMASK);
 }
 
 static void
 msix_addroute(struct pic *pic, struct cpu_info *ci,
-	     int pin, int vec, int type)
+	     int table_idx, int vec, int type)
 {
-	struct pci_attach_args *pa = get_msi_pci_attach_args(pic);
-	pci_chipset_tag_t pc = pa->pa_pc;
-	pcitag_t tag = pa->pa_tag;
+	pci_chipset_tag_t pc;
+	struct pci_attach_args *pa;
+	pcitag_t tag;
+	bus_space_tag_t bstag;
+	bus_space_handle_t bshandle;
 	uint64_t entry_base;
 	pcireg_t addr, data, ctl;
 	int off;
 
-	bus_space_tag_t bstag = pic->pic_msipic->mp_bstag;
-	bus_space_handle_t bshandle = pic->pic_msipic->mp_bshandle;
-	int table_idx;
+	if (table_idx < 0) {
+		aprint_normal("%s: invalid MSI-X table index, devid=%d vecid=%d",
+		    __func__, msi_get_devid(pic), table_idx);
+		return;
+	}
 
-	table_idx = msix_get_table_index(pic, pin);
-	if (table_idx < 0)
-		panic("%s: invalid MSI-X table index, devid=%d vecid=%d",
-		    __func__, msi_get_devid(pic), pin);
+	pa = get_msi_pci_attach_args(pic);
+	pc = pa->pa_pc;
+	tag = pa->pa_tag;
+	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
+		panic("%s: no msix capability", __func__);
 
 	entry_base = PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
 
 	/*
-	 * see OpenBSD's cpu_attach().
-	 * OpenBSD's ci->ci_apicid is equal to NetBSD's ci_cpuid.
-	 * What's mean OpenBSD's ci->ci_cpuid? the value is sc->sc_dev.dv_unit.
+	 * "cpuid" for MSI-X address is local APIC ID. In NetBSD, the ID is
+	 * the same as ci->ci_cpuid.
 	 */
 	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid, LAPIC_MSIADDR_DSTID_MASK);
 	/*if triger mode is edge, it don't care level for trigger mode. */
 	data = __SHIFTIN(vec, LAPIC_MSIDATA_VECTOR_MASK) |
 		LAPIC_MSIDATA_TRGMODE_EDGE | LAPIC_MSIDATA_DM_FIXED;
 
+	bstag = pic->pic_msipic->mp_bstag;
+	bshandle = pic->pic_msipic->mp_bshandle;
 	bus_space_write_4(bstag, bshandle,
 	    entry_base + PCI_MSIX_TABLE_ENTRY_ADDR_LO, addr);
 	bus_space_write_4(bstag, bshandle,
@@ -450,18 +483,22 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 		panic("%s: no msix capability", __func__);
 
 	ctl = pci_conf_read(pc, tag, off + PCI_MSIX_CTL);
-
 	ctl |= PCI_MSIX_CTL_ENABLE;
 	pci_conf_write(pc, tag, off + PCI_MSIX_CTL, ctl);
 }
 
 static void
 msix_delroute(struct pic *pic, struct cpu_info *ci,
-	     int pin, int vec, int type)
+	     int table_idx, int vec, int type)
 {
-	msix_hwmask(pic, pin);
+
+	msix_hwmask(pic, table_idx);
 }
 
+/*
+ * Template for MSI-X pic.
+ * .pic_msipic is set later in construct_msix_pic().
+ */
 static struct pic msix_pic_tmpl = {
 	.pic_type = PIC_MSIX,
 	.pic_vecbase = 0,
@@ -477,30 +514,18 @@ static struct pic msix_pic_tmpl = {
 struct pic *
 construct_msix_pic(struct pci_attach_args *pa)
 {
-	pci_chipset_tag_t pc = pa->pa_pc;
-	pcitag_t tag = pa->pa_tag;
+	struct pic *msix_pic;
+	pci_chipset_tag_t pc;
+	pcitag_t tag;
 	pcireg_t tbl;
 	bus_space_tag_t bstag;
 	bus_space_handle_t bshandle;
 	bus_size_t bssize;
-	uint32_t table_offset;
-	int table_nentry;
 	size_t table_size;
+	uint32_t table_offset;
 	u_int memtype;
-	int off, bir, bar, err;
-	struct pic *msix_pic;
-	char pic_name_buf[MSIPIC_NAME_LEN];
-
-	msix_pic = construct_common_msi_pic(pa, &msix_pic_tmpl);
-	if (msix_pic == NULL) {
-		aprint_normal("cannot allocate MSI-X pic.\n");
-		return NULL;
-	}
-
-	memset(pic_name_buf, 0, MSIPIC_NAME_LEN);
-	snprintf(pic_name_buf, MSIPIC_NAME_LEN, "msix%d", msix_pic->pic_msipic->mp_devid);
-	strncpy(msix_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPIC_NAME_LEN);
-	msix_pic->pic_name = msix_pic->pic_msipic->mp_pic_name;
+	int bir, bar, err, off, table_nentry;
+	char pic_name_buf[MSIPICNAMEBUF];
 
 	table_nentry = pci_msix_count(pa);
 	if (table_nentry == 0) {
@@ -508,10 +533,24 @@ construct_msix_pic(struct pci_attach_args *pa)
 		return NULL;
 	}
 
+	pc = pa->pa_pc;
+	tag = pa->pa_tag;
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0) {
 		aprint_normal("%s: no msix capability", __func__);
 		return NULL;
 	}
+
+	msix_pic = construct_common_msi_pic(pa, &msix_pic_tmpl);
+	if (msix_pic == NULL) {
+		aprint_normal("cannot allocate MSI-X pic.\n");
+		return NULL;
+	}
+
+	memset(pic_name_buf, 0, MSIPICNAMEBUF);
+	snprintf(pic_name_buf, MSIPICNAMEBUF, "msix%d", msix_pic->pic_msipic->mp_devid);
+	strncpy(msix_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPICNAMEBUF - 1);
+	msix_pic->pic_name = msix_pic->pic_msipic->mp_pic_name;
+
 	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
 	table_offset = tbl & PCI_MSIX_TBLOFFSET_MASK;
 	bir = tbl & PCI_MSIX_PBABIR_MASK;
@@ -536,6 +575,7 @@ construct_msix_pic(struct pci_attach_args *pa)
 		break;
 	default:
 		aprint_normal("the device use reserved BIR values.\n");
+		destruct_common_msi_pic(msix_pic);
 		return NULL;
 	}
 	memtype = pci_mapreg_type(pc, tag, bar);
@@ -552,6 +592,7 @@ construct_msix_pic(struct pci_attach_args *pa)
 	    &bstag, &bshandle, NULL, &bssize);
 	if (err) {
 		aprint_normal("cannot map msix table.\n");
+		destruct_common_msi_pic(msix_pic);
 		return NULL;
 	}
 	msix_pic->pic_msipic->mp_bstag = bstag;
@@ -561,6 +602,9 @@ construct_msix_pic(struct pci_attach_args *pa)
 	return msix_pic;
 }
 
+/*
+ * Delete pseudo pic for a MSI-X device.
+ */
 void
 destruct_msix_pic(struct pic *msix_pic)
 {
@@ -576,17 +620,25 @@ destruct_msix_pic(struct pic *msix_pic)
 	destruct_common_msi_pic(msix_pic);
 }
 
+/*
+ * Set the number of MSI vectors for pseudo MSI pic.
+ */
 int
 set_msi_vectors(struct pic *msi_pic, pci_intr_handle_t *pihs, int count)
 {
+
 	KASSERT(is_msi_pic(msi_pic));
 
 	msi_pic->pic_msipic->mp_veccnt = count;
 	return 0;
 }
 
+/*
+ * Initialize the system to use MSI/MSI-X.
+ */
 void
 msipic_init(void)
 {
+
 	mutex_init(&msipic_list_lock, MUTEX_DEFAULT, IPL_NONE);
 }
