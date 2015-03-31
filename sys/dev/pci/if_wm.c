@@ -154,6 +154,31 @@ int	wm_debug = WM_DEBUG_TX | WM_DEBUG_RX | WM_DEBUG_LINK | WM_DEBUG_GMII
 #define WM_MPSAFE	1
 #endif
 
+#ifdef __HAVE_PCI_MSI_MSIX
+#if 0 /* off by default */
+#define WM_MSI_MSIX	1
+#endif
+#endif
+
+/*
+ * This device driver divides interrupt to TX, RX and link state.
+ * Each MSI-X vector indexes are below.
+ */
+#define WM_NINTR		3
+#define WM_TX_INTR_INDEX	0
+#define WM_RX_INTR_INDEX	1
+#define WM_LINK_INTR_INDEX	2
+#define WM_MAX_NINTR		WM_NINTR
+
+/*
+ * This device driver set affinity to each interrupts like below (round-robin).
+ * If the number CPUs is less than the number of interrupts, this driver usase
+ * the same CPU for multiple interrupts.
+ */
+#define WM_TX_INTR_CPUID	0
+#define WM_RX_INTR_CPUID	1
+#define WM_LINK_INTR_CPUID	2
+
 /*
  * Transmit descriptor list size.  Due to errata, we can only have
  * 256 hardware descriptors in the ring on < 82544, but we use 4096
@@ -295,7 +320,11 @@ struct wm_softc {
 	int sc_flowflags;		/* 802.3x flow control flags */
 	int sc_align_tweak;
 
-	void *sc_ih;			/* interrupt cookie */
+	void *sc_ihs[WM_MAX_NINTR];	/*
+					 * interrupt cookie.
+					 * legacy and msi use sc_ihs[0].
+					 */
+
 	callout_t sc_tick_ch;		/* tick callout */
 	bool sc_stopping;
 
@@ -401,6 +430,9 @@ struct wm_softc {
 
 	kmutex_t *sc_tx_lock;		/* lock for tx operations */
 	kmutex_t *sc_rx_lock;		/* lock for rx operations */
+
+	int sc_nintrs;			/* number of interrupts */
+	pci_intr_handle_t *sc_intrs;	/* legacy and msi use sc_intrs[0] */
 };
 
 #define WM_TX_LOCK(_sc)		if ((_sc)->sc_tx_lock) mutex_enter((_sc)->sc_tx_lock)
@@ -597,6 +629,11 @@ static void	wm_linkintr_gmii(struct wm_softc *, uint32_t);
 static void	wm_linkintr_tbi(struct wm_softc *, uint32_t);
 static void	wm_linkintr(struct wm_softc *, uint32_t);
 static int	wm_intr(void *);
+#ifdef WM_MSI_MSIX
+static int	wm_tx_intr(void *);
+static int	wm_rx_intr(void *);
+static int	wm_link_intr(void *);
+#endif
 
 /*
  * Media related.
@@ -1350,7 +1387,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 	prop_dictionary_t dict;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	pci_chipset_tag_t pc = pa->pa_pc;
+#ifndef WM_MSI_MSIX
 	pci_intr_handle_t ih;
+#endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
 	bus_space_tag_t memt;
@@ -1499,6 +1538,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
+#ifndef WM_MSI_MSIX
 	/*
 	 * Map and establish our interrupt.
 	 */
@@ -1510,8 +1550,8 @@ wm_attach(device_t parent, device_t self, void *aux)
 #ifdef WM_MPSAFE
 	pci_intr_setattr(pc, &ih, PCI_INTR_MPSAFE, true);
 #endif
-	sc->sc_ih = pci_intr_establish(pc, ih, IPL_NET, wm_intr, sc);
-	if (sc->sc_ih == NULL) {
+	sc->sc_ihs[0] = pci_intr_establish(pc, ih, IPL_NET, wm_intr, sc);
+	if (sc->sc_ihs[0] == NULL) {
 		aprint_error_dev(sc->sc_dev, "unable to establish interrupt");
 		if (intrstr != NULL)
 			aprint_error(" at %s", intrstr);
@@ -1519,6 +1559,150 @@ wm_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
+	sc->sc_nintrs = 1;
+#else /* WM_MSI_MSIX */
+	if (pci_msix_alloc_exact(pa, &sc->sc_intrs, WM_NINTR) == 0) {
+		/* 1st, try to use MSI-X */
+		void *vih;
+		kcpuset_t *affinity;
+
+		kcpuset_create(&affinity, false);
+
+		/*
+		 * for TX
+		 */
+		intrstr = pci_intr_string(pc, sc->sc_intrs[WM_TX_INTR_INDEX],
+		    intrbuf, sizeof(intrbuf));
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &sc->sc_intrs[WM_TX_INTR_INDEX], PCI_INTR_MPSAFE,
+		    true);
+#endif
+		vih = pci_intr_establish(pc, sc->sc_intrs[WM_TX_INTR_INDEX],
+		    IPL_NET, wm_tx_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI-X(for TX)%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			error = EBUSY;
+			return;
+		}
+		kcpuset_zero(affinity);
+		/* Round-robin affinity */
+		kcpuset_set(affinity, WM_TX_INTR_CPUID % ncpu);
+		error = pci_intr_distribute(vih, affinity, NULL);
+		if (error != 0) {
+			aprint_normal_dev(sc->sc_dev,
+			    "for TX interrupting at %s affinity to %u\n",
+			    intrstr, WM_TX_INTR_CPUID % ncpu);
+		} else {
+			aprint_normal_dev(sc->sc_dev,
+			    "for TX interrupting at %s\n",
+			    intrstr);
+		}
+		sc->sc_ihs[WM_TX_INTR_INDEX] = vih;
+
+		/*
+		 * for RX
+		 */
+		intrstr = pci_intr_string(pc, sc->sc_intrs[WM_RX_INTR_INDEX],
+		    intrbuf, sizeof(intrbuf));
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &sc->sc_intrs[WM_RX_INTR_INDEX],
+		    PCI_INTR_MPSAFE, true);
+#endif
+		vih = pci_intr_establish(pc, sc->sc_intrs[WM_RX_INTR_INDEX],
+		    IPL_NET, wm_rx_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI-X(for RX)%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			error = EBUSY;
+			return;
+		}
+		kcpuset_zero(affinity);
+		kcpuset_set(affinity, WM_RX_INTR_CPUID % ncpu);
+		error = pci_intr_distribute(vih, affinity, NULL);
+		if (error != 0) {
+			aprint_normal_dev(sc->sc_dev,
+			    "for RX interrupting at %s affinity to %u\n",
+			    intrstr, WM_TX_INTR_CPUID % ncpu);
+		} else {
+			aprint_normal_dev(sc->sc_dev,
+			    "for RX interrupting at %s\n",
+			    intrstr);
+		}
+		sc->sc_ihs[WM_RX_INTR_INDEX] = vih;
+
+		/*
+		 * for link state changing
+		 */
+		intrstr = pci_intr_string(pc, sc->sc_intrs[WM_LINK_INTR_INDEX],
+		    intrbuf, sizeof(intrbuf));
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &sc->sc_intrs[WM_LINK_INTR_INDEX],
+		    PCI_INTR_MPSAFE, true);
+#endif
+		vih = pci_intr_establish(pc, sc->sc_intrs[WM_LINK_INTR_INDEX],
+		    IPL_NET, wm_link_intr, sc);
+		if (vih == NULL) {
+			aprint_error_dev(sc->sc_dev,
+			    "unable to establish MSI-X(for LINK)%s%s\n",
+			    intrstr ? " at " : "", intrstr ? intrstr : "");
+			error = EBUSY;
+			return;
+		}
+		kcpuset_zero(affinity);
+		kcpuset_set(affinity, WM_LINK_INTR_CPUID % ncpu);
+		error = pci_intr_distribute(vih, affinity, NULL);
+		if (error != 0) {
+			aprint_normal_dev(sc->sc_dev,
+			    "for LINK interrupting at %s affinity to %u\n",
+			    intrstr, WM_TX_INTR_CPUID % ncpu);
+		} else {
+			aprint_normal_dev(sc->sc_dev,
+			    "for LINK interrupting at %s\n",
+			    intrstr);
+		}
+		sc->sc_ihs[WM_LINK_INTR_INDEX] = vih;
+
+		sc->sc_nintrs = WM_NINTR;
+		kcpuset_destroy(affinity);
+	} else if (pci_msi_alloc_exact(pa, &sc->sc_intrs, 1) == 0) {
+		/* 2nd, try to use MSI */
+		intrstr = pci_intr_string(pc, sc->sc_intrs[0], intrbuf,
+		    sizeof(intrbuf));
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &sc->sc_intrs[0], PCI_INTR_MPSAFE, true);
+#endif
+		sc->sc_ihs[0] = pci_intr_establish(pc, sc->sc_intrs[0],
+		    IPL_NET, wm_intr, sc);
+		if (sc->sc_ihs[0] == NULL) {
+			aprint_error_dev(sc->sc_dev, "unable to establish MSI\n");
+			error = EBUSY;
+			return;
+		}
+		aprint_normal_dev(sc->sc_dev, "MSI at %s\n", intrstr);
+
+		sc->sc_nintrs = 1;
+	} else if (pci_intx_alloc(pa, &sc->sc_intrs)) {
+		/* Last, try to use INTx */
+		intrstr = pci_intr_string(pc, sc->sc_intrs[0], intrbuf,
+		    sizeof(intrbuf));
+#ifdef WM_MPSAFE
+		pci_intr_setattr(pc, &sc->sc_intrs[0], PCI_INTR_MPSAFE, true);
+#endif
+		sc->sc_ihs[0] = pci_intr_establish(pc, sc->sc_intrs[0],
+		    IPL_NET, wm_intr, sc);
+		if (sc->sc_ihs[0] == NULL) {
+			aprint_error_dev(sc->sc_dev, "unable to establish MSI\n");
+			error = EBUSY;
+			return;
+		}
+		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
+
+		sc->sc_nintrs = 1;
+	}
+#endif /* WM_MSI_MSIX */
 
 	/*
 	 * Check the function ID (unit number of the chip).
@@ -2498,10 +2682,15 @@ wm_detach(device_t self, int flags __unused)
 	bus_dmamem_free(sc->sc_dmat, &sc->sc_cd_seg, sc->sc_cd_rseg);
 
 	/* Disestablish the interrupt handler */
-	if (sc->sc_ih != NULL) {
-		pci_intr_disestablish(sc->sc_pc, sc->sc_ih);
-		sc->sc_ih = NULL;
+	for (i = 0; i < sc->sc_nintrs; i++) {
+		if (sc->sc_ihs[i] != NULL) {
+			pci_intr_disestablish(sc->sc_pc, sc->sc_ihs[i]);
+			sc->sc_ihs[i] = NULL;
+		}
 	}
+#ifdef WM_MSI_MSIX
+	pci_intr_release(sc->sc_pc, sc->sc_intrs, sc->sc_nintrs);
+#endif /* WM_MSI_MSIX */
 
 	/* Unmap the registers */
 	if (sc->sc_ss) {
@@ -3547,6 +3736,10 @@ wm_reset(struct wm_softc *sc)
 
 	/* Clear interrupt */
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
+	if (sc->sc_nintrs > 1) {
+		CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
+		CSR_WRITE(sc, WMREG_EIAC, 0);
+	}
 
 	/* Stop the transmit and receive processes. */
 	CSR_WRITE(sc, WMREG_RCTL, 0);
@@ -3791,6 +3984,10 @@ wm_reset(struct wm_softc *sc)
 	/* Clear any pending interrupt events. */
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	reg = CSR_READ(sc, WMREG_ICR);
+	if (sc->sc_nintrs > 1) {
+		CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
+		CSR_WRITE(sc, WMREG_EIAC, 0);
+	}
 
 	/* reload sc_ctrl */
 	sc->sc_ctrl = CSR_READ(sc, WMREG_CTRL);
@@ -4217,11 +4414,44 @@ wm_init_locked(struct ifnet *ifp)
 		reg |= RXCSUM_IPV6OFL | RXCSUM_TUOFL;
 	CSR_WRITE(sc, WMREG_RXCSUM, reg);
 
+	/* Set up MSI-X */
+	if (sc->sc_nintrs > 1) {
+		uint32_t ivar;
+
+		CSR_WRITE(sc, WMREG_GPIE, WMREG_GPIE_NSICR | WMREG_GPIE_MSIX_MODE |
+		    WMREG_GPIE_EIAME | WMREG_GPIE_PBA);
+
+		/* TX */
+		ivar = CSR_READ(sc, WMREG_IVAR0);
+		ivar &= 0xFFFF00FF;
+		ivar |= (WM_TX_INTR_INDEX | WMREG_IVAR_VALID) << 8;
+		CSR_WRITE(sc, WMREG_IVAR0, ivar);
+
+		/* RX */
+		ivar = CSR_READ(sc, WMREG_IVAR0);
+		ivar &= 0xFFFFFF00;
+		ivar |= WM_RX_INTR_INDEX | WMREG_IVAR_VALID;
+		CSR_WRITE(sc, WMREG_IVAR0, ivar);
+
+		/* LINK */
+		ivar = (WM_LINK_INTR_INDEX | WMREG_IVAR_VALID) << 8;
+		CSR_WRITE(sc, WMREG_IVAR_MISC, ivar);
+	}
+
 	/* Set up the interrupt registers. */
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	sc->sc_icr = ICR_TXDW | ICR_LSC | ICR_RXSEQ | ICR_RXDMT0 |
 	    ICR_RXO | ICR_RXT0;
-	CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
+	if (sc->sc_nintrs > 1) {
+		uint32_t mask = (1 << WM_RX_INTR_INDEX) | (1 << WM_TX_INTR_INDEX) |
+		    (1 << WM_LINK_INTR_INDEX);
+		CSR_WRITE(sc, WMREG_EIAC, mask);
+		CSR_WRITE(sc, WMREG_EIAM, mask);
+		CSR_WRITE(sc, WMREG_EIMS, mask);
+		CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
+	} else {
+		CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
+	}
 
 	if ((sc->sc_type == WM_T_ICH8) || (sc->sc_type == WM_T_ICH9)
 	    || (sc->sc_type == WM_T_ICH10) || (sc->sc_type == WM_T_PCH)
@@ -4429,6 +4659,10 @@ wm_stop_locked(struct ifnet *ifp, int disable)
 	 */
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	sc->sc_icr = 0;
+	if (sc->sc_nintrs > 1) {
+		CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
+		CSR_WRITE(sc, WMREG_EIAC, 0);
+	}
 
 	/* Release any queued transmit buffers. */
 	for (i = 0; i < WM_TXQUEUELEN(sc); i++) {
@@ -6100,6 +6334,145 @@ wm_intr(void *arg)
 
 	return handled;
 }
+
+#ifdef WM_MSI_MSIX
+/*
+ * wm_tx_intr:
+ *
+ *	Interrupt service routine.
+ */
+static int
+wm_tx_intr(void *arg)
+{
+	struct wm_softc *sc = arg;
+	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+	uint32_t icr;
+	int handled = 0;
+
+	CSR_WRITE(sc, WMREG_EIMC, 1 << WM_TX_INTR_INDEX);
+
+	WM_TX_LOCK(sc);
+
+	if (sc->sc_stopping)
+		goto out;
+
+	while (1 /* CONSTCOND */) {
+		icr = CSR_READ(sc, WMREG_ICR); /* XXXX no need? */
+		if ((icr & sc->sc_icr) == 0)
+			break;
+		rnd_add_uint32(&sc->rnd_source, icr);
+
+		handled = 1;
+
+
+#if defined(WM_DEBUG) || defined(WM_EVENT_COUNTERS)
+		if (icr & ICR_TXDW) {
+			DPRINTF(WM_DEBUG_TX,
+			    ("%s: TX: got TXDW interrupt\n",
+			    device_xname(sc->sc_dev)));
+			WM_EVCNT_INCR(&sc->sc_ev_txdw);
+		}
+#endif
+
+		wm_txintr(sc);
+	}
+out:
+	WM_TX_UNLOCK(sc);
+
+	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_TX_INTR_INDEX);
+
+	if (handled) {
+		/* Try to get more packets going. */
+		ifp->if_start(ifp);
+	}
+
+	return handled;
+}
+
+/*
+ * wm_rx_intr:
+ *
+ *	Interrupt service routine.
+ */
+static int
+wm_rx_intr(void *arg)
+{
+	struct wm_softc *sc = arg;
+	uint32_t icr;
+
+	CSR_WRITE(sc, WMREG_EIMC, 1 << WM_RX_INTR_INDEX);
+	WM_RX_LOCK(sc);
+
+	if (sc->sc_stopping)
+		goto out;
+
+	while (1 /* CONSTCOND */) {
+		icr = CSR_READ(sc, WMREG_ICR);
+		if ((icr & sc->sc_icr) == 0)
+			break;
+		rnd_add_uint32(&sc->rnd_source, icr);
+
+#if defined(WM_DEBUG) || defined(WM_EVENT_COUNTERS)
+		if (icr & (ICR_RXDMT0|ICR_RXT0)) {
+			DPRINTF(WM_DEBUG_RX,
+			    ("%s: RX: got Rx intr 0x%08x\n",
+			    device_xname(sc->sc_dev),
+			    icr & (ICR_RXDMT0|ICR_RXT0)));
+			WM_EVCNT_INCR(&sc->sc_ev_rxintr);
+		}
+#endif
+		wm_rxintr(sc);
+
+		if (icr & ICR_RXO) {
+#if defined(WM_DEBUG)
+			log(LOG_WARNING, "%s: Receive overrun\n",
+			    device_xname(sc->sc_dev));
+#endif /* defined(WM_DEBUG) */
+		}
+	}
+out:
+	WM_RX_UNLOCK(sc);
+
+	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_RX_INTR_INDEX);
+
+	return 1;
+}
+
+/*
+ * wm_link_intr:
+ *
+ *	Interrupt service routine.
+ */
+static int
+wm_link_intr(void *arg)
+{
+	struct wm_softc *sc = arg;
+	uint32_t icr;
+
+	CSR_WRITE(sc, WMREG_EIMC, 1 << WM_LINK_INTR_INDEX);
+	WM_TX_LOCK(sc);
+	if (sc->sc_stopping)
+		goto out;
+
+	while (1 /* CONSTCOND */) {
+		icr = CSR_READ(sc, WMREG_ICR);
+		if ((icr & sc->sc_icr) == 0)
+			break;
+		rnd_add_uint32(&sc->rnd_source, icr);
+
+		if (icr & (ICR_LSC|ICR_RXSEQ)) {
+			WM_EVCNT_INCR(&sc->sc_ev_linkintr);
+			wm_linkintr(sc, icr);
+		}
+	}
+
+out:
+	WM_TX_UNLOCK(sc);
+	CSR_WRITE(sc, WMREG_EIMS, 1 << WM_LINK_INTR_INDEX);
+
+	return 1;
+}
+#endif /* WM_MSI_MSIX */
 
 /*
  * Media related.
