@@ -1986,13 +1986,20 @@ intr_get_devname(void *ich)
 int
 intr_distribute(void *ich, const kcpuset_t *newset, kcpuset_t *oldset)
 {
+	struct intrsource *isp;
+	struct intrhand *ih;
+	int slot;
 
 	KASSERT(mutex_owned(&cpu_lock));
 
-	if (oldset != NULL)
-		intr_get_affinity(ich, oldset);
+	ih = ich;
+	slot = ih->ih_slot;
+	isp = ih->ih_cpu->ci_isources[slot];
 
-	return intr_set_affinity(ich, newset);
+	if (oldset != NULL)
+		intr_get_affinity(isp, oldset);
+
+	return intr_set_affinity(isp, newset);
 }
 
 int
