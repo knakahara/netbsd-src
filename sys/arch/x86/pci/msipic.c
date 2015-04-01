@@ -47,6 +47,16 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <x86/pci/msipic.h>
 
+#ifdef INTRDEBUG
+#define MSIPICDEBUG
+#endif
+
+#ifdef MSIPICDEBUG
+#define DPRINTF(msg) printf msg
+#else
+#define DPRINTF(msg)
+#endif
+
 #define BUS_SPACE_WRITE_FLUSH(pc, tag) (void)bus_space_read_4(pc, tag, 0)
 
 #define MSIPICNAMEBUF 16
@@ -82,6 +92,7 @@ struct dev_seq {
 };
 /* The number of MSI/MSI-X devices supported by system. */
 #define NUM_MSI_DEVS 256
+/* Record devids to use the same devid when the device is re-attached. */
 static struct dev_seq dev_seq[NUM_MSI_DEVS];
 
 static int
@@ -121,7 +132,7 @@ allocate_common_msi_devid(struct pci_attach_args *pa)
 		}
 	}
 
-	aprint_normal("too many MSI devices.\n");
+	DPRINTF(("too many MSI devices.\n"));
 	return -1;
 }
 
@@ -130,7 +141,7 @@ release_common_msi_devid(int devid)
 {
 
 	if (devid < 0 || NUM_MSI_DEVS <= devid) {
-		aprint_normal("%s: invalid device.\n", __func__);
+		DPRINTF(("%s: invalid devid.\n", __func__));
 		return;
 	}
 
@@ -171,11 +182,13 @@ construct_common_msi_pic(struct pci_attach_args *pa, struct pic *pic_tmpl)
 
 	pic = kmem_alloc(sizeof(*pic), KM_SLEEP);
 	if (pic == NULL) {
+		release_common_msi_devid(devid);
 		return NULL;
 	}
 
 	msipic = kmem_zalloc(sizeof(*msipic), KM_SLEEP);
 	if (msipic == NULL) {
+		release_common_msi_devid(devid);
 		kmem_free(pic, sizeof(*pic));
 		return NULL;
 	}
@@ -228,7 +241,7 @@ is_msi_pic(struct pic *pic)
 }
 
 /*
- * Return the MSI/MSI-X device id.
+ * Return the MSI/MSI-X devid which is unique for each devices.
  */
 int
 msi_get_devid(struct pic *pic)
@@ -262,10 +275,9 @@ msi_set_msictl_enablebit(struct pic *pic, int pin, int flag)
 	pc = NULL;
 	pa = get_msi_pci_attach_args(pic);
 	tag = pa->pa_tag;
-	/* should use Mask Bits? */
-	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) == 0)
-		panic("%s: no msi capability", __func__);
+	KASSERT(pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) != 0);
 
+	/* XXX Should use Mask Bits? */
 	ctl = pci_conf_read(pc, tag, off + PCI_MSI_CTL);
 	if (flag == MSI_MSICTL_ENABLE)
 		ctl |= PCI_MSI_CTL_MSI_ENABLE;
@@ -302,15 +314,15 @@ msi_addroute(struct pic *pic, struct cpu_info *ci,
 	pc = NULL;
 	pa = get_msi_pci_attach_args(pic);
 	tag = pa->pa_tag;
-	if (pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) == 0)
-		panic("%s: no msi capability", __func__);
+	KASSERT(pci_get_capability(pc, tag, PCI_CAP_MSI, &off, NULL) != 0);
 
 	/*
 	 * "cpuid" for MSI address is local APIC ID. In NetBSD, the ID is
 	 * the same as ci->ci_cpuid.
 	 */
-	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid, LAPIC_MSIADDR_DSTID_MASK);
-	/*if triger mode is edge, it don't care level for trigger mode. */
+	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid,
+	    LAPIC_MSIADDR_DSTID_MASK);
+	/* If trigger mode is edge, it don't care level for trigger mode. */
 	data = __SHIFTIN(vec, LAPIC_MSIDATA_VECTOR_MASK) |
 		LAPIC_MSIDATA_TRGMODE_EDGE | LAPIC_MSIDATA_DM_FIXED;
 
@@ -343,7 +355,7 @@ static struct pic msi_pic_tmpl = {
 	.pic_type = PIC_MSI,
 	.pic_vecbase = 0,
 	.pic_apicid = 0,
-	.pic_lock = __SIMPLELOCK_UNLOCKED,
+	.pic_lock = __SIMPLELOCK_UNLOCKED, /* not used for msi_pic */
 	.pic_hwmask = msi_hwmask,
 	.pic_hwunmask = msi_hwunmask,
 	.pic_addroute = msi_addroute,
@@ -363,13 +375,15 @@ construct_msi_pic(struct pci_attach_args *pa)
 
 	msi_pic = construct_common_msi_pic(pa, &msi_pic_tmpl);
 	if (msi_pic == NULL) {
-		aprint_normal("cannot allocate MSI pic.\n");
+		DPRINTF(("cannot allocate MSI pic.\n"));
 		return NULL;
 	}
 
 	memset(pic_name_buf, 0, MSIPICNAMEBUF);
-	snprintf(pic_name_buf, MSIPICNAMEBUF, "msi%d", msi_pic->pic_msipic->mp_devid);
-	strncpy(msi_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPICNAMEBUF - 1);
+	snprintf(pic_name_buf, MSIPICNAMEBUF, "msi%d",
+	    msi_pic->pic_msipic->mp_devid);
+	strncpy(msi_pic->pic_msipic->mp_pic_name, pic_name_buf,
+	    MSIPICNAMEBUF - 1);
 	msi_pic->pic_name = msi_pic->pic_msipic->mp_pic_name;
 
 	return msi_pic;
@@ -396,8 +410,8 @@ msix_set_vecctl_mask(struct pic *pic, int table_idx, int flag)
 	uint32_t vecctl;
 
 	if (table_idx < 0) {
-		aprint_normal("%s: invalid MSI-X table index, devid=%d vecid=%d",
-		    __func__, msi_get_devid(pic), table_idx);
+		DPRINTF(("%s: invalid MSI-X table index, devid=%d vecid=%d",
+			__func__, msi_get_devid(pic), table_idx));
 		return;
 	}
 
@@ -445,16 +459,15 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 	int off;
 
 	if (table_idx < 0) {
-		aprint_normal("%s: invalid MSI-X table index, devid=%d vecid=%d",
-		    __func__, msi_get_devid(pic), table_idx);
+		DPRINTF(("%s: invalid MSI-X table index, devid=%d vecid=%d",
+			__func__, msi_get_devid(pic), table_idx));
 		return;
 	}
 
 	pa = get_msi_pci_attach_args(pic);
 	pc = pa->pa_pc;
 	tag = pa->pa_tag;
-	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0)
-		panic("%s: no msix capability", __func__);
+	KASSERT(pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) != 0);
 
 	entry_base = PCI_MSIX_TABLE_ENTRY_SIZE * table_idx;
 
@@ -462,8 +475,9 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 	 * "cpuid" for MSI-X address is local APIC ID. In NetBSD, the ID is
 	 * the same as ci->ci_cpuid.
 	 */
-	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid, LAPIC_MSIADDR_DSTID_MASK);
-	/*if triger mode is edge, it don't care level for trigger mode. */
+	addr = LAPIC_MSIADDR_BASE | __SHIFTIN(ci->ci_cpuid,
+	    LAPIC_MSIADDR_DSTID_MASK);
+	/* If trigger mode is edge, it don't care level for trigger mode. */
 	data = __SHIFTIN(vec, LAPIC_MSIDATA_VECTOR_MASK) |
 		LAPIC_MSIDATA_TRGMODE_EDGE | LAPIC_MSIDATA_DM_FIXED;
 
@@ -500,7 +514,7 @@ static struct pic msix_pic_tmpl = {
 	.pic_type = PIC_MSIX,
 	.pic_vecbase = 0,
 	.pic_apicid = 0,
-	.pic_lock = __SIMPLELOCK_UNLOCKED,
+	.pic_lock = __SIMPLELOCK_UNLOCKED, /* not used for msix_pic */
 	.pic_hwmask = msix_hwmask,
 	.pic_hwunmask = msix_hwunmask,
 	.pic_addroute = msix_addroute,
@@ -526,26 +540,28 @@ construct_msix_pic(struct pci_attach_args *pa)
 
 	table_nentry = pci_msix_count(pa);
 	if (table_nentry == 0) {
-		aprint_normal("MSI-X table entry is 0.\n");
+		DPRINTF(("MSI-X table entry is 0.\n"));
 		return NULL;
 	}
 
 	pc = pa->pa_pc;
 	tag = pa->pa_tag;
 	if (pci_get_capability(pc, tag, PCI_CAP_MSIX, &off, NULL) == 0) {
-		aprint_normal("%s: no msix capability", __func__);
+		DPRINTF(("%s: no msix capability", __func__));
 		return NULL;
 	}
 
 	msix_pic = construct_common_msi_pic(pa, &msix_pic_tmpl);
 	if (msix_pic == NULL) {
-		aprint_normal("cannot allocate MSI-X pic.\n");
+		DPRINTF(("cannot allocate MSI-X pic.\n"));
 		return NULL;
 	}
 
 	memset(pic_name_buf, 0, MSIPICNAMEBUF);
-	snprintf(pic_name_buf, MSIPICNAMEBUF, "msix%d", msix_pic->pic_msipic->mp_devid);
-	strncpy(msix_pic->pic_msipic->mp_pic_name, pic_name_buf, MSIPICNAMEBUF - 1);
+	snprintf(pic_name_buf, MSIPICNAMEBUF, "msix%d",
+	    msix_pic->pic_msipic->mp_devid);
+	strncpy(msix_pic->pic_msipic->mp_pic_name, pic_name_buf,
+	    MSIPICNAMEBUF - 1);
 	msix_pic->pic_name = msix_pic->pic_msipic->mp_pic_name;
 
 	tbl = pci_conf_read(pc, tag, off + PCI_MSIX_TBLOFFSET);
@@ -571,7 +587,7 @@ construct_msix_pic(struct pci_attach_args *pa)
 		bar = PCI_BAR5;
 		break;
 	default:
-		aprint_normal("the device use reserved BIR values.\n");
+		aprint_error("detect an illegal device! The device use reserved BIR values.\n");
 		destruct_common_msi_pic(msix_pic);
 		return NULL;
 	}
@@ -588,7 +604,7 @@ construct_msix_pic(struct pci_attach_args *pa)
 	    roundup(table_size, PAGE_SIZE), table_offset,
 	    &bstag, &bshandle, NULL, &bssize);
 	if (err) {
-		aprint_normal("cannot map msix table.\n");
+		DPRINTF(("cannot map msix table.\n"));
 		destruct_common_msi_pic(msix_pic);
 		return NULL;
 	}
