@@ -1914,10 +1914,12 @@ intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
 void *
 intr_get_handler(const char *intrid)
 {
+	struct intrsource *isp;
 
 	KASSERT(mutex_owned(&cpu_lock));
 
-	return intr_get_io_intrsource(intrid);
+	isp = intr_get_io_intrsource(intrid);
+	return isp->is_handlers;
 }
 
 uint64_t
@@ -1925,14 +1927,18 @@ intr_get_count(void *ich, u_int cpu_idx)
 {
 	struct cpu_info *ci;
 	struct intrsource *isp;
+	struct intrhand *ih;
 	struct percpu_evcnt pep;
 	cpuid_t cpuid;
-	int i;
+	int i, slot;
 
 	ci = cpu_lookup(cpu_idx);
 	cpuid = ci->ci_cpuid;
 
-	isp = ich;
+	ih = ich;
+	slot = ih->ih_slot;
+	isp = ih->ih_cpu->ci_isources[slot];
+
 	for (i = 0; i < ncpu; i++) {
 		pep = isp->is_saved_evcnt[i];
 		if (cpuid == pep.cpuid) {
@@ -1950,10 +1956,10 @@ void
 intr_get_assigned(void *ich, kcpuset_t *cpuset)
 {
 	struct cpu_info *ci;
-	struct intrsource *isp;
+	struct intrhand *ih;
 
-	isp = ich;
-	ci = isp->is_handlers->ih_cpu;
+	ih = ich;
+	ci = ih->ih_cpu;
 	KASSERT(ci != NULL);
 
 	kcpuset_zero(cpuset);
@@ -1978,8 +1984,13 @@ const char *
 intr_get_devname(void *ich)
 {
 	struct intrsource *isp;
+	struct intrhand *ih;
+	int slot;
 
-	isp = ich;
+	ih = ich;
+	slot = ih->ih_slot;
+	isp = ih->ih_cpu->ci_isources[slot];
+
 	return isp->is_xname;
 }
 
