@@ -34,7 +34,7 @@ __RCSID("$NetBSD$");
 
 #include <sys/intrio.h>
 
-void*intrctl_io_alloc(int);
+void *intrctl_io_alloc(int);
 void intrctl_io_free(void *);
 int intrctl_io_ncpus(void *);
 int intrctl_io_nintrs(void *);
