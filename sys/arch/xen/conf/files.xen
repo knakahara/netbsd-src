@@ -31,6 +31,9 @@ defparam opt_beep.h		BEEP_ONHALT_PERIOD=250
 defflag opt_pcifixup.h	PCI_ADDR_FIXUP PCI_BUS_FIXUP
 			PCI_INTR_FIXUP PCI_INTR_FIXUP_FORCE
 
+# PCI MSI/MSI-X option
+defflag opt_pci_msi_msix.h	PCI_MSI_MSIX
+
 defparam		PCI_CONF_MODE
 
 file	arch/xen/x86/autoconf.c
