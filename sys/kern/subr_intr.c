@@ -145,10 +145,7 @@ intr_avert_intr(u_int cpu_idx)
 
 	for (i = 0; i < nids; i++) {
 		ich = intr_get_handler(ids[i]);
-		if (ich == NULL) {
-			error = ENOENT;
-			break;
-		}
+		KASSERT(ich != NULL);
 		error = intr_distribute(ich, cpuset, NULL);
 		if (error)
 			break;
@@ -253,6 +250,7 @@ intr_list(void *data, int length)
 		void *ich;
 
 		ich = intr_get_handler(ids[intr_idx]);
+		KASSERT(ich != NULL);
 		strncpy(illine->ill_intrid, ids[intr_idx], INTRIDBUF);
 		strncpy(illine->ill_xname, intr_get_devname(ich), INTRDEVNAMEBUF);
 

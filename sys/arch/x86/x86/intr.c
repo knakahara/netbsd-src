@@ -1919,6 +1919,9 @@ intr_get_handler(const char *intrid)
 	KASSERT(mutex_owned(&cpu_lock));
 
 	isp = intr_get_io_intrsource(intrid);
+	if (isp == NULL)
+		return NULL;
+
 	return isp->is_handlers;
 }
 
