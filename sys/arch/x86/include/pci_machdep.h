@@ -33,13 +33,15 @@
 #ifndef _X86_PCI_MACHDEP_H_
 #define _X86_PCI_MACHDEP_H_
 
+#include <machine/intr.h>
+
 #include <x86/intr_distribute.h>
 
 /*
  * Types provided to machine-independent PCI code
  * See also i82093var.h to find out pci_intr_handle_t's bitfield.
  */
-typedef int pci_intr_handle_t;
+typedef intr_handle_t pci_intr_handle_t;
 
 #include <x86/pci_machdep_common.h>
 

@@ -117,11 +117,11 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.27 2014/03/29 19:28:30 christ
 int
 pci_intr_map(const struct pci_attach_args *pa, pci_intr_handle_t *ihp)
 {
-	int pin = pa->pa_intrpin;
-	int line = pa->pa_intrline;
+	pci_intr_pin_t pin = pa->pa_intrpin;
+	pci_intr_line_t line = pa->pa_intrline;
 	pci_chipset_tag_t ipc, pc = pa->pa_pc;
 #if NIOAPIC > 0 || NACPICA > 0
-	int rawpin = pa->pa_rawintrpin;
+	pci_intr_pin_t rawpin = pa->pa_rawintrpin;
 	int bus, dev, func;
 #endif
 
@@ -292,7 +292,7 @@ pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 	}
 
 	pic = &i8259_pic;
-	pin = irq = (ih & ~MPSAFE_MASK);
+	pin = irq = APIC_IRQ_LEGACY_IRQ(ih);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
 
 #if NIOAPIC > 0

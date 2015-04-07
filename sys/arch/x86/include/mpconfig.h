@@ -60,7 +60,7 @@ struct mp_intr_map
 	int bus_pin;
 	struct pic *ioapic;	/* NULL for local apic */
 	int ioapic_pin;
-	int ioapic_ih;		/* int handle, see i82093var.h for encoding */
+	intr_handle_t ioapic_ih;	/* int handle, see i82093var.h for encoding */
 	int type;		/* from mp spec intr record */
  	int flags;		/* from mp spec intr record */
 	uint32_t redir;

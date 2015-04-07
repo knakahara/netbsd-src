@@ -183,7 +183,7 @@ ioapic_write(struct ioapic_softc *sc,int regid, int val)
 }
 
 struct ioapic_softc *
-ioapic_find(int apicid)
+ioapic_find(intr_handle_t apicid)
 {
 	struct ioapic_softc *sc;
 

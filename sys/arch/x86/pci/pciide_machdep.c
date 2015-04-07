@@ -69,7 +69,7 @@ pciide_machdep_compat_intr_establish(device_t dev,
 	int irq;
 	void *cookie;
 #if NIOAPIC > 0
-	int mpih;
+	intr_handle_t mpih;
 	char buf[PCI_INTRSTR_LEN];
 #endif
 

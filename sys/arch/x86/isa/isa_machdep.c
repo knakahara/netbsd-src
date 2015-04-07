@@ -203,7 +203,7 @@ isa_intr_establish(isa_chipset_tag_t ic, int irq, int type, int level,
 	struct pic *pic;
 	int pin;
 #if NIOAPIC > 0
-	int mpih;
+	intr_handle_t mpih;
 	struct ioapic_softc *ioapic;
 #endif
 
