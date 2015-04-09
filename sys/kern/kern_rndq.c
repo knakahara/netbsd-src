@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_rndq.c,v 1.29 2015/01/08 16:13:07 christos Exp $	*/
+/*	$NetBSD: kern_rndq.c,v 1.43 2015/04/08 14:13:55 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 1997-2013 The NetBSD Foundation, Inc.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_rndq.c,v 1.29 2015/01/08 16:13:07 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_rndq.c,v 1.43 2015/04/08 14:13:55 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/atomic.h>
@@ -55,7 +55,6 @@ __KERNEL_RCSID(0, "$NetBSD: kern_rndq.c,v 1.29 2015/01/08 16:13:07 christos Exp 
 #include <sys/kauth.h>
 #include <sys/once.h>
 #include <sys/rngtest.h>
-#include <sys/cpu.h>	/* XXX temporary, see rnd_detach_source */
 
 #include <dev/rnd_private.h>
 
@@ -83,6 +82,12 @@ int	rnd_debug = 0;
 #endif
 
 #ifdef RND_VERBOSE
+#define	rnd_printf_verbose(fmt, ...)	rnd_printf(fmt, ##__VA_ARGS__)
+#else
+#define	rnd_printf_verbose(fmt, ...)	((void)0)
+#endif
+
+#ifdef RND_VERBOSE
 static unsigned int deltacnt;
 #endif
 
@@ -102,12 +107,16 @@ typedef struct _rnd_sample_t {
 	u_int32_t	values[RND_SAMPLE_COUNT];
 } rnd_sample_t;
 
+SIMPLEQ_HEAD(rnd_sampleq, _rnd_sample_t);
+
 /*
- * The event queue.  Fields are altered at an interrupt level.
- * All accesses must be protected with the mutex.
+ * The sample queue.  Samples are put into the queue and processed in a
+ * softint in order to limit the latency of adding a sample.
  */
-SIMPLEQ_HEAD(, _rnd_sample_t)	rnd_samples;
-kmutex_t			rnd_mtx;
+static struct {
+	kmutex_t		lock;
+	struct rnd_sampleq	q;
+} rnd_samples __cacheline_aligned;
 
 /*
  * Memory pool for sample buffers
@@ -160,14 +169,12 @@ static krndsource_t rnd_source_anonymous = {
 krndsource_t rnd_printf_source, rnd_autoconf_source;
 
 void *rnd_process, *rnd_wakeup;
-struct callout skew_callout, skew_stop_callout;
 
 void	      		rnd_wakeup_readers(void);
 static inline uint32_t	rnd_counter(void);
 static        void	rnd_intr(void *);
 static	      void	rnd_wake(void *);
 static	      void	rnd_process_events(void);
-u_int32_t     rnd_extract_data_locked(void *, u_int32_t, u_int32_t); /* XXX */
 static	      void	rnd_add_data_ts(krndsource_t *, const void *const,
 					uint32_t, uint32_t, uint32_t);
 static inline void	rnd_schedule_process(void);
@@ -274,23 +281,21 @@ rnd_schedule_wakeup(void)
 void
 rnd_getmore(size_t byteswanted)
 {
-	krndsource_t *rs; 
+	krndsource_t *rs;
 
 	KASSERT(mutex_owned(&rndpool_mtx));
 
 	LIST_FOREACH(rs, &rnd_sources, list) {
-		if (rs->flags & RND_FLAG_HASCB) {
-			KASSERT(rs->get != NULL);
-			KASSERT(rs->getarg != NULL);
-			rs->get(byteswanted, rs->getarg);
-#ifdef RND_VERBOSE
-			rnd_printf("rnd: entropy estimate %zu bits\n",
-				   rndpool_get_entropy_count(&rnd_pool));
-			rnd_printf("rnd: asking source %s for %zu bytes\n",
-			       rs->name, byteswanted);
-#endif
-		}    
-	}    
+		if (!ISSET(rs->flags, RND_FLAG_HASCB))
+			continue;
+		KASSERT(rs->get != NULL);
+		KASSERT(rs->getarg != NULL);
+		rs->get(byteswanted, rs->getarg);
+		rnd_printf_verbose("rnd: entropy estimate %zu bits\n",
+		    rndpool_get_entropy_count(&rnd_pool));
+		rnd_printf_verbose("rnd: asking source %s for %zu bytes\n",
+		    rs->name, byteswanted);
+	}
 }
 
 /*
@@ -302,22 +307,19 @@ rnd_wakeup_readers(void)
 
 	/*
 	 * XXX This bookkeeping shouldn't be here -- this is not where
-	 * the rnd_empty/rnd_initial_entropy state change actually
-	 * happens.
+	 * the rnd_initial_entropy state change actually happens.
 	 */
 	mutex_spin_enter(&rndpool_mtx);
 	const size_t entropy_count = rndpool_get_entropy_count(&rnd_pool);
 	if (entropy_count < RND_ENTROPY_THRESHOLD * 8) {
-		rnd_empty = 1;
 		mutex_spin_exit(&rndpool_mtx);
 		return;
 	} else {
 #ifdef RND_VERBOSE
 		if (__predict_false(!rnd_initial_entropy))
-			rnd_printf("rnd: have initial entropy (%zu)\n",
+			rnd_printf_verbose("rnd: have initial entropy (%zu)\n",
 			    entropy_count);
 #endif
-		rnd_empty = 0;
 		rnd_initial_entropy = 1;
 	}
 	mutex_spin_exit(&rndpool_mtx);
@@ -389,7 +391,7 @@ rnd_dt_estimate(krndsource_t *rs, uint32_t t)
 	KASSERT(d->dx == delta);
 #ifdef RND_VERBOSE
 	if (deltacnt++ % 1151 == 0) {
-		rnd_printf("rnd_dt_estimate: %s x = %lld, dx = %lld, "
+		rnd_printf_verbose("rnd_dt_estimate: %s x = %lld, dx = %lld, "
 		       "d2x = %lld\n", rs->name,
 		       (int)d->x, (int)d->dx, (int)d->d2x);
 	}
@@ -418,7 +420,7 @@ rnd_dv_estimate(krndsource_t *rs, uint32_t v)
 	KASSERT(d->dx == delta);
 #ifdef RND_VERBOSE
 	if (deltacnt++ % 1151 == 0) {
-		rnd_printf("rnd_dv_estimate: %s x = %lld, dx = %lld, "
+		rnd_printf_verbose("rnd_dv_estimate: %s x = %lld, dx = %lld, "
 		       " d2x = %lld\n", rs->name,
 		       (long long int)d->x,
 		       (long long int)d->dx,
@@ -429,49 +431,50 @@ rnd_dv_estimate(krndsource_t *rs, uint32_t v)
 }
 
 #if defined(__HAVE_CPU_COUNTER)
-kmutex_t                        rnd_skew_mtx;
+static struct {
+	kmutex_t	lock;
+	struct callout	callout;
+	struct callout	stop_callout;
+	krndsource_t	source;
+} rnd_skew __cacheline_aligned;
 
-static void rnd_skew(void *);
+static void rnd_skew_intr(void *);
 
 static void
 rnd_skew_enable(krndsource_t *rs, bool enabled)
 {
-	mutex_spin_enter(&rnd_skew_mtx);
+
 	if (enabled) {
-		rnd_skew(rs);
+		rnd_skew_intr(rs);
 	} else {
-		callout_stop(&skew_callout);
+		callout_stop(&rnd_skew.callout);
 	}
-	mutex_spin_exit(&rnd_skew_mtx);
 }
 
 static void
-rnd_skew_stop(void *arg)
+rnd_skew_stop_intr(void *arg)
 {
-	mutex_spin_enter(&rnd_skew_mtx);
-	callout_stop(&skew_callout);
-	mutex_spin_exit(&rnd_skew_mtx);
+
+	callout_stop(&rnd_skew.callout);
 }
 
 static void
 rnd_skew_get(size_t bytes, void *priv)
 {
 	krndsource_t *skewsrcp = priv;
+
+	KASSERT(skewsrcp == &rnd_skew.source);
 	if (RND_ENABLED(skewsrcp)) {
 		/* Measure for 30s */
-		if (mutex_tryenter(&rnd_skew_mtx)) {
-			callout_schedule(&skew_stop_callout, hz * 30);
-			callout_schedule(&skew_callout, 1);
-			mutex_spin_exit(&rnd_skew_mtx);
-		}
+		callout_schedule(&rnd_skew.stop_callout, hz * 30);
+		callout_schedule(&rnd_skew.callout, 1);
 	}
 }
 
 static void
-rnd_skew(void *arg)
+rnd_skew_intr(void *arg)
 {
-	static krndsource_t skewsrc;
-	static int live, flipflop;
+	static int flipflop;
 
 	/*
 	 * Even on systems with seemingly stable clocks, the
@@ -479,30 +482,18 @@ rnd_skew(void *arg)
 	 * about every 2 calls.
 	 *
 	 */
-	if (__predict_false(!live)) {
-		/* XXX must be spin, taken with rndpool_mtx held */
-		mutex_init(&rnd_skew_mtx, MUTEX_DEFAULT, IPL_VM);
-		rndsource_setcb(&skewsrc, rnd_skew_get, &skewsrc);
-		rndsource_setenable(&skewsrc, rnd_skew_enable);
-		rnd_attach_source(&skewsrc, "callout", RND_TYPE_SKEW,
-				  RND_FLAG_COLLECT_VALUE|
-				  RND_FLAG_ESTIMATE_VALUE|
-				  RND_FLAG_HASCB|RND_FLAG_HASENABLE);
-		live = 1;
-		return;
-	}
-	mutex_spin_enter(&rnd_skew_mtx);
+	mutex_spin_enter(&rnd_skew.lock);
 	flipflop = !flipflop;
 
-	if (RND_ENABLED(&skewsrc)) {
+	if (RND_ENABLED(&rnd_skew.source)) {
 		if (flipflop) {
-			rnd_add_uint32(&skewsrc, rnd_counter());
-			callout_schedule(&skew_callout, hz / 10);
+			rnd_add_uint32(&rnd_skew.source, rnd_counter());
+			callout_schedule(&rnd_skew.callout, hz / 10);
 		} else {
-			callout_schedule(&skew_callout, 1);
+			callout_schedule(&rnd_skew.callout, 1);
 		}
 	}
-	mutex_spin_exit(&rnd_skew_mtx);
+	mutex_spin_exit(&rnd_skew.lock);
 }
 #endif
 
@@ -519,7 +510,7 @@ rnd_init(void)
 	if (rnd_ready)
 		return;
 
-	mutex_init(&rnd_mtx, MUTEX_DEFAULT, IPL_VM);
+	mutex_init(&rnd_samples.lock, MUTEX_DEFAULT, IPL_VM);
 	rndsinks_init();
 
 	/*
@@ -529,7 +520,7 @@ rnd_init(void)
 	c = rnd_counter();
 
 	LIST_INIT(&rnd_sources);
-	SIMPLEQ_INIT(&rnd_samples);
+	SIMPLEQ_INIT(&rnd_samples.q);
 
 	rndpool_init(&rnd_pool);
 	mutex_init(&rndpool_mtx, MUTEX_DEFAULT, IPL_VM);
@@ -568,32 +559,34 @@ rnd_init(void)
  	 *
 	 */
 #if defined(__HAVE_CPU_COUNTER)
-	callout_init(&skew_callout, CALLOUT_MPSAFE);
-	callout_init(&skew_stop_callout, CALLOUT_MPSAFE);
-	callout_setfunc(&skew_callout, rnd_skew, NULL);
-	callout_setfunc(&skew_stop_callout, rnd_skew_stop, NULL);
-	rnd_skew(NULL);
+	/* IPL_VM because taken while rndpool_mtx is held.  */
+	mutex_init(&rnd_skew.lock, MUTEX_DEFAULT, IPL_VM);
+	callout_init(&rnd_skew.callout, CALLOUT_MPSAFE);
+	callout_init(&rnd_skew.stop_callout, CALLOUT_MPSAFE);
+	callout_setfunc(&rnd_skew.callout, rnd_skew_intr, NULL);
+	callout_setfunc(&rnd_skew.stop_callout, rnd_skew_stop_intr, NULL);
+	rndsource_setcb(&rnd_skew.source, rnd_skew_get, &rnd_skew.source);
+	rndsource_setenable(&rnd_skew.source, rnd_skew_enable);
+	rnd_attach_source(&rnd_skew.source, "callout", RND_TYPE_SKEW,
+	    RND_FLAG_COLLECT_VALUE|RND_FLAG_ESTIMATE_VALUE|
+	    RND_FLAG_HASCB|RND_FLAG_HASENABLE);
+	rnd_skew_intr(NULL);
 #endif
 
-#ifdef RND_VERBOSE
-	rnd_printf("rnd: initialised (%u)%s", RND_POOLBITS,
-	       c ? " with counter\n" : "\n");
-#endif
+	rnd_printf_verbose("rnd: initialised (%u)%s", RND_POOLBITS,
+	    c ? " with counter\n" : "\n");
 	if (boot_rsp != NULL) {
 		mutex_spin_enter(&rndpool_mtx);
-			rndpool_add_data(&rnd_pool, boot_rsp->data,
-					 sizeof(boot_rsp->data),
-					 MIN(boot_rsp->entropy,
-					     RND_POOLBITS / 2));
+		rndpool_add_data(&rnd_pool, boot_rsp->data,
+		    sizeof(boot_rsp->data),
+		    MIN(boot_rsp->entropy, RND_POOLBITS / 2));
 		if (rndpool_get_entropy_count(&rnd_pool) >
 		    RND_ENTROPY_THRESHOLD * 8) {
                 	rnd_initial_entropy = 1;
 		}
                 mutex_spin_exit(&rndpool_mtx);
-#ifdef RND_VERBOSE
 		rnd_printf("rnd: seeded with %d bits\n",
-		       MIN(boot_rsp->entropy, RND_POOLBITS / 2));
-#endif
+		    MIN(boot_rsp->entropy, RND_POOLBITS / 2));
 		memset(boot_rsp, 0, sizeof(*boot_rsp));
 	}
 	rnd_attach_source(&rnd_source_anonymous, "Anonymous",
@@ -701,15 +694,16 @@ rnd_attach_source(krndsource_t *rs, const char *name, uint32_t type,
 	LIST_INSERT_HEAD(&rnd_sources, rs, list);
 
 #ifdef RND_VERBOSE
-	rnd_printf("rnd: %s attached as an entropy source (", rs->name);
+	rnd_printf_verbose("rnd: %s attached as an entropy source (",
+	    rs->name);
 	if (!(flags & RND_FLAG_NO_COLLECT)) {
-		rnd_printf("collecting");
+		rnd_printf_verbose("collecting");
 		if (flags & RND_FLAG_NO_ESTIMATE)
-			rnd_printf(" without estimation");
+			rnd_printf_verbose(" without estimation");
 	}
 	else
-		rnd_printf("off");
-	rnd_printf(")\n");
+		rnd_printf_verbose("off");
+	rnd_printf_verbose(")\n");
 #endif
 
 	/*
@@ -730,38 +724,35 @@ rnd_detach_source(krndsource_t *source)
 {
 	rnd_sample_t *sample;
 
-	mutex_spin_enter(&rnd_mtx);
-
+	mutex_spin_enter(&rndpool_mtx);
 	LIST_REMOVE(source, list);
+	mutex_spin_exit(&rndpool_mtx);
 
 	/*
 	 * If there are samples queued up "remove" them from the sample queue
 	 * by setting the source to the no-collect pseudosource.
 	 */
-	sample = SIMPLEQ_FIRST(&rnd_samples);
+	mutex_spin_enter(&rnd_samples.lock);
+	sample = SIMPLEQ_FIRST(&rnd_samples.q);
 	while (sample != NULL) {
 		if (sample->source == source)
 			sample->source = &rnd_source_no_collect;
 
 		sample = SIMPLEQ_NEXT(sample, next);
 	}
+	mutex_spin_exit(&rnd_samples.lock);
 
-	mutex_spin_exit(&rnd_mtx);
-
-	if (!cpu_softintr_p()) {	/* XXX XXX very temporary "fix" */
-		if (source->state) {
-			rnd_sample_free(source->state);
-			source->state = NULL;
-		}
-
-		if (source->test) {
-			kmem_free(source->test, sizeof(rngtest_t));
-		}
+	if (source->state) {
+		rnd_sample_free(source->state);
+		source->state = NULL;
 	}
 
-#ifdef RND_VERBOSE
-	rnd_printf("rnd: %s detached as an entropy source\n", source->name);
-#endif
+	if (source->test) {
+		kmem_free(source->test, sizeof(rngtest_t));
+	}
+
+	rnd_printf_verbose("rnd: %s detached as an entropy source\n",
+	    source->name);
 }
 
 static inline uint32_t
@@ -864,8 +855,7 @@ rnd_add_data_ts(krndsource_t *rs, const void *const data, u_int32_t len,
 	uint32_t dint;
 	int todo, done, filled = 0;
 	int sample_count;
-	SIMPLEQ_HEAD(, _rnd_sample_t) tmp_samples =
-	    		SIMPLEQ_HEAD_INITIALIZER(tmp_samples);
+	struct rnd_sampleq tmp_samples = SIMPLEQ_HEAD_INITIALIZER(tmp_samples);
 
 	if (rs && (rs->flags & RND_FLAG_NO_COLLECT ||
 	    __predict_false(!(rs->flags & 
@@ -892,13 +882,12 @@ rnd_add_data_ts(krndsource_t *rs, const void *const data, u_int32_t len,
 			    (upt.tv_sec > 10 && rs->total > upt.tv_sec) ||
 			    (upt.tv_sec > 100 &&
 			      rs->total > upt.tv_sec / 10)) {
-#ifdef RND_VERBOSE
-				rnd_printf("rnd: source %s is fast (%d samples "
-				       "at once, %d bits in %lld seconds), "
-				       "processing samples in bulk.\n",
-				       rs->name, todo, rs->total,
-				       (long long int)upt.tv_sec);
-#endif
+				rnd_printf_verbose("rnd: source %s is fast"
+				    " (%d samples at once,"
+				    " %d bits in %lld seconds), "
+				    "processing samples in bulk.\n",
+				    rs->name, todo, rs->total,
+				    (long long int)upt.tv_sec);
 				rs->flags |= RND_FLAG_FAST;
 			}
 		}
@@ -957,12 +946,12 @@ rnd_add_data_ts(krndsource_t *rs, const void *const data, u_int32_t len,
 		return;
 	}
 
-	mutex_spin_enter(&rnd_mtx);
+	mutex_spin_enter(&rnd_samples.lock);
 	while ((state = SIMPLEQ_FIRST(&tmp_samples))) {
 		SIMPLEQ_REMOVE_HEAD(&tmp_samples, next);
-		SIMPLEQ_INSERT_HEAD(&rnd_samples, state, next);
+		SIMPLEQ_INSERT_HEAD(&rnd_samples.q, state, next);
 	}
-	mutex_spin_exit(&rnd_mtx);
+	mutex_spin_exit(&rnd_samples.lock);
 
 	/* Cause processing of queued samples */
 	rnd_schedule_process();
@@ -1036,20 +1025,16 @@ rnd_process_events(void)
 	u_int32_t entropy;
 	size_t pool_entropy;
 	int found = 0, wake = 0;
-	SIMPLEQ_HEAD(, _rnd_sample_t) dq_samples =
-			SIMPLEQ_HEAD_INITIALIZER(dq_samples);
-	SIMPLEQ_HEAD(, _rnd_sample_t) df_samples =
-			SIMPLEQ_HEAD_INITIALIZER(df_samples);
+	struct rnd_sampleq dq_samples = SIMPLEQ_HEAD_INITIALIZER(dq_samples);
+	struct rnd_sampleq df_samples = SIMPLEQ_HEAD_INITIALIZER(df_samples);
 
 	/*
-	 * Sample queue is protected by rnd_mtx, drain to onstack queue
-	 * and drop lock.
+	 * Drain to the on-stack queue and drop the lock.
 	 */
-
-	mutex_spin_enter(&rnd_mtx);
-	while ((sample = SIMPLEQ_FIRST(&rnd_samples))) {
+	mutex_spin_enter(&rnd_samples.lock);
+	while ((sample = SIMPLEQ_FIRST(&rnd_samples.q))) {
 		found++;
-		SIMPLEQ_REMOVE_HEAD(&rnd_samples, next);
+		SIMPLEQ_REMOVE_HEAD(&rnd_samples.q, next);
 		/*
 		 * We repeat this check here, since it is possible
 		 * the source was disabled before we were called, but
@@ -1063,7 +1048,7 @@ rnd_process_events(void)
 			SIMPLEQ_INSERT_TAIL(&dq_samples, sample, next);
 		}
 	}
-	mutex_spin_exit(&rnd_mtx);
+	mutex_spin_exit(&rnd_samples.lock);
 
 	/* Don't thrash the rndpool mtx either.  Hold, add all samples. */
 	mutex_spin_enter(&rndpool_mtx);
@@ -1076,7 +1061,7 @@ rnd_process_events(void)
 		SIMPLEQ_REMOVE_HEAD(&dq_samples, next);
 		source = sample->source;
 		entropy = sample->entropy;
-		sample_count = sample->cursor + 1;
+		sample_count = sample->cursor;
 
 		/*
 		 * Don't provide a side channel for timing attacks on
@@ -1090,19 +1075,23 @@ rnd_process_events(void)
 		last_source = source;
 
 		/*
+		 * If the source has been disabled, ignore samples from
+		 * it.
+		 */
+		if (source->flags & RND_FLAG_NO_COLLECT)
+			goto skip;
+
+		/*
 		 * Hardware generators are great but sometimes they
 		 * have...hardware issues.  Don't use any data from
 		 * them unless it passes some tests.
 		 */
 		if (source->type == RND_TYPE_RNG) {
 			if (__predict_false(rnd_hwrng_test(sample))) {
-				/*
-				 * Detach the bad source.  See below.
-				 */
-				badsource = source;
-				rnd_printf("rnd: detaching source \"%s\".",
-				       badsource->name);
-				break;
+				source->flags |= RND_FLAG_NO_COLLECT;
+				rnd_printf("rnd: disabling source \"%s\".",
+				    badsource->name);
+				goto skip;
 			}
 		}
 
@@ -1121,35 +1110,19 @@ rnd_process_events(void)
 
 		pool_entropy += entropy;
 		source->total += sample->entropy;
-		SIMPLEQ_INSERT_TAIL(&df_samples, sample, next);
+skip:		SIMPLEQ_INSERT_TAIL(&df_samples, sample, next);
 	}
 	rndpool_set_entropy_count(&rnd_pool, pool_entropy);
 	if (pool_entropy > RND_ENTROPY_THRESHOLD * 8) {
 		wake++;
 	} else {
-		rnd_empty = 1;
 		rnd_getmore(howmany((RND_POOLBITS - pool_entropy), NBBY));
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: empty, asking for %d bytes\n",
-		       (int)(howmany((RND_POOLBITS - pool_entropy), NBBY)));
-#endif
+		rnd_printf_verbose("rnd: empty, asking for %d bytes\n",
+		    (int)(howmany((RND_POOLBITS - pool_entropy), NBBY)));
 	}
 	mutex_spin_exit(&rndpool_mtx);
 
 	/* Now we hold no locks: clean up. */
-	if (__predict_false(badsource)) {
-		/*
-		 * The detach routine frees any samples we have not
-		 * dequeued ourselves.  For sanity's sake, we simply
-		 * free (without using) all dequeued samples from the
-		 * point at which we detected a problem onwards.
-		 */
-		rnd_detach_source(badsource);
-		while ((sample = SIMPLEQ_FIRST(&dq_samples))) {
-			SIMPLEQ_REMOVE_HEAD(&dq_samples, next);
-			rnd_sample_free(sample);
-		}
-	}
 	while ((sample = SIMPLEQ_FIRST(&df_samples))) {
 		SIMPLEQ_REMOVE_HEAD(&df_samples, next);
 		rnd_sample_free(sample);
@@ -1176,12 +1149,13 @@ rnd_wake(void *arg)
 }
 
 u_int32_t
-rnd_extract_data_locked(void *p, u_int32_t len, u_int32_t flags)
+rnd_extract_data(void *p, u_int32_t len, u_int32_t flags)
 {
 	static int timed_in;
 	int entropy_count;
+	uint32_t retval;
 
-	KASSERT(mutex_owned(&rndpool_mtx));
+	mutex_spin_enter(&rndpool_mtx);
 	if (__predict_false(!timed_in)) {
 		if (boottime.tv_sec) {
 			rndpool_add_data(&rnd_pool, &boottime,
@@ -1192,10 +1166,8 @@ rnd_extract_data_locked(void *p, u_int32_t len, u_int32_t flags)
 	if (__predict_false(!rnd_initial_entropy)) {
 		uint32_t c;
 
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: WARNING! initial entropy low (%u).\n",
+		rnd_printf_verbose("rnd: WARNING! initial entropy low (%u).\n",
 		       rndpool_get_entropy_count(&rnd_pool));
-#endif
 		/* Try once again to put something in the pool */
 		c = rnd_counter();
 		rndpool_add_data(&rnd_pool, &c, sizeof(c), 1);
@@ -1204,10 +1176,9 @@ rnd_extract_data_locked(void *p, u_int32_t len, u_int32_t flags)
 #ifdef DIAGNOSTIC
 	while (!rnd_tested) {
 		entropy_count = rndpool_get_entropy_count(&rnd_pool);
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: starting statistical RNG test, entropy = %d.\n",
-			entropy_count);
-#endif
+		rnd_printf_verbose("rnd: starting statistical RNG test,"
+		    " entropy = %d.\n",
+		    entropy_count);
 		if (rndpool_extract_data(&rnd_pool, rnd_rt.rt_b,
 		    sizeof(rnd_rt.rt_b), RND_EXTRACT_ANY)
 		    != sizeof(rnd_rt.rt_b)) {
@@ -1237,33 +1208,21 @@ rnd_extract_data_locked(void *p, u_int32_t len, u_int32_t flags)
 		rndpool_add_data(&rnd_pool, rnd_testbits, sizeof(rnd_testbits),
 				 entropy_count);
 		memset(rnd_testbits, 0, sizeof(rnd_testbits));
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: statistical RNG test done, entropy = %d.\n",
-		       rndpool_get_entropy_count(&rnd_pool));
-#endif
+		rnd_printf_verbose("rnd: statistical RNG test done,"
+		    " entropy = %d.\n",
+		    rndpool_get_entropy_count(&rnd_pool));
 		rnd_tested++;
 	}
 #endif
 	entropy_count = rndpool_get_entropy_count(&rnd_pool);
 	if (entropy_count < (RND_ENTROPY_THRESHOLD * 2 + len) * NBBY) {
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: empty, asking for %d bytes\n",
-			   (int)(howmany((RND_POOLBITS - entropy_count),
-				 NBBY)));
-#endif
+		rnd_printf_verbose("rnd: empty, asking for %d bytes\n",
+		    (int)(howmany((RND_POOLBITS - entropy_count), NBBY)));
 		rnd_getmore(howmany((RND_POOLBITS - entropy_count), NBBY));
 	}
-	return rndpool_extract_data(&rnd_pool, p, len, flags);
-}
-
-u_int32_t
-rnd_extract_data(void *p, u_int32_t len, u_int32_t flags)
-{
-	uint32_t retval;
-
-	mutex_spin_enter(&rndpool_mtx);
-	retval = rnd_extract_data_locked(p, len, flags);
+	retval = rndpool_extract_data(&rnd_pool, p, len, flags);
 	mutex_spin_exit(&rndpool_mtx);
+
 	return retval;
 }
 
@@ -1295,9 +1254,8 @@ rnd_seed(void *base, size_t len)
 	 * modules run before or after rnd_init().  Handle both cases.
 	 */
 	if (rnd_ready) {
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: ready, feeding in seed data directly.\n");
-#endif
+		rnd_printf_verbose("rnd: ready,"
+		    " feeding in seed data directly.\n");
 		mutex_spin_enter(&rndpool_mtx);
 		rndpool_add_data(&rnd_pool, boot_rsp->data,
 				 sizeof(boot_rsp->data),
@@ -1305,8 +1263,6 @@ rnd_seed(void *base, size_t len)
 		memset(boot_rsp, 0, sizeof(*boot_rsp));
 		mutex_spin_exit(&rndpool_mtx);
 	} else {
-#ifdef RND_VERBOSE
-		rnd_printf("rnd: not ready, deferring seed feed.\n");
-#endif
+		rnd_printf_verbose("rnd: not ready, deferring seed feed.\n");
 	}
 }

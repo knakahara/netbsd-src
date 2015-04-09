@@ -1,4 +1,4 @@
-/*	$NetBSD: route.c,v 1.137 2015/03/26 04:38:17 ozaki-r Exp $	*/
+/*	$NetBSD: route.c,v 1.142 2015/04/07 04:36:19 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2008 The NetBSD Foundation, Inc.
@@ -94,11 +94,12 @@
 #include "opt_route.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route.c,v 1.137 2015/03/26 04:38:17 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route.c,v 1.142 2015/04/07 04:36:19 ozaki-r Exp $");
 
 #include <sys/param.h>
-#include <sys/kmem.h>
+#ifdef RTFLUSH_DEBUG
 #include <sys/sysctl.h>
+#endif
 #include <sys/systm.h>
 #include <sys/callout.h>
 #include <sys/proc.h>
@@ -115,7 +116,6 @@ __KERNEL_RCSID(0, "$NetBSD: route.c,v 1.137 2015/03/26 04:38:17 ozaki-r Exp $");
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <net/route.h>
-#include <net/raw_cb.h>
 
 #include <netinet/in.h>
 #include <netinet/in_var.h>
@@ -144,6 +144,9 @@ static kauth_listener_t route_listener;
 static int rtdeletemsg(struct rtentry *);
 static int rtflushclone1(struct rtentry *, void *);
 static void rtflushclone(sa_family_t family, struct rtentry *);
+
+static void rt_maskedcopy(const struct sockaddr *,
+    struct sockaddr *, const struct sockaddr *);
 
 #ifdef RTFLUSH_DEBUG
 static void sysctl_net_rtcache_setup(struct sysctllog **);
@@ -872,7 +875,7 @@ rt_setgate(struct rtentry *rt, const struct sockaddr *gate)
 	return 0;
 }
 
-void
+static void
 rt_maskedcopy(const struct sockaddr *src, struct sockaddr *dst,
 	const struct sockaddr *netmask)
 {
@@ -1420,20 +1423,28 @@ rtcache_lookup2(struct route *ro, const struct sockaddr *dst, int clone,
 	struct rtentry *rt = NULL;
 
 	odst = rtcache_getdst(ro);
-
 	if (odst == NULL)
-		;
-	else if (sockaddr_cmp(odst, dst) != 0)
-		rtcache_free(ro);
-	else if ((rt = rtcache_validate(ro)) == NULL)
-		rtcache_clear(ro);
+		goto miss;
 
+	if (sockaddr_cmp(odst, dst) != 0) {
+		rtcache_free(ro);
+		goto miss;
+	}
+
+	rt = rtcache_validate(ro);
 	if (rt == NULL) {
-		*hitp = 0;
-		if (rtcache_setdst(ro, dst) == 0)
-			rt = _rtcache_init(ro, clone);
-	} else
-		*hitp = 1;
+		rtcache_clear(ro);
+		goto miss;
+	}
+
+	*hitp = 1;
+	rtcache_invariants(ro);
+
+	return rt;
+miss:
+	*hitp = 0;
+	if (rtcache_setdst(ro, dst) == 0)
+		rt = _rtcache_init(ro, clone);
 
 	rtcache_invariants(ro);
 
@@ -1457,15 +1468,16 @@ rtcache_setdst(struct route *ro, const struct sockaddr *sa)
 	KASSERT(sa != NULL);
 
 	rtcache_invariants(ro);
-	if (ro->ro_sa != NULL && ro->ro_sa->sa_family == sa->sa_family) {
-		rtcache_clear(ro);
-		if (sockaddr_copy(ro->ro_sa, ro->ro_sa->sa_len, sa) != NULL) {
-			rtcache_invariants(ro);
-			return 0;
+	if (ro->ro_sa != NULL) {
+		if (ro->ro_sa->sa_family == sa->sa_family) {
+			rtcache_clear(ro);
+			sockaddr_copy(ro->ro_sa, ro->ro_sa->sa_len, sa);
+			sockaddr_free(ro->ro_sa);
+		} else {
+			/* free ro_sa, wrong family */
+			rtcache_free(ro);
 		}
-		sockaddr_free(ro->ro_sa);
-	} else if (ro->ro_sa != NULL)
-		rtcache_free(ro);	/* free ro_sa, wrong family */
+	}
 
 	KASSERT(ro->_ro_rt == NULL);
 

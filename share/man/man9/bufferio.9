@@ -1,4 +1,4 @@
-.\"	$NetBSD: bufferio.9,v 1.5 2015/03/29 21:08:36 riastradh Exp $
+.\"	$NetBSD: bufferio.9,v 1.16 2015/03/30 14:09:04 riastradh Exp $
 .\"
 .\" Copyright (c) 2015 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -91,7 +91,7 @@ Transfer is read from device.
 If not set, transfer is write to device.
 .It Dv B_ASYNC
 Asynchronous I/O.
-Caller must provide
+Caller must not provide
 .Fa bp Ns Li "->b_iodone"
 and must not call
 .Fn biowait bp .
@@ -107,11 +107,10 @@ Nonnegative number of bytes requested for transfer.
 .It Fa bp Ns Li "->b_blkno"
 Block number at which to do transfer.
 .It Fa bp Ns Li "->b_iodone"
-If
+I/O completion callback.
 .Dv B_ASYNC
-is set in
-.Fa bp Ns Li "->b_flags" ,
-an I/O completion callback.
+must not be set in
+.Fa bp Ns Li "->b_flags" .
 .El
 .Pp
 Additionally, if the I/O transfer is a write associated with a
@@ -129,31 +128,55 @@ and submitting
 to a block device -- doing so will likely cause deadlock with the
 syncer.
 .Pp
-Block I/O transfers may be synchronous or asynchronous:
+Block I/O transfer completion may be notified by the
+.Fa bp Ns Li "->b_iodone"
+callback, by signalling
+.Fn biowait
+waiters, or not at all in the
+.Dv B_ASYNC
+case.
 .Bl -dash
 .It
-If synchronous, after submitting the transfer to a block device, the
-user must call
-.Fn biowait bp
-in order to wait until the transfer has completed.
-.It
-If asynchronous, the user must set
-.Dv B_ASYNC
-in
-.Fa bp Ns Li "->b_flags"
-and provide
-.Fa bp Ns Li "->b_iodone" .
-After submitting the transfer to a block device,
+If the user sets the
 .Fa bp Ns Li "->b_iodone"
-will eventually be called with
-.Fa bp
-as its argument when the transfer has completed.
+callback to a
+.Pf non- Dv NULL
+function pointer, it will be called in soft interrupt context when the
+I/O transfer is complete.
 The user
 .Em may not
 call
 .Fn biowait bp
 in this case.
+.It
+If
+.Dv B_ASYNC
+is set, then the I/O transfer is asynchronous and the user will not be
+notified when it is completed.
+The user
+.Em may not
+call
+.Fn biowait bp
+in this case.
+.It
+Otherwise, if
+.Fa bp Ns Li "->b_iodone"
+is
+.Dv NULL
+and
+.Dv B_ASYNC
+is not specified, the user may wait for the I/O transfer to complete
+with
+.Fn biowait bp .
 .El
+.Pp
+Once an I/O transfer has completed, its
+.Vt "struct buf"
+may be reused, but the user must first clear the
+.Dv BO_DONE
+flag of
+.Fa bp Ns Li "->b_oflags"
+before reusing it.
 .Sh NESTED I/O TRANSFERS
 Sometimes an I/O transfer from a single buffer in memory cannot go to a
 single location on a block device: it must be split up into smaller
@@ -169,8 +192,8 @@ parameters of an I/O transfer for the buffer, called the
 buffer, the user can issue smaller transfers for segments of the buffer
 using
 .Fn nestiobuf_setup .
-The nested I/O transfers are asynchronous -- when they complete, they
-debit from the amount of work left to be done in the master buffer.
+When nested I/O transfers complete, in any order, they debit from the
+amount of work left to be done in the master buffer.
 If any segments of the buffer were skipped, the user can report this
 with
 .Fn nestiobuf_done
@@ -212,7 +235,8 @@ mbp->b_data = data;
 mbp->b_resid = mbp->b_bcount = datalen;
 mbp->b_flags = B_WRITE;
 
-KASSERT(i < nsegs);
+KASSERT(0 < nsegs);
+KASSERT(datalen == nsegs*segsz);
 for (i = 0; i < nsegs; i++) {
 	struct vnode *devvp;
 	daddr_t blkno;
@@ -220,10 +244,11 @@ for (i = 0; i < nsegs; i++) {
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	error = VOP_BMAP(vp, i*segsz, &devvp, &blkno, NULL);
 	VOP_UNLOCK(vp);
-	if (error == 0 && nbn == -1)
+	if (error == 0 && blkno == -1)
 		error = EIO;
 	if (error) {
-		skipped += segsz;
+		/* Give up early, don't try to handle holes.  */
+		skipped += datalen - i*segsz;
 		break;
 	}
 
@@ -299,11 +324,11 @@ Set
 .Fa bp Ns Li "->b_resid"
 to the number of bytes remaining to transfer, whether on success or
 on failure.
-If no bytes are transferred, this must be set to
+If no bytes were transferred, this must be set to
 .Fa bp Ns Li "->b_bcount" .
 .It
 Call
-.Li "biodone(" Ns Fa bp Ns Li ")" .
+.Fn biodone bp .
 .El
 .Sh FUNCTIONS
 .Bl -tag -width abcd
@@ -329,24 +354,30 @@ To be called by a user requesting the I/O transfer.
 .Pp
 May not be called if
 .Fa bp
-represents an asynchronous transfer, i.e. if
+has a callback or is asynchronous -- that is, if
+.Fa bp Ns Li "->b_iodone"
+is set, or if
 .Dv B_ASYNC
 is set in
 .Fa bp Ns Li "->b_flags" .
 .It Fn getiobuf vp waitok
 Allocate a
-.Fa struct buf
+.Vt "struct buf"
 for an I/O transfer.
 If
 .Fa vp
-is nonnull, the transfer is associated with it.
+is
+.Pf non- Dv NULL ,
+the transfer is associated with it.
 If
 .Fa waitok
 is false,
-returns null if none can be allocated immediately.
+returns
+.Dv NULL
+if none can be allocated immediately.
 .Pp
 The resulting
-.Li struct buf
+.Vt "struct buf"
 pointer must eventually be passed to
 .Fn putiobuf
 to release it.
@@ -354,6 +385,13 @@ Do
 .Em not
 use
 .Xr brelse 9 .
+.Pp
+The buffer may not be used for an asynchronous I/O transfer, because
+there is no way to know when it is completed and may be safely passed
+to
+.Fn putiobuf .
+Asynchronous I/O transfers are allowed only for buffers in the
+.Xr buffercache 9 .
 .Pp
 May sleep if
 .Fa waitok
@@ -379,7 +417,7 @@ subsystem is implemented in
 .Sh BUGS
 The
 .Nm
-abstraction provides no way to cancel an I/O transfers once it has been
+abstraction provides no way to cancel an I/O transfer once it has been
 submitted to a block device.
 .Pp
 The
