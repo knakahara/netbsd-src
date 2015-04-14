@@ -197,6 +197,11 @@ static const struct handlespec {
 	{ "/kern/coredump/setid/mode",		mode_bits, mode_bits, NULL },
 	{ "/kern/drivers",			kern_drivers, NULL, NULL },
 
+	{ "/kern/intr/list",			printother, NULL, "intrctl" },
+	{ "/kern/intr/affinity",		printother, NULL, "intrctl" },
+	{ "/kern/intr/intr",			printother, NULL, "intrctl" },
+	{ "/kern/intr/nointr",			printother, NULL, "intrctl" },
+
 	{ "/vm/vmmeter",			printother, NULL,
 						"vmstat' or 'systat" },
 	{ "/vm/loadavg",			vm_loadavg, NULL, NULL },

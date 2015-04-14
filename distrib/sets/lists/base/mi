@@ -1486,6 +1486,7 @@
 ./usr/sbin/ifwatchd				base-netutil-bin
 ./usr/sbin/inetd				base-netutil-bin
 ./usr/sbin/installboot				base-sysutil-bin
+./usr/sbin/intrctl				base-sysutil-bin
 ./usr/sbin/iopctl				base-sysutil-bin
 ./usr/sbin/iostat				base-sysutil-bin
 ./usr/sbin/ipfs					base-ipf-bin		ipfilter
