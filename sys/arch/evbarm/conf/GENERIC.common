@@ -1,5 +1,5 @@
 #
-#	$NetBSD: GENERIC.common,v 1.2 2015/04/03 23:52:51 jmcneill Exp $
+#	$NetBSD: GENERIC.common,v 1.4 2015/04/12 14:55:30 jmcneill Exp $
 #
 #	GENERIC evbarm kernel config (template)
 #
@@ -47,8 +47,8 @@ options 	INET6		# IPV6
 #options 	PPP_FILTER	# Active filter support for PPP (requires bpf)
 #options 	TCP_DEBUG	# Record last TCP_NDEBUG packets with SO_DEBUG
 
-options 	NFS_BOOT_BOOTP
-#options 	NFS_BOOT_DHCP
+#options 	NFS_BOOT_BOOTP
+options 	NFS_BOOT_DHCP
 #options 	NFS_BOOT_BOOTSTATIC
 #options 	NFS_BOOTSTATIC_MYIP="\"192.168.1.4\""
 #options 	NFS_BOOTSTATIC_GWIP="\"192.168.1.1\""
@@ -56,7 +56,7 @@ options 	NFS_BOOT_BOOTP
 #options 	NFS_BOOTSTATIC_SERVADDR="\"192.168.1.1\""
 #options 	NFS_BOOTSTATIC_SERVER="\"192.168.1.1:/nfs/sdp2430\""
 
-options		NFS_BOOT_RWSIZE=1024
+options 	NFS_BOOT_RWSIZE=1024
 
 # Compatibility options
 
@@ -104,7 +104,7 @@ options 	KTRACE		# system call tracing, a la ktrace(1)
 #options 	SCSIVERBOSE	# Verbose SCSI errors
 #options 	MIIVERBOSE	# Verbose MII autoconfuration messages
 #options 	USERCONF	# userconf(4) support
-#options	PIPE_SOCKETPAIR	# smaller, but slower pipe(2)
+#options 	PIPE_SOCKETPAIR	# smaller, but slower pipe(2)
 
 # Alternate buffer queue strategies for better responsiveness under high
 # disk I/O load.
@@ -121,7 +121,7 @@ options 	BUFQ_PRIOCSCAN
 #options 	IPKDB		# remote kernel debugging
 #options 	VERBOSE_INIT_ARM # verbose bootstraping messages
 options 	DDB		# in-kernel debugger
-options		DDB_ONPANIC=1
+options 	DDB_ONPANIC=1
 options 	DDB_HISTORY_SIZE=100	# Enable history editing in DDB
 #options 	DDB_COMMANDONENTER="bt"
 #options 	KGDB
@@ -141,7 +141,7 @@ pseudo-device	loop			# network loopback
 
 # miscellaneous pseudo-devices
 pseudo-device	pty			# pseudo-terminals
-#options	RND_COM
+#options 	RND_COM
 #pseudo-device	clockctl		# user control of clock subsystem
 pseudo-device	ksyms			# /dev/ksyms
 pseudo-device	lockstat		# lock profiling
