@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.108 2015/03/03 11:06:47 martin Exp $
+# $NetBSD: mi,v 1.110 2015/04/09 17:56:30 christos Exp $
 
 ./etc/mtree/set.debug                           comp-sys-root
 ./usr/lib/i18n/libBIG5_g.a			comp-c-debuglib		debuglib
@@ -1871,6 +1871,7 @@
 ./usr/libdata/debug/usr/tests/lib/libc/ieeefp/t_nan_inf.debug		tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/lib/libc/ieeefp/t_round.debug		tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/lib/libc/ieeefp/t_subnormal.debug		tests-obsolete		obsolete
+./usr/libdata/debug/usr/tests/lib/libc/inet/t_inet_addr.debug		tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libc/inet/t_inet_network.debug	tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libc/locale/t_ctype1.debug		tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/lib/libc/locale/t_ctype2.debug		tests-obsolete		obsolete
@@ -1969,6 +1970,7 @@
 ./usr/libdata/debug/usr/tests/lib/libc/string/t_strspn.debug		tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libc/string/t_swab.debug		tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libc/sys/t_access.debug		tests-lib-debug		debug,atf
+./usr/libdata/debug/usr/tests/lib/libc/sys/t_bind.debug			tests-lib-debug		debug,atf
 ./usr/libdata/debug/usr/tests/lib/libc/sys/t_bitops.debug		tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/lib/libc/sys/t_cerror.debug		tests-obsolete		obsolete
 ./usr/libdata/debug/usr/tests/lib/libc/sys/t_chroot.debug		tests-lib-debug		debug,atf

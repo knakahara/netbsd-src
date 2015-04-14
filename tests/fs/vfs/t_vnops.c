@@ -1,4 +1,4 @@
-/*	$NetBSD: t_vnops.c,v 1.45 2015/03/24 23:24:55 riastradh Exp $	*/
+/*	$NetBSD: t_vnops.c,v 1.49 2015/04/09 19:47:05 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -179,8 +179,6 @@ dir_notempty(const atf_tc_t *tc, const char *mountpath)
 	rump_sys_close(fd);
 
 	rv = rump_sys_rmdir(pb);
-	if (FSTYPE_ZFS(tc))
-		atf_tc_expect_fail("PR kern/47656: Test known to be broken");
 	if (rv != -1 || errno != ENOTEMPTY)
 		atf_tc_fail("non-empty directory removed succesfully");
 
@@ -276,8 +274,6 @@ rename_dir(const atf_tc_t *tc, const char *mp)
 	md(pb1, mp, "dir3/.");
 	if (rump_sys_rename(pb1, pb3) != -1 || errno != EINVAL)
 		atf_tc_fail_errno("rename 2");
-	if (FSTYPE_ZFS(tc))
-		atf_tc_expect_fail("PR kern/47656: Test known to be broken");
 	if (rump_sys_rename(pb3, pb1) != -1 || errno != EISDIR)
 		atf_tc_fail_errno("rename 3");
 
@@ -645,8 +641,6 @@ attrs(const atf_tc_t *tc, const char *mp)
 
 	RL(rump_sys_stat(TESTFILE, &sb2));
 #define CHECK(a) ATF_REQUIRE_EQ(sb.a, sb2.a)
-	if (FSTYPE_ZFS(tc))
-		atf_tc_expect_fail("PR kern/47656: Test known to be broken");
 	if (!(FSTYPE_MSDOS(tc) || FSTYPE_SYSVBFS(tc))) {
 		CHECK(st_uid);
 		CHECK(st_gid);
@@ -684,9 +678,6 @@ fcntl_lock(const atf_tc_t *tc, const char *mp)
 	RL(fd = rump_sys_open(TESTFILE, O_RDWR | O_CREAT, 0755));
 	RL(rump_sys_ftruncate(fd, 8192));
 
-	/* PR kern/43321 */
-	if (FSTYPE_ZFS(tc))
-		atf_tc_expect_fail("PR kern/47656: Test known to be broken");
 	RL(rump_sys_fcntl(fd, F_SETLK, &l));
 
 	/* Next, we fork and try to lock the same area */
@@ -820,9 +811,6 @@ fcntl_getlock_pids(const atf_tc_t *tc, const char *mp)
 
 		RL(rump_sys_ftruncate(fd[i], sz));
 
-		if (FSTYPE_ZFS(tc))
-			atf_tc_expect_fail("PR kern/47656: Test known to be "
-			    "broken");
 		if (i < __arraycount(lock)) {
 			RL(rump_sys_fcntl(fd[i], F_SETLK, &lock[i]));
 			expect[i].l_pid = pid[i];

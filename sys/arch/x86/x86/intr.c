@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $	*/
+/*	$NetBSD: intr.c,v 1.78 2015/04/08 05:52:41 knakahara Exp $	*/
 
 /*-
  * Copyright (c) 2007, 2008, 2009 The NetBSD Foundation, Inc.
@@ -133,7 +133,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.77 2014/05/20 03:24:19 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.78 2015/04/08 05:52:41 knakahara Exp $");
 
 #include "opt_intrdebug.h"
 #include "opt_multiprocessor.h"
@@ -202,6 +202,8 @@ struct pic softintr_pic = {
 static SIMPLEQ_HEAD(, intrsource) io_interrupt_sources =
 	SIMPLEQ_HEAD_INITIALIZER(io_interrupt_sources);
 
+static void intr_calculatemasks(struct cpu_info *);
+
 #if NIOAPIC > 0 || NACPICA > 0
 static int intr_scan_bus(int, int, int *);
 #if NPCI > 0
@@ -209,7 +211,26 @@ static int intr_find_pcibridge(int, pcitag_t *, pci_chipset_tag_t *);
 #endif
 #endif
 
+static int intr_allocate_slot_cpu(struct cpu_info *, struct pic *, int, int *,
+				  struct intrsource *);
+static int __noinline intr_allocate_slot(struct pic *, int, int,
+					 struct cpu_info **, int *, int *,
+					 struct intrsource *);
+
+static void intr_source_free(struct cpu_info *, int, struct pic *, int);
+
+static void intr_establish_xcall(void *, void *);
+static void intr_disestablish_xcall(void *, void *);
+
 static const char *legacy_intr_string(int, char *, size_t, struct pic *);
+
+static inline bool redzone_const_or_false(bool);
+static inline int redzone_const_or_zero(int);
+
+static void intr_redistribute_xc_t(void *, void *);
+static void intr_redistribute_xc_s1(void *, void *);
+static void intr_redistribute_xc_s2(void *, void *);
+static bool intr_redistribute(struct cpu_info *);
 
 /*
  * Fill in default interrupt table (in case of spurious interrupt

@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.317 2015/02/25 13:52:42 joerg Exp $	*/
+/*	$NetBSD: pmap.c,v 1.320 2015/04/13 16:19:42 matt Exp $	*/
 
 /*
  * Copyright 2003 Wasabi Systems, Inc.
@@ -186,6 +186,7 @@
 
 /* Include header files */
 
+#include "opt_arm_debug.h"
 #include "opt_cpuoptions.h"
 #include "opt_pmap_debug.h"
 #include "opt_ddb.h"
@@ -215,7 +216,7 @@
 
 #include <arm/locore.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.317 2015/02/25 13:52:42 joerg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.320 2015/04/13 16:19:42 matt Exp $");
 
 //#define PMAP_DEBUG
 #ifdef PMAP_DEBUG
@@ -924,9 +925,18 @@ static inline bool
 pmap_is_cached(pmap_t pm)
 {
 #ifdef ARM_MMU_EXTENDED
-	struct pmap_tlb_info * const ti = cpu_tlb_info(curcpu());
-	if (pm == pmap_kernel() || PMAP_PAI_ASIDVALID_P(PMAP_PAI(pm, ti), ti))
+	if (pm == pmap_kernel())
 		return true;
+#ifdef MULTIPROCESSOR
+	// Is this pmap active on any CPU?
+	if (!kcpuset_iszero(pm->pm_active))
+		return true;
+#else
+	struct pmap_tlb_info * const ti = cpu_tlb_info(curcpu());
+	// Is this pmap active?
+	if (PMAP_PAI_ASIDVALID_P(PMAP_PAI(pm, ti), ti))
+		return true;
+#endif
 #else
 	struct cpu_info * const ci = curcpu();
 	if (pm == pmap_kernel() || ci->ci_pmap_lastuser == NULL
@@ -3661,6 +3671,7 @@ pmap_kenter_pa(vaddr_t va, paddr_t pa, vm_prot_t prot, u_int flags)
 	}
 
 	pmap_t kpm = pmap_kernel();
+	pmap_acquire_pmap_lock(kpm);
 	struct l2_bucket * const l2b = pmap_get_l2_bucket(kpm, va);
 	const size_t l1slot __diagused = l1pte_index(va);
 	KASSERTMSG(l2b != NULL,
@@ -3708,6 +3719,7 @@ pmap_kenter_pa(vaddr_t va, paddr_t pa, vm_prot_t prot, u_int flags)
 			cpu_cpwait();
 		}
 	}
+	pmap_release_pmap_lock(kpm);
 
 	pt_entry_t npte = L2_S_PROTO | pa | L2_S_PROT(PTE_KERNEL, prot)
 	    | ((flags & PMAP_NOCACHE)
@@ -3804,6 +3816,8 @@ pmap_kremove(vaddr_t va, vsize_t len)
 
 	const vaddr_t eva = va + len;
 
+	pmap_acquire_pmap_lock(pmap_kernel());
+
 	while (va < eva) {
 		vaddr_t next_bucket = L2_NEXT_BUCKET_VA(va);
 		if (next_bucket > eva)
@@ -3865,6 +3879,7 @@ pmap_kremove(vaddr_t va, vsize_t len)
 		total_mappings += mappings;
 #endif
 	}
+	pmap_release_pmap_lock(pmap_kernel());
 	cpu_cpwait();
 	UVMHIST_LOG(maphist, "  <--- done (%u mappings removed)",
 	    total_mappings, 0, 0, 0);
@@ -4937,6 +4952,7 @@ pmap_deactivate(struct lwp *l)
 	pmap_tlb_asid_deactivate(pm);
 	cpu_setttb(pmap_kernel()->pm_l1_pa, KERNEL_PID);
 	ci->ci_pmap_cur = pmap_kernel();
+	ci->ci_pmap_asid_cur = KERNEL_PID;
 	kpreempt_enable();
 #else
 	/*

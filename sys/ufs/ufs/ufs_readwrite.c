@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_readwrite.c,v 1.116 2015/03/29 14:39:41 riastradh Exp $	*/
+/*	$NetBSD: ufs_readwrite.c,v 1.120 2015/04/12 22:48:38 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.116 2015/03/29 14:39:41 riastradh Exp $");
+__KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.120 2015/04/12 22:48:38 riastradh Exp $");
 
 #ifdef LFS_READWRITE
 #define	FS			struct lfs
@@ -328,6 +328,33 @@ WRITE(void *v)
 
 	KASSERT(vp->v_type == VREG);
 
+	/*
+	 * XXX The entire write operation must occur in a single WAPBL
+	 * transaction because it may allocate disk blocks, if
+	 * appending or filling holes, which is allowed to happen only
+	 * if the write fully succeeds.
+	 *
+	 * If ubc_uiomove fails in the middle with EFAULT, we can clean
+	 * up at the end with UFS_TRUNCATE.  But if the power fails in
+	 * the middle, there would be nobody to deallocate the blocks,
+	 * without an fsck to globally analyze the file system.
+	 *
+	 * If the increasingly inaccurately named WAPBL were augmented
+	 * with rollback records for block allocations, then we could
+	 * split this into multiple transactions and commit the
+	 * allocations in the last one.
+	 *
+	 * But WAPBL doesn't have that notion now, so we'll have to
+	 * live with gigantic transactions and WAPBL tentacles in
+	 * genfs_getpages/putpages to cope with the possibility that
+	 * the transaction may or may not be locked on entry to the
+	 * page cache.
+	 *
+	 * And even if we added that notion to WAPBL, it wouldn't help
+	 * us get rid of the tentacles in genfs_getpages/putpages
+	 * because we'd have to interoperate with old implementations
+	 * that assume they can replay the log without fsck.
+	 */
 	error = UFS_WAPBL_BEGIN(vp->v_mount);
 	if (error) {
 		fstrans_done(vp->v_mount);
@@ -491,7 +518,7 @@ BUFWR(struct vnode *vp, struct uio *uio, int ioflag, kauth_cred_t cred)
 	FS *fs;
 	int flags;
 	struct buf *bp;
-	off_t osize, origoff;
+	off_t osize;
 	int resid, xfersize, size, blkoffset;
 	daddr_t lbn;
 	int extended=0;
@@ -527,7 +554,6 @@ BUFWR(struct vnode *vp, struct uio *uio, int ioflag, kauth_cred_t cred)
 	fstrans_start(vp->v_mount, FSTRANS_SHARED);
 
 	flags = ioflag & IO_SYNC ? B_SYNC : 0;
-	origoff = uio->uio_offset;
 	resid = uio->uio_resid;
 	osize = ip->i_size;
 	error = 0;
@@ -540,9 +566,7 @@ BUFWR(struct vnode *vp, struct uio *uio, int ioflag, kauth_cred_t cred)
 #endif /* !LFS_READWRITE */
 
 	/* XXX Should never have pages cached here.  */
-	mutex_enter(vp->v_interlock);
-	VOP_PUTPAGES(vp, trunc_page(origoff), round_page(origoff + resid),
-	    PGO_CLEANIT | PGO_FREE | PGO_SYNCIO | PGO_JOURNALLOCKED);
+	KASSERT(vp->v_uobj.uo_npages == 0);
 	while (uio->uio_resid > 0) {
 		lbn = ufs_lblkno(fs, uio->uio_offset);
 		blkoffset = ufs_blkoff(fs, uio->uio_offset);

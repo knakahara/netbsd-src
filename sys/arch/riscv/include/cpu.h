@@ -1,4 +1,4 @@
-/* $NetBSD: cpu.h,v 1.2 2015/03/28 16:13:56 matt Exp $ */
+/* $NetBSD: cpu.h,v 1.4 2015/04/01 21:55:03 matt Exp $ */
 
 /*-
  * Copyright (c) 2014 The NetBSD Foundation, Inc.
@@ -33,6 +33,7 @@
 #define _RISCV_CPU_H_
 
 #if defined(_KERNEL) || defined(_KMEMUSER)
+
 struct clockframe {
 	uintptr_t cf_pc;
 	uint32_t cf_sr;
@@ -79,18 +80,19 @@ struct cpu_info {
 	struct evcnt ci_ev_fpu_reenables;
 };
 
+#endif /* _KERNEL || _KMEMUSER */
+
+#ifdef _KERNEL
+
 extern struct cpu_info cpu_info_store;
+
+// This is also in <sys/lwp.h>
+struct lwp;
+static inline struct cpu_info *lwp_getcpu(struct lwp *);
 
 register struct lwp *riscv_curlwp __asm("tp");
 #define	curlwp		riscv_curlwp
-
-static inline struct cpu_info *
-curcpu(void)
-{
-	struct cpu_info *ci;
-	__asm("csrr\t%0, sscratch" : "=r"(ci));
-	return ci;
-}
+#define	curcpu()	lwp_getcpu(curlwp)
 
 static inline cpuid_t
 cpu_number(void)
@@ -144,6 +146,6 @@ cpu_idle(void)
 {
 }
 
-#endif /* _KERNEL || _KMEMUSER */
+#endif /* _KERNEL */
 
 #endif /* _RISCV_CPU_H_ */

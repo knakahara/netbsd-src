@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bge.c,v 1.280 2015/02/17 23:07:56 enami Exp $	*/
+/*	$NetBSD: if_bge.c,v 1.282 2015/04/13 16:33:25 riastradh Exp $	*/
 
 /*
  * Copyright (c) 2001 Wind River Systems
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bge.c,v 1.280 2015/02/17 23:07:56 enami Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bge.c,v 1.282 2015/04/13 16:33:25 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -97,7 +97,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_bge.c,v 1.280 2015/02/17 23:07:56 enami Exp $");
 #include <net/if_media.h>
 #include <net/if_ether.h>
 
-#include <sys/rnd.h>
+#include <sys/rndsource.h>
 
 #ifdef INET
 #include <netinet/in.h>
@@ -5749,7 +5749,10 @@ bge_stop(struct ifnet *ifp, int disable)
 {
 	struct bge_softc *sc = ifp->if_softc;
 
-	callout_stop(&sc->bge_timeout);
+	if (disable)
+		callout_halt(&sc->bge_timeout, NULL);
+	else
+		callout_stop(&sc->bge_timeout);
 
 	/* Disable host interrupts. */
 	BGE_SETBIT(sc, BGE_PCI_MISC_CTL, BGE_PCIMISCCTL_MASK_PCI_INTR);

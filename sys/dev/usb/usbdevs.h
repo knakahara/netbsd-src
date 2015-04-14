@@ -1,10 +1,10 @@
-/*	$NetBSD: usbdevs.h,v 1.685 2015/03/17 08:15:48 macallan Exp $	*/
+/*	$NetBSD: usbdevs.h,v 1.688 2015/04/06 17:16:25 bouyer Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: usbdevs,v 1.692 2015/03/15 01:37:47 nonaka Exp
+ *	NetBSD: usbdevs,v 1.696 2015/04/06 17:15:32 bouyer Exp
  */
 
 /*
@@ -862,6 +862,7 @@
 #define	USB_PRODUCT_APPLE_FOUNTAIN_TP	0x030a		/* Apple Internal Trackpad (Fountain) */
 #define	USB_PRODUCT_APPLE_GEYSER1_TP	0x030b		/* Apple Internal Trackpad (Geyser) */
 #define	USB_PRODUCT_APPLE_MAGICMOUSE	0x030d		/* Magic Mouse */
+#define	USB_PRODUCT_APPLE_MAGICTRACKPAD	0x030e		/* Magic Trackpad */
 #define	USB_PRODUCT_APPLE_BLUETOOTH_HIDMODE	0x1000		/* Bluetooth HCI (HID-proxy mode) */
 #define	USB_PRODUCT_APPLE_EXT_KBD_HUB	0x1003		/* Hub in Apple Extended USB Keyboard */
 #define	USB_PRODUCT_APPLE_SPEAKERS	0x1101		/* Speakers */
@@ -3179,10 +3180,13 @@
 #define	USB_PRODUCT_TENX_MISSILE	0x0202		/* Missile Launcher */
 #define	USB_PRODUCT_TENX_TEMPER	0x660c		/* TEMPer sensor */
 
-/* Texas Intel products */
+/* Texas Instruments products */
 #define	USB_PRODUCT_TI_UTUSB41	0x1446		/* UT-USB41 hub */
 #define	USB_PRODUCT_TI_TUSB2046	0x2046		/* TUSB2046 hub */
+#define	USB_PRODUCT_TI_TUSB3410	0x3410		/* TUSB3410 */
 #define	USB_PRODUCT_TI_NEXII	0x5409		/* Nex II Digital */
+#define	USB_PRODUCT_TI_MSP430_JTAG	0xf430		/* MSP-FET430UIF JTAG */
+#define	USB_PRODUCT_TI_MSP430	0xf432		/* MSP-FET430UIF */
 
 /* Thrustmaster products */
 #define	USB_PRODUCT_THRUST_FUSION_PAD	0xa0a3		/* Fusion Digital Gamepad */
@@ -3350,6 +3354,7 @@
 #define	USB_PRODUCT_XIRLINK_PCCAM	0x8080		/* IBM PC Camera */
 
 /* Conexant */
+#define	USB_PRODUCT_CONEXANT_MODEM_1	0x1329		/* USB Modem */
 #define	USB_PRODUCT_CONEXANT_PRISM_GT_1	0x2000		/* PrismGT USB 2.0 WLAN */
 #define	USB_PRODUCT_CONEXANT_PRISM_GT_2	0x2002		/* PrismGT USB 2.0 WLAN */
 

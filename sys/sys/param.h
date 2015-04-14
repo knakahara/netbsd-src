@@ -1,4 +1,4 @@
-/*	$NetBSD: param.h,v 1.468 2015/03/28 19:29:16 maxv Exp $	*/
+/*	$NetBSD: param.h,v 1.470 2015/04/13 21:32:04 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -63,7 +63,7 @@
  *	2.99.9		(299000900)
  */
 
-#define	__NetBSD_Version__	799000800	/* NetBSD 7.99.8 */
+#define	__NetBSD_Version__	799000900	/* NetBSD 7.99.9 */
 
 #define __NetBSD_Prereq__(M,m,p) (((((M) * 100000000) + \
     (m) * 1000000) + (p) * 100) <= __NetBSD_Version__)
@@ -130,13 +130,12 @@
 #endif /* (MAXUPRC - 0) < CHILD_MAX */
 #endif /* !defined(MAXUPRC) */
 
+/* Macros for min/max. */
 #define	MIN(a,b)	((/*CONSTCOND*/(a)<(b))?(a):(b))
 #define	MAX(a,b)	((/*CONSTCOND*/(a)>(b))?(a):(b))
 
 /* More types and definitions used throughout the kernel. */
 #ifdef _KERNEL
-/* Macros for min/max. */
-
 #include <sys/cdefs.h>
 #include <sys/errno.h>
 #include <sys/time.h>

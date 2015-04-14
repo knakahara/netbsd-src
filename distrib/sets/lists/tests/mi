@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.613 2015/03/29 19:37:02 chopps Exp $
+# $NetBSD: mi,v 1.616 2015/04/09 16:47:57 ginsbach Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -2454,6 +2454,7 @@
 ./usr/tests/lib/libc/inet			tests-lib-tests
 ./usr/tests/lib/libc/inet/Atffile		tests-lib-tests		atf
 ./usr/tests/lib/libc/inet/Kyuafile		tests-lib-tests		atf,kyua
+./usr/tests/lib/libc/inet/t_inet_addr		tests-lib-tests		atf
 ./usr/tests/lib/libc/inet/t_inet_network	tests-lib-tests		atf
 ./usr/tests/lib/libc/locale			tests-lib-tests
 ./usr/tests/lib/libc/locale/Atffile		tests-lib-tests		atf
@@ -2638,6 +2639,7 @@
 ./usr/tests/lib/libc/sys/Atffile		tests-lib-tests		atf
 ./usr/tests/lib/libc/sys/Kyuafile		tests-lib-tests		atf,kyua
 ./usr/tests/lib/libc/sys/t_access		tests-lib-tests		atf
+./usr/tests/lib/libc/sys/t_bind			tests-lib-tests		atf
 ./usr/tests/lib/libc/sys/t_bitops		tests-obsolete		obsolete
 ./usr/tests/lib/libc/sys/t_cerror		tests-obsolete		obsolete
 ./usr/tests/lib/libc/sys/t_chroot		tests-lib-tests		atf
@@ -3762,6 +3764,7 @@
 ./usr/tests/usr.bin/xlint/lint1/d_type_conv1.c			tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_type_conv2.c			tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_type_conv3.c			tests-usr.bin-tests	atf
+./usr/tests/usr.bin/xlint/lint1/d_typefun.c			tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_typename_as_var.c		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/d_zero_sized_arrays.c		tests-usr.bin-tests	atf
 ./usr/tests/usr.bin/xlint/lint1/t_integration			tests-usr.bin-tests	atf
