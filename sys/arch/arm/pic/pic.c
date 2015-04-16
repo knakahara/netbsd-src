@@ -1,4 +1,4 @@
-/*	$NetBSD: pic.c,v 1.32 2015/04/12 15:32:19 matt Exp $	*/
+/*	$NetBSD: pic.c,v 1.34 2015/04/15 15:45:06 matt Exp $	*/
 /*-
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -33,7 +33,7 @@
 #include "opt_multiprocessor.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pic.c,v 1.32 2015/04/12 15:32:19 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pic.c,v 1.34 2015/04/15 15:45:06 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/atomic.h>
@@ -118,6 +118,13 @@ pic_set_priority(struct cpu_info *ci, int newipl)
 
 #ifdef MULTIPROCESSOR
 int
+pic_ipi_ast(void *arg)
+{
+	setsoftast(curcpu());
+	return 1;
+}
+
+int
 pic_ipi_nop(void *arg)
 {
 	/* do nothing */
@@ -146,7 +153,16 @@ pic_ipi_ddb(void *arg)
 	kdb_trap(-1, arg);
 	return 1;
 }
+
+#ifdef __HAVE_PREEMPTION
+int
+pic_ipi_kpreempt(void *arg)
+{
+	atomic_or_uint(&curcpu()->ci_astpending, __BIT(1));
+	return 1;
+}
 #endif
+#endif /* MULTIPROCESSOR */
 
 void
 intr_cpu_init(struct cpu_info *ci)
@@ -556,7 +572,7 @@ pic_do_pending_ints(register_t psw, int newipl, void *frame)
 	percpu_putref(pic_pending_percpu);
 #endif
 #endif /* __HAVE_PIC_PENDING_INTRS */
-#ifdef __HAVE_PREEEMPTION
+#ifdef __HAVE_PREEMPTION
 	if (newipl == IPL_NONE && (ci->ci_astpending & __BIT(1))) {
 		pic_set_priority(ci, IPL_SCHED);
 		kpreempt(0);
