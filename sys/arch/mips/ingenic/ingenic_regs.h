@@ -1,4 +1,4 @@
-/*	$NetBSD: ingenic_regs.h,v 1.12 2015/03/25 11:23:26 macallan Exp $ */
+/*	$NetBSD: ingenic_regs.h,v 1.14 2015/04/21 19:56:01 macallan Exp $ */
 
 /*-
  * Copyright (c) 2014 Michael Lorenz
@@ -26,10 +26,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <mips/locore.h>
-
 #ifndef INGENIC_REGS_H
 #define INGENIC_REGS_H
+
+/* for wbflush() */
+#include <mips/locore.h>
 
 /* UARTs, mostly 16550 compatible with 32bit spaced registers */
 #define JZ_UART0 0x10030000
@@ -37,6 +38,10 @@
 #define JZ_UART2 0x10032000
 #define JZ_UART3 0x10033000
 #define JZ_UART4 0x10034000
+
+/* LCD controller base addresses, registers are in jzfb_regs.h */
+#define JZ_LCDC0_BASE 0x13050000
+#define JZ_LCDC1_BASE 0x130a0000
 
 /* watchdog */
 #define JZ_WDOG_TDR	0x10002000	/* compare */
@@ -176,6 +181,12 @@ MFC0(uint32_t r, uint32_t s)
 	#define JZ_PLLBP	0x00000002	/* PLL bypass */
 	#define JZ_PLLEN	0x00000001	/* PLL enable */
 #define JZ_CLKGR0	0x10000020	/* CLocK Gating Registers */
+	#define CLK_OTG0	(1 << 2)
+	#define CLK_SMB0	(1 << 5)
+	#define CLK_SMB1	(1 << 6)
+	#define CLK_UHC		(1 << 24)
+	#define CLK_SMB2	(1 << 25)
+	#define CLK_LCD		(1 << 28)
 #define JZ_OPCR		0x10000024	/* Oscillator Power Control Reg. */
 	#define OPCR_IDLE_DIS	0x80000000	/* don't stop CPU clk on idle */
 	#define OPCR_GPU_CLK_ST	0x40000000	/* stop GPU clock */
@@ -192,6 +203,12 @@ MFC0(uint32_t r, uint32_t s)
 	#define OPCR_CPU_MODE	0x00000002	/* 1 access 'accelerated' */
 	#define OPCR_OSE	0x00000001	/* disable EXTCLK */
 #define JZ_CLKGR1	0x10000028	/* CLocK Gating Registers */
+	#define CLK_SMB3	(1 << 0)
+	#define CLK_OTG1	(1 << 8)
+	#define CLK_HDMI	(1 << 9)
+	#define CLK_AHB_MON	(1 << 11)
+	#define CLK_SMB4	(1 << 12)
+
 #define JZ_USBPCR	0x1000003c
 	#define PCR_USB_MODE		0x80000000	/* 1 - otg */
 	#define PCR_AVLD_REG		0x40000000
@@ -459,7 +476,7 @@ gpio_as_intr_level(uint32_t g, int pin)
 	#define JZ_TXABT	0x40	/* ABORT occured */
 	#define JZ_TXEMP	0x10	/* TX FIFO is low */
 	#define JZ_TXOF		0x08	/* TX FIFO is high */
-	#define JZ_RXFL		0x04	/* RX FIFO is low */
+	#define JZ_RXFL		0x04	/* RX FIFO is at  JZ_SMBRXTL*/
 	#define JZ_RXOF		0x02	/* RX FIFO is high */
 	#define JZ_RXUF		0x01	/* RX FIFO underflow */
 #define JZ_SMBINTM	0x30 /* SMB Interrupt Mask */

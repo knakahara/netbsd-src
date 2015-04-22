@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.c,v 1.48 2015/01/14 18:51:56 pooka Exp $	*/
+/*	$NetBSD: intr.c,v 1.50 2015/04/21 16:18:50 pooka Exp $	*/
 
 /*
  * Copyright (c) 2008-2010, 2015 Antti Kantee.  All Rights Reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.48 2015/01/14 18:51:56 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.50 2015/04/21 16:18:50 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/atomic.h>
@@ -80,7 +80,6 @@ static struct rumpuser_cv *sicpucv;
 
 kcondvar_t lbolt; /* Oh Kath Ra */
 
-static u_int ticks;
 static int ncpu_final;
 
 static u_int
@@ -88,7 +87,7 @@ rumptc_get(struct timecounter *tc)
 {
 
 	KASSERT(rump_threads);
-	return ticks;
+	return (u_int)hardclock_ticks;
 }
 
 static struct timecounter rumptc = {
@@ -111,7 +110,6 @@ doclock(void *noarg)
 	long nsec;
 	int error;
 	int cpuindx = curcpu()->ci_index;
-	extern int hz;
 
 	error = rumpuser_clock_gettime(RUMPUSER_CLOCK_ABSMONO, &sec, &nsec);
 	if (error)
@@ -133,7 +131,7 @@ doclock(void *noarg)
 		if (cpuindx != 0)
 			continue;
 
-		if ((++ticks % hz) == 0) {
+		if ((++hardclock_ticks % hz) == 0) {
 			cv_broadcast(&lbolt);
 		}
 		tc_ticktock();

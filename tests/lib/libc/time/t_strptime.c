@@ -1,4 +1,4 @@
-/* $NetBSD: t_strptime.c,v 1.1 2011/01/13 00:14:10 pgoyette Exp $ */
+/* $NetBSD: t_strptime.c,v 1.3 2015/04/21 17:39:50 ginsbach Exp $ */
 
 /*-
  * Copyright (c) 1998, 2008 The NetBSD Foundation, Inc.
@@ -32,7 +32,7 @@
 #include <sys/cdefs.h>
 __COPYRIGHT("@(#) Copyright (c) 2008\
  The NetBSD Foundation, inc. All rights reserved.");
-__RCSID("$NetBSD: t_strptime.c,v 1.1 2011/01/13 00:14:10 pgoyette Exp $");
+__RCSID("$NetBSD: t_strptime.c,v 1.3 2015/04/21 17:39:50 ginsbach Exp $");
 
 #include <time.h>
 
@@ -113,12 +113,6 @@ ATF_TC_BODY(common, tc)
 
 	h_pass("1980", "%Y", 4, -1, -1, -1, -1, -1, 80, -1, -1);
 	h_pass("1980", "%EY", 4, -1, -1, -1, -1, -1, 80, -1, -1);
-
-	h_pass("0", "%S", 1, 0, -1, -1, -1, -1, -1, -1, -1);
-	h_pass("59", "%S", 2, 59, -1, -1, -1, -1, -1, -1, -1);
-	h_pass("60", "%S", 2, 60, -1, -1, -1, -1, -1, -1, -1);
-	h_pass("61", "%S", 2, 61, -1, -1, -1, -1, -1, -1, -1);
-	h_fail("62", "%S");
 }
 
 ATF_TC(day);
@@ -126,7 +120,8 @@ ATF_TC(day);
 ATF_TC_HEAD(day, tc)
 {
 
-	atf_tc_set_md_var(tc, "descr", "Checks strptime(3): day names");
+	atf_tc_set_md_var(tc, "descr",
+			  "Checks strptime(3) day name conversions [aA]");
 }
 
 ATF_TC_BODY(day, tc)
@@ -178,7 +173,8 @@ ATF_TC(month);
 ATF_TC_HEAD(month, tc)
 {
 
-	atf_tc_set_md_var(tc, "descr", "Checks strptime(3): month names");
+	atf_tc_set_md_var(tc, "descr",
+			  "Checks strptime(3) month name conversions [bB]");
 }
 
 ATF_TC_BODY(month, tc)
@@ -241,12 +237,32 @@ ATF_TC_BODY(month, tc)
 	h_pass("septembe", "%B", 3, -1, -1, -1, -1, 8, -1, -1, -1);
 }
 
+ATF_TC(seconds);
+
+ATF_TC_HEAD(seconds, tc)
+{
+
+	atf_tc_set_md_var(tc, "descr",
+			  "Checks strptime(3) seconds conversions [S]");
+}
+
+ATF_TC_BODY(seconds, tc)
+{
+
+	h_pass("0", "%S", 1, 0, -1, -1, -1, -1, -1, -1, -1);
+	h_pass("59", "%S", 2, 59, -1, -1, -1, -1, -1, -1, -1);
+	h_pass("60", "%S", 2, 60, -1, -1, -1, -1, -1, -1, -1);
+	h_pass("61", "%S", 2, 61, -1, -1, -1, -1, -1, -1, -1);
+	h_fail("62", "%S");
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 
 	ATF_TP_ADD_TC(tp, common);
 	ATF_TP_ADD_TC(tp, day);
 	ATF_TP_ADD_TC(tp, month);
+	ATF_TP_ADD_TC(tp, seconds);
 
 	return atf_no_error();
 }
