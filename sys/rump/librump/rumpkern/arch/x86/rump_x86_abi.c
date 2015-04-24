@@ -1,9 +1,7 @@
-/*	$NetBSD: net_component.c,v 1.3 2015/04/23 07:55:24 pooka Exp $	*/
+/*	$NetBSD: rump_x86_abi.c,v 1.1 2015/04/22 18:12:39 pooka Exp $	*/
 
-/*
- * Copyright (c) 2009 Antti Kantee.  All Rights Reserved.
- *
- * Development of this software was supported by The Nokia Foundation
+/*-
+ * Copyright (c) 2015 Antti Kantee.  All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,41 +26,13 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: net_component.c,v 1.3 2015/04/23 07:55:24 pooka Exp $");
-
-#include <sys/param.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-
-#include <net/if.h>
-#include <net/route.h>
+__KERNEL_RCSID(0, "$NetBSD: rump_x86_abi.c,v 1.1 2015/04/22 18:12:39 pooka Exp $");
 
 #include "rump_private.h"
-#include "rump_net_private.h"
 
-RUMP_COMPONENT(RUMP_COMPONENT_NET)
+int
+rump_nativeabi_p(void)
 {
 
-	ifinit1();
-	ifinit();
-}
-
-RUMP_COMPONENT(RUMP_COMPONENT_NET_ROUTE)
-{
-	extern struct domain routedomain, linkdomain;
-#ifdef COMPAT_50
-	extern struct domain compat_50_routedomain;
-#endif
-
-	domain_attach(&linkdomain);
-	domain_attach(&routedomain);
-#ifdef COMPAT_50
-	domain_attach(&compat_50_routedomain);
-#endif
-}
-
-RUMP_COMPONENT(RUMP_COMPONENT_NET_IF)
-{
-
-	loopattach(1);
+	return 1;
 }
