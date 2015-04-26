@@ -1,4 +1,4 @@
-/*	$NetBSD: udp_usrreq.c,v 1.218 2015/04/03 20:01:07 rtr Exp $	*/
+/*	$NetBSD: udp_usrreq.c,v 1.220 2015/04/26 21:40:49 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: udp_usrreq.c,v 1.218 2015/04/03 20:01:07 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: udp_usrreq.c,v 1.220 2015/04/26 21:40:49 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_compat_netbsd.h"
@@ -895,7 +895,7 @@ udp_detach(struct socket *so)
 }
 
 static int
-udp_accept(struct socket *so, struct mbuf *nam)
+udp_accept(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 
@@ -1018,7 +1018,7 @@ udp_stat(struct socket *so, struct stat *ub)
 }
 
 static int
-udp_peeraddr(struct socket *so, struct mbuf *nam)
+udp_peeraddr(struct socket *so, struct sockaddr *nam)
 {
 	int s;
 
@@ -1027,14 +1027,14 @@ udp_peeraddr(struct socket *so, struct mbuf *nam)
 	KASSERT(nam != NULL);
 
 	s = splsoftnet();
-	in_setpeeraddr(sotoinpcb(so), nam);
+	in_setpeeraddr(sotoinpcb(so), (struct sockaddr_in *)nam);
 	splx(s);
 
 	return 0;
 }
 
 static int
-udp_sockaddr(struct socket *so, struct mbuf *nam)
+udp_sockaddr(struct socket *so, struct sockaddr *nam)
 {
 	int s;
 
@@ -1043,7 +1043,7 @@ udp_sockaddr(struct socket *so, struct mbuf *nam)
 	KASSERT(nam != NULL);
 
 	s = splsoftnet();
-	in_setsockaddr(sotoinpcb(so), nam);
+	in_setsockaddr(sotoinpcb(so), (struct sockaddr_in *)nam);
 	splx(s);
 
 	return 0;
@@ -1140,40 +1140,6 @@ udp_purgeif(struct socket *so, struct ifnet *ifp)
 	in_pcbpurgeif(&udbtable, ifp);
 	mutex_exit(softnet_lock);
 	splx(s);
-
-	return 0;
-}
-
-static int
-udp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-    struct mbuf *control, struct lwp *l)
-{
-	KASSERT(req != PRU_ATTACH);
-	KASSERT(req != PRU_DETACH);
-	KASSERT(req != PRU_ACCEPT);
-	KASSERT(req != PRU_BIND);
-	KASSERT(req != PRU_LISTEN);
-	KASSERT(req != PRU_CONNECT);
-	KASSERT(req != PRU_CONNECT2);
-	KASSERT(req != PRU_DISCONNECT);
-	KASSERT(req != PRU_SHUTDOWN);
-	KASSERT(req != PRU_ABORT);
-	KASSERT(req != PRU_CONTROL);
-	KASSERT(req != PRU_SENSE);
-	KASSERT(req != PRU_PEERADDR);
-	KASSERT(req != PRU_SOCKADDR);
-	KASSERT(req != PRU_RCVD);
-	KASSERT(req != PRU_RCVOOB);
-	KASSERT(req != PRU_SEND);
-	KASSERT(req != PRU_SENDOOB);
-	KASSERT(req != PRU_PURGEIF);
-
-	KASSERT(solocked(so));
-
-	if (sotoinpcb(so) == NULL)
-		return EINVAL;
-
-	panic("udp_usrreq");
 
 	return 0;
 }
@@ -1415,7 +1381,6 @@ PR_WRAP_USRREQS(udp)
 #define	udp_send	udp_send_wrapper
 #define	udp_sendoob	udp_sendoob_wrapper
 #define	udp_purgeif	udp_purgeif_wrapper
-#define	udp_usrreq	udp_usrreq_wrapper
 
 const struct pr_usrreqs udp_usrreqs = {
 	.pr_attach	= udp_attach,
@@ -1437,5 +1402,4 @@ const struct pr_usrreqs udp_usrreqs = {
 	.pr_send	= udp_send,
 	.pr_sendoob	= udp_sendoob,
 	.pr_purgeif	= udp_purgeif,
-	.pr_generic	= udp_usrreq,
 };

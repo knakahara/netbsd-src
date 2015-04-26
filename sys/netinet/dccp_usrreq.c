@@ -1,5 +1,5 @@
 /*	$KAME: dccp_usrreq.c,v 1.67 2005/11/03 16:05:04 nishida Exp $	*/
-/*	$NetBSD: dccp_usrreq.c,v 1.2 2015/04/04 04:33:38 rtr Exp $ */
+/*	$NetBSD: dccp_usrreq.c,v 1.4 2015/04/26 21:40:49 rtr Exp $ */
 
 /*
  * Copyright (c) 2003 Joacim Häggmark, Magnus Erixzon, Nils-Erik Mattsson 
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dccp_usrreq.c,v 1.2 2015/04/04 04:33:38 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dccp_usrreq.c,v 1.4 2015/04/26 21:40:49 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_dccp.h"
@@ -2270,7 +2270,7 @@ dccp_listen(struct socket *so, struct lwp *td)
  * Accepts a connection (accept system call)
  */
 static int
-dccp_accept(struct socket *so, struct mbuf *nam)
+dccp_accept(struct socket *so, struct sockaddr *nam)
 {
 	struct inpcb *inp = NULL;
 	int error = 0;
@@ -2293,7 +2293,7 @@ dccp_accept(struct socket *so, struct mbuf *nam)
 	}
 	INP_LOCK(inp);
 	INP_INFO_RUNLOCK(&dccpbinfo);
-	in_setpeeraddr(inp, nam);
+	in_setpeeraddr(inp, (struct sockaddr_in *)nam);
 
 	return error;
 }
@@ -2912,24 +2912,26 @@ dccp_stat(struct socket *so, struct stat *ub)
 }
 
 static int
-dccp_peeraddr(struct socket *so, struct mbuf *nam)
+dccp_peeraddr(struct socket *so, struct sockaddr *nam)
 {
+
 	KASSERT(solocked(so));
 	KASSERT(sotoinpcb(so) != NULL);
 	KASSERT(nam != NULL);
 
-	in_setpeeraddr(sotoinpcb(so), nam);
+	in_setpeeraddr(sotoinpcb(so), (struct sockaddr_in *)nam);
 	return 0;
 }
 
 static int
-dccp_sockaddr(struct socket *so, struct mbuf *nam)
+dccp_sockaddr(struct socket *so, struct sockaddr *nam)
 {
+
 	KASSERT(solocked(so));
 	KASSERT(sotoinpcb(so) != NULL);
 	KASSERT(nam != NULL);
 
-	in_setsockaddr(sotoinpcb(so), nam);
+	in_setsockaddr(sotoinpcb(so), (struct sockaddr_in *)nam);
 	return 0;
 }
 
@@ -2972,40 +2974,6 @@ dccp_purgeif(struct socket *so, struct ifnet *ifp)
 	in_pcbpurgeif(&dccpbtable, ifp);
 	mutex_exit(softnet_lock);
 	splx(s);
-
-	return 0;
-}
-
-int
-dccp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-	    struct mbuf *control, struct lwp *l)
-{
-	KASSERT(req != PRU_ATTACH);
-	KASSERT(req != PRU_DETACH);
-	KASSERT(req != PRU_ACCEPT);
-	KASSERT(req != PRU_BIND);
-	KASSERT(req != PRU_LISTEN);
-	KASSERT(req != PRU_CONNECT);
-	KASSERT(req != PRU_CONNECT2);
-	KASSERT(req != PRU_DISCONNECT);
-	KASSERT(req != PRU_SHUTDOWN);
-	KASSERT(req != PRU_ABORT);
-	KASSERT(req != PRU_CONTROL);
-	KASSERT(req != PRU_SENSE);
-	KASSERT(req != PRU_PEERADDR);
-	KASSERT(req != PRU_SOCKADDR);
-	KASSERT(req != PRU_RCVD);
-	KASSERT(req != PRU_RCVOOB);
-	KASSERT(req != PRU_SEND);
-	KASSERT(req != PRU_SENDOOB);
-	KASSERT(req != PRU_PURGEIF);
-
-	KASSERT(solocked(so));
-
-	if (sotoinpcb(so) == NULL)
-		return EINVAL;
-
-	panic("dccp_usrreq");
 
 	return 0;
 }
@@ -3382,7 +3350,6 @@ PR_WRAP_USRREQS(dccp)
 #define	dccp_send	dccp_send_wrapper
 #define	dccp_sendoob	dccp_sendoob_wrapper
 #define	dccp_purgeif	dccp_purgeif_wrapper
-#define	dccp_usrreq	dccp_usrreq_wrapper
 
 const struct pr_usrreqs dccp_usrreqs = {
 	.pr_attach	= dccp_attach,
@@ -3404,5 +3371,4 @@ const struct pr_usrreqs dccp_usrreqs = {
 	.pr_send	= dccp_send,
 	.pr_sendoob	= dccp_sendoob,
 	.pr_purgeif	= dccp_purgeif,
-	.pr_generic	= dccp_usrreq,
 };

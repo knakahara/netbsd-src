@@ -1,4 +1,4 @@
-/*	$NetBSD: sockin.c,v 1.59 2015/04/03 20:01:08 rtr Exp $	*/
+/*	$NetBSD: sockin.c,v 1.61 2015/04/26 21:40:49 rtr Exp $	*/
 
 /*
  * Copyright (c) 2008, 2009 Antti Kantee.  All Rights Reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sockin.c,v 1.59 2015/04/03 20:01:08 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sockin.c,v 1.61 2015/04/26 21:40:49 rtr Exp $");
 
 #include <sys/param.h>
 #include <sys/condvar.h>
@@ -68,7 +68,7 @@ static int	sockin_do_init(void);
 static void	sockin_init(void);
 static int	sockin_attach(struct socket *, int);
 static void	sockin_detach(struct socket *);
-static int	sockin_accept(struct socket *, struct mbuf *);
+static int	sockin_accept(struct socket *, struct sockaddr *);
 static int	sockin_connect2(struct socket *, struct socket *);
 static int	sockin_bind(struct socket *, struct sockaddr *, struct lwp *);
 static int	sockin_listen(struct socket *, struct lwp *);
@@ -78,16 +78,14 @@ static int	sockin_shutdown(struct socket *);
 static int	sockin_abort(struct socket *);
 static int	sockin_ioctl(struct socket *, u_long, void *, struct ifnet *);
 static int	sockin_stat(struct socket *, struct stat *);
-static int	sockin_peeraddr(struct socket *, struct mbuf *);
-static int	sockin_sockaddr(struct socket *, struct mbuf *);
+static int	sockin_peeraddr(struct socket *, struct sockaddr *);
+static int	sockin_sockaddr(struct socket *, struct sockaddr *);
 static int	sockin_rcvd(struct socket *, int, struct lwp *);
 static int	sockin_recvoob(struct socket *, struct mbuf *, int);
 static int	sockin_send(struct socket *, struct mbuf *, struct mbuf *,
 			    struct mbuf *, struct lwp *);
 static int	sockin_sendoob(struct socket *, struct mbuf *, struct mbuf *);
 static int	sockin_purgeif(struct socket *, struct ifnet *);
-static int	sockin_usrreq(struct socket *, int, struct mbuf *,
-			      struct mbuf *, struct mbuf *, struct lwp *);
 static int	sockin_ctloutput(int op, struct socket *, struct sockopt *);
 
 static const struct pr_usrreqs sockin_usrreqs = {
@@ -110,7 +108,6 @@ static const struct pr_usrreqs sockin_usrreqs = {
 	.pr_send = sockin_send,
 	.pr_sendoob = sockin_sendoob,
 	.pr_purgeif = sockin_purgeif,
-	.pr_generic = sockin_usrreq,
 };
 
 const struct protosw sockinsw[] = {
@@ -485,7 +482,7 @@ sockin_detach(struct socket *so)
 }
 
 static int
-sockin_accept(struct socket *so, struct mbuf *nam)
+sockin_accept(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 
@@ -574,32 +571,32 @@ sockin_stat(struct socket *so, struct stat *ub)
 }
 
 static int
-sockin_peeraddr(struct socket *so, struct mbuf *nam)
+sockin_peeraddr(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 
 	int error = 0;
-	int slen = nam->m_len;
+	int slen = nam->sa_len;
 
 	error = rumpcomp_sockin_getname(SO2S(so),
-	    mtod(nam, struct sockaddr *), &slen, RUMPCOMP_SOCKIN_PEERNAME);
+	    nam, &slen, RUMPCOMP_SOCKIN_PEERNAME);
 	if (error == 0)
-		nam->m_len = slen;
+		nam->sa_len = slen;
 	return error;
 }
 
 static int
-sockin_sockaddr(struct socket *so, struct mbuf *nam)
+sockin_sockaddr(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 
 	int error = 0;
-	int slen = nam->m_len;
+	int slen = nam->sa_len;
 
 	error = rumpcomp_sockin_getname(SO2S(so),
-	    mtod(nam, struct sockaddr *), &slen, RUMPCOMP_SOCKIN_SOCKNAME);
+	    nam, &slen, RUMPCOMP_SOCKIN_SOCKNAME);
 	if (error == 0)
-		nam->m_len = slen;
+		nam->sa_len = slen;
 	return error;
 }
 
@@ -692,33 +689,6 @@ sockin_purgeif(struct socket *so, struct ifnet *ifp)
 {
 
 	panic("sockin_purgeif: IMPLEMENT ME, purgeif not supported");
-}
-
-static int
-sockin_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-	struct mbuf *control, struct lwp *l)
-{
-	KASSERT(req != PRU_ACCEPT);
-	KASSERT(req != PRU_BIND);
-	KASSERT(req != PRU_LISTEN);
-	KASSERT(req != PRU_CONNECT);
-	KASSERT(req != PRU_CONNECT2);
-	KASSERT(req != PRU_DISCONNECT);
-	KASSERT(req != PRU_SHUTDOWN);
-	KASSERT(req != PRU_ABORT);
-	KASSERT(req != PRU_CONTROL);
-	KASSERT(req != PRU_SENSE);
-	KASSERT(req != PRU_PEERADDR);
-	KASSERT(req != PRU_SOCKADDR);
-	KASSERT(req != PRU_RCVD);
-	KASSERT(req != PRU_RCVOOB);
-	KASSERT(req != PRU_SEND);
-	KASSERT(req != PRU_SENDOOB);
-	KASSERT(req != PRU_PURGEIF);
-
-	panic("sockin_usrreq: IMPLEMENT ME, req %d not supported", req);
-
-	return 0;
 }
 
 static int

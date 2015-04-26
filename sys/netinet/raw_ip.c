@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_ip.c,v 1.147 2015/04/03 20:01:07 rtr Exp $	*/
+/*	$NetBSD: raw_ip.c,v 1.150 2015/04/26 21:40:49 rtr Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -65,7 +65,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_ip.c,v 1.147 2015/04/03 20:01:07 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_ip.c,v 1.150 2015/04/26 21:40:49 rtr Exp $");
 
 #include "opt_inet.h"
 #include "opt_compat_netbsd.h"
@@ -111,7 +111,7 @@ struct inpcbtable rawcbtable;
 
 int	 rip_pcbnotify(struct inpcbtable *, struct in_addr,
     struct in_addr, int, int, void (*)(struct inpcb *, int));
-int	 rip_connect_pcb(struct inpcb *, struct mbuf *);
+static int	 rip_connect_pcb(struct inpcb *, struct sockaddr_in *);
 static void	 rip_disconnect1(struct inpcb *);
 
 static void sysctl_net_inet_raw_setup(struct sysctllog **);
@@ -480,12 +480,9 @@ rip_ctloutput(int op, struct socket *so, struct sockopt *sopt)
 }
 
 int
-rip_connect_pcb(struct inpcb *inp, struct mbuf *nam)
+rip_connect_pcb(struct inpcb *inp, struct sockaddr_in *addr)
 {
-	struct sockaddr_in *addr = mtod(nam, struct sockaddr_in *);
 
-	if (nam->m_len != sizeof(*addr))
-		return (EINVAL);
 	if (IFNET_EMPTY())
 		return (EADDRNOTAVAIL);
 	if (addr->sin_family != AF_INET)
@@ -547,7 +544,7 @@ rip_detach(struct socket *so)
 }
 
 static int
-rip_accept(struct socket *so, struct mbuf *nam)
+rip_accept(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 
@@ -612,7 +609,9 @@ rip_connect(struct socket *so, struct mbuf *nam, struct lwp *l)
 	KASSERT(nam != NULL);
 
 	s = splsoftnet();
-	error = rip_connect_pcb(inp, nam);
+	if (nam->m_len != sizeof(struct sockaddr_in))
+		return EINVAL;
+	error = rip_connect_pcb(inp, mtod(nam, struct sockaddr_in *));
 	if (! error)
 		soisconnected(so);
 	splx(s);
@@ -688,7 +687,7 @@ rip_stat(struct socket *so, struct stat *ub)
 }
 
 static int
-rip_peeraddr(struct socket *so, struct mbuf *nam)
+rip_peeraddr(struct socket *so, struct sockaddr *nam)
 {
 	int s;
 
@@ -697,14 +696,14 @@ rip_peeraddr(struct socket *so, struct mbuf *nam)
 	KASSERT(nam != NULL);
 
 	s = splsoftnet();
-	in_setpeeraddr(sotoinpcb(so), nam);
+	in_setpeeraddr(sotoinpcb(so), (struct sockaddr_in *)nam);
 	splx(s);
 
 	return 0;
 }
 
 static int
-rip_sockaddr(struct socket *so, struct mbuf *nam)
+rip_sockaddr(struct socket *so, struct sockaddr *nam)
 {
 	int s;
 
@@ -713,7 +712,7 @@ rip_sockaddr(struct socket *so, struct mbuf *nam)
 	KASSERT(nam != NULL);
 
 	s = splsoftnet();
-	in_setsockaddr(sotoinpcb(so), nam);
+	in_setsockaddr(sotoinpcb(so), (struct sockaddr_in *)nam);
 	splx(s);
 
 	return 0;
@@ -763,7 +762,9 @@ rip_send(struct socket *so, struct mbuf *m, struct mbuf *nam,
 			error = EISCONN;
 			goto die;
 		}
-		error = rip_connect_pcb(inp, nam);
+		if (nam->m_len != sizeof(struct sockaddr_in))
+			return EINVAL;
+		error = rip_connect_pcb(inp, mtod(nam, struct sockaddr_in *));
 		if (error) {
 		die:
 			m_freem(m);
@@ -811,40 +812,6 @@ rip_purgeif(struct socket *so, struct ifnet *ifp)
 	return 0;
 }
 
-int
-rip_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-    struct mbuf *control, struct lwp *l)
-{
-	KASSERT(req != PRU_ATTACH);
-	KASSERT(req != PRU_DETACH);
-	KASSERT(req != PRU_ACCEPT);
-	KASSERT(req != PRU_BIND);
-	KASSERT(req != PRU_LISTEN);
-	KASSERT(req != PRU_CONNECT);
-	KASSERT(req != PRU_CONNECT2);
-	KASSERT(req != PRU_DISCONNECT);
-	KASSERT(req != PRU_SHUTDOWN);
-	KASSERT(req != PRU_ABORT);
-	KASSERT(req != PRU_CONTROL);
-	KASSERT(req != PRU_SENSE);
-	KASSERT(req != PRU_PEERADDR);
-	KASSERT(req != PRU_SOCKADDR);
-	KASSERT(req != PRU_RCVD);
-	KASSERT(req != PRU_RCVOOB);
-	KASSERT(req != PRU_SEND);
-	KASSERT(req != PRU_SENDOOB);
-	KASSERT(req != PRU_PURGEIF);
-
-	KASSERT(solocked(so));
-
-	if (sotoinpcb(so) == NULL)
-		return EINVAL;
-
-	panic("rip_usrreq");
-
-	return 0;
-}
-
 PR_WRAP_USRREQS(rip)
 #define	rip_attach	rip_attach_wrapper
 #define	rip_detach	rip_detach_wrapper
@@ -865,7 +832,6 @@ PR_WRAP_USRREQS(rip)
 #define	rip_send	rip_send_wrapper
 #define	rip_sendoob	rip_sendoob_wrapper
 #define	rip_purgeif	rip_purgeif_wrapper
-#define	rip_usrreq	rip_usrreq_wrapper
 
 const struct pr_usrreqs rip_usrreqs = {
 	.pr_attach	= rip_attach,
@@ -887,7 +853,6 @@ const struct pr_usrreqs rip_usrreqs = {
 	.pr_send	= rip_send,
 	.pr_sendoob	= rip_sendoob,
 	.pr_purgeif	= rip_purgeif,
-	.pr_generic	= rip_usrreq,
 };
 
 static void

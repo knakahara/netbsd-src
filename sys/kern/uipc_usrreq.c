@@ -1,4 +1,4 @@
-/*	$NetBSD: uipc_usrreq.c,v 1.176 2015/04/03 20:01:07 rtr Exp $	*/
+/*	$NetBSD: uipc_usrreq.c,v 1.178 2015/04/26 21:40:48 rtr Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000, 2004, 2008, 2009 The NetBSD Foundation, Inc.
@@ -96,7 +96,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uipc_usrreq.c,v 1.176 2015/04/03 20:01:07 rtr Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uipc_usrreq.c,v 1.178 2015/04/26 21:40:48 rtr Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -333,39 +333,25 @@ unp_output(struct mbuf *m, struct mbuf *control, struct unpcb *unp)
 }
 
 static void
-unp_setaddr(struct socket *so, struct mbuf *nam, bool peeraddr)
+unp_setaddr(struct socket *so, struct sockaddr *nam, bool peeraddr)
 {
-	const struct sockaddr_un *sun;
+	const struct sockaddr_un *sun = NULL;
 	struct unpcb *unp;
-	bool ext;
 
 	KASSERT(solocked(so));
 	unp = sotounpcb(so);
-	ext = false;
 
-	for (;;) {
-		sun = NULL;
-		if (peeraddr) {
-			if (unp->unp_conn && unp->unp_conn->unp_addr)
-				sun = unp->unp_conn->unp_addr;
-		} else {
-			if (unp->unp_addr)
-				sun = unp->unp_addr;
-		}
-		if (sun == NULL)
-			sun = &sun_noname;
-		nam->m_len = sun->sun_len;
-		if (nam->m_len > MLEN && !ext) {
-			sounlock(so);
-			MEXTMALLOC(nam, MAXPATHLEN * 2, M_WAITOK);
-			solock(so);
-			ext = true;
-		} else {
-			KASSERT(nam->m_len <= MAXPATHLEN * 2);
-			memcpy(mtod(nam, void *), sun, (size_t)nam->m_len);
-			break;
-		}
+	if (peeraddr) {
+		if (unp->unp_conn && unp->unp_conn->unp_addr)
+			sun = unp->unp_conn->unp_addr;
+	} else {
+		if (unp->unp_addr)
+			sun = unp->unp_addr;
 	}
+	if (sun == NULL)
+		sun = &sun_noname;
+
+	memcpy(nam, sun, sun->sun_len);
 }
 
 static int
@@ -561,41 +547,6 @@ unp_sendoob(struct socket *so, struct mbuf *m, struct mbuf * control)
 	return EOPNOTSUPP;
 }
 
-static int
-unp_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-    struct mbuf *control, struct lwp *l)
-{
-
-	KASSERT(req != PRU_ATTACH);
-	KASSERT(req != PRU_DETACH);
-	KASSERT(req != PRU_ACCEPT);
-	KASSERT(req != PRU_BIND);
-	KASSERT(req != PRU_LISTEN);
-	KASSERT(req != PRU_CONNECT);
-	KASSERT(req != PRU_CONNECT2);
-	KASSERT(req != PRU_DISCONNECT);
-	KASSERT(req != PRU_SHUTDOWN);
-	KASSERT(req != PRU_ABORT);
-	KASSERT(req != PRU_CONTROL);
-	KASSERT(req != PRU_SENSE);
-	KASSERT(req != PRU_PEERADDR);
-	KASSERT(req != PRU_SOCKADDR);
-	KASSERT(req != PRU_RCVD);
-	KASSERT(req != PRU_RCVOOB);
-	KASSERT(req != PRU_SEND);
-	KASSERT(req != PRU_SENDOOB);
-	KASSERT(req != PRU_PURGEIF);
-
-	KASSERT(solocked(so));
-
-	if (sotounpcb(so) == NULL)
-		return EINVAL;
-
-	panic("piusrreq");
-
-	return 0;
-}
-
 /*
  * Unix domain socket option processing.
  */
@@ -785,7 +736,7 @@ unp_detach(struct socket *so)
 }
 
 static int
-unp_accept(struct socket *so, struct mbuf *nam)
+unp_accept(struct socket *so, struct sockaddr *nam)
 {
 	struct unpcb *unp = sotounpcb(so);
 	struct socket *so2;
@@ -888,7 +839,7 @@ unp_stat(struct socket *so, struct stat *ub)
 }
 
 static int
-unp_peeraddr(struct socket *so, struct mbuf *nam)
+unp_peeraddr(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 	KASSERT(sotounpcb(so) != NULL);
@@ -899,7 +850,7 @@ unp_peeraddr(struct socket *so, struct mbuf *nam)
 }
 
 static int
-unp_sockaddr(struct socket *so, struct mbuf *nam)
+unp_sockaddr(struct socket *so, struct sockaddr *nam)
 {
 	KASSERT(solocked(so));
 	KASSERT(sotounpcb(so) != NULL);
@@ -2011,5 +1962,4 @@ const struct pr_usrreqs unp_usrreqs = {
 	.pr_recvoob	= unp_recvoob,
 	.pr_send	= unp_send,
 	.pr_sendoob	= unp_sendoob,
-	.pr_generic	= unp_usrreq,
 };
