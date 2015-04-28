@@ -478,7 +478,7 @@ msix_set_vecctl_mask(struct pic *pic, int msix_vec, int flag)
 
 	if (msix_vec < 0) {
 		DPRINTF(("%s: invalid MSI-X table index, devid=%d vecid=%d",
-			__func__, msi_get_devid(pic), msix_vec));
+			__func__, msipic_get_devid(pic), msix_vec));
 		return;
 	}
 
@@ -531,7 +531,7 @@ msix_addroute(struct pic *pic, struct cpu_info *ci,
 
 	if (msix_vec < 0) {
 		DPRINTF(("%s: invalid MSI-X table index, devid=%d vecid=%d",
-			__func__, msi_get_devid(pic), msix_vec));
+			__func__, msipic_get_devid(pic), msix_vec));
 		return;
 	}
 
