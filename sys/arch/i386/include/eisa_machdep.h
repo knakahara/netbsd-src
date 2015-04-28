@@ -48,11 +48,12 @@ extern struct x86_bus_dma_tag eisa_bus_dma_tag;
 #define ELCR0   0x4d0                   /* eisa irq 0-7 */
 #define ELCR1   0x4d1                   /* eisa irq 8-15 */
 
+#include <machine/intr.h> /* for intr_handle_t */
 /*
  * Types provided to machine-independent EISA code.
  */
 typedef void *eisa_chipset_tag_t;
-typedef int eisa_intr_handle_t;
+typedef intr_handle_t eisa_intr_handle_t;
 
 /*
  * Functions provided to machine-independent EISA code.
