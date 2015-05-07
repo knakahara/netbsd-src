@@ -88,6 +88,8 @@ intr_shield(u_int cpu_idx, int shield)
 	struct cpu_info *ci;
 	struct schedstate_percpu *spc;
 
+	KASSERT(mutex_owned(&cpu_lock));
+
 	ci = cpu_lookup(cpu_idx);
 	if (ci == NULL)
 		return EINVAL;
@@ -423,11 +425,10 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 
 	mutex_enter(&cpu_lock);
 	error = intr_shield(cpu_idx, SET_NOINTR_SHIELD);
-	if (error) {
-		mutex_exit(&cpu_lock);
-		return error;
-	}
 	mutex_exit(&cpu_lock);
+	if (error)
+		return error;
+
 	error = intr_avert_intr(cpu_idx);
 
 	kcpuset_destroy(kcpuset);
