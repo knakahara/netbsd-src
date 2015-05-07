@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2001-2012, Intel Corporation 
+  Copyright (c) 2001-2013, Intel Corporation 
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -30,8 +30,8 @@
   POSSIBILITY OF SUCH DAMAGE.
 
 ******************************************************************************/
-/*$FreeBSD: head/sys/dev/ixgbe/ixv.c 238149 2012-07-05 20:51:44Z jfv $*/
-/*$NetBSD: ixv.c,v 1.6 2015/04/02 09:26:55 msaitoh Exp $*/
+/*$FreeBSD: head/sys/dev/ixgbe/ixv.c 247822 2013-03-04 23:07:40Z jfv $*/
+/*$NetBSD: ixv.c,v 1.8 2015/04/24 07:00:51 msaitoh Exp $*/
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -182,7 +182,7 @@ static device_method_t ixv_methods[] = {
 	DEVMETHOD(device_attach, ixv_attach),
 	DEVMETHOD(device_detach, ixv_detach),
 	DEVMETHOD(device_shutdown, ixv_shutdown),
-	{0, 0}
+	DEVMETHOD_END
 };
 #endif
 
@@ -597,7 +597,7 @@ ixv_start_locked(struct tx_ring *txr, struct ifnet * ifp)
 		if (rc == EFBIG) {
 			struct mbuf *mtmp;
 
-			if ((mtmp = m_defrag(m_head, M_DONTWAIT)) != NULL) {
+			if ((mtmp = m_defrag(m_head, M_NOWAIT)) != NULL) {
 				m_head = mtmp;
 				rc = ixv_xmit(txr, m_head);
 				if (rc != 0)
@@ -690,23 +690,26 @@ ixv_mq_start_locked(struct ifnet *ifp, struct tx_ring *txr, struct mbuf *m)
 
 	enqueued = 0;
 	if (m == NULL) {
-		next = drbr_dequeue(ifp, txr->br);
-	} else if (drbr_needs_enqueue(ifp, txr->br)) {
-		if ((err = drbr_enqueue(ifp, txr->br, m)) != 0)
-			return (err);
-		next = drbr_dequeue(ifp, txr->br);
-	} else
-		next = m;
-
+		err = drbr_dequeue(ifp, txr->br, m);
+		if (err) {
+ 			return (err);
+		}
+	}
 	/* Process the queue */
-	while (next != NULL) {
+	while ((next = drbr_peek(ifp, txr->br)) != NULL) {
 		if ((err = ixv_xmit(txr, next)) != 0) {
-			if (next != NULL)
-				err = drbr_enqueue(ifp, txr->br, next);
+			if (next != NULL) {
+				drbr_advance(ifp, txr->br);
+			} else {
+				drbr_putback(ifp, txr->br, next);
+			}
 			break;
 		}
+		drbr_advance(ifp, txr->br);
 		enqueued++;
-		drbr_stats_update(ifp, next->m_pkthdr.len, next->m_flags);
+		ifp->if_obytes += next->m_pkthdr.len;
+		if (next->m_flags & M_MCAST)
+			ifp->if_omcasts++;
 		/* Send a copy of the frame to the BPF listener */
 		ETHER_BPF_MTAP(ifp, next);
 		if ((ifp->if_flags & IFF_RUNNING) == 0)
@@ -715,7 +718,6 @@ ixv_mq_start_locked(struct ifnet *ifp, struct tx_ring *txr, struct mbuf *m)
 			ifp->if_flags |= IFF_OACTIVE;
 			break;
 		}
-		next = drbr_dequeue(ifp, txr->br);
 	}
 
 	if (enqueued > 0) {
@@ -1994,7 +1996,6 @@ ixv_config_link(struct adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32	autoneg, err = 0;
-	bool	negotiate = TRUE;
 
 	if (hw->mac.ops.check_link)
 		err = hw->mac.ops.check_link(hw, &autoneg,
@@ -2003,8 +2004,8 @@ ixv_config_link(struct adapter *adapter)
 		goto out;
 
 	if (hw->mac.ops.setup_link)
-               	err = hw->mac.ops.setup_link(hw, autoneg,
-		    negotiate, adapter->link_up);
+               	err = hw->mac.ops.setup_link(hw,
+		    autoneg, adapter->link_up);
 out:
 	return;
 }
@@ -2824,7 +2825,7 @@ ixv_refresh_mbufs(struct rx_ring *rxr, int limit)
 	while (j != limit) {
 		rxbuf = &rxr->rx_buffers[i];
 		if ((rxbuf->m_head == NULL) && (rxr->hdr_split)) {
-			mh = m_gethdr(M_DONTWAIT, MT_DATA);
+			mh = m_gethdr(M_NOWAIT, MT_DATA);
 			if (mh == NULL)
 				goto update;
 			mh->m_pkthdr.len = mh->m_len = MHLEN;
@@ -2848,7 +2849,7 @@ ixv_refresh_mbufs(struct rx_ring *rxr, int limit)
 		}
 
 		if (rxbuf->m_pack == NULL) {
-			mp = ixgbe_getjcl(&adapter->jcl_head, M_DONTWAIT,
+			mp = ixgbe_getjcl(&adapter->jcl_head, M_NOWAIT,
 			    MT_DATA, M_PKTHDR, adapter->rx_mbuf_sz);
 			if (mp == NULL) {
 				rxr->no_jmbuf.ev_count++;

@@ -1,4 +1,4 @@
-/*	$NetBSD: apbus.c,v 1.11 2015/03/25 11:25:10 macallan Exp $ */
+/*	$NetBSD: apbus.c,v 1.14 2015/05/04 12:23:15 macallan Exp $ */
 
 /*-
  * Copyright (c) 2014 Michael Lorenz
@@ -29,7 +29,7 @@
 /* catch-all for on-chip peripherals */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: apbus.c,v 1.11 2015/03/25 11:25:10 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: apbus.c,v 1.14 2015/05/04 12:23:15 macallan Exp $");
 
 #include "locators.h"
 #define	_MIPS_BUS_DMA_PRIVATE
@@ -63,29 +63,34 @@ struct mips_bus_dma_tag	apbus_dmat = {
 };
 
 typedef struct apbus_dev {
-	const char *name;
-	bus_addr_t addr;
-	uint32_t irq;
+	const char *name;	/* driver name */
+	bus_addr_t addr;	/* base address */
+	uint32_t irq;		/* interrupt */
+	uint32_t clk0;		/* bit(s) in CLKGR0 */
+	uint32_t clk1;		/* bit(s) in CLKGR1 */
 } apbus_dev_t;
 
 static const apbus_dev_t apbus_devs[] = {
-	{ "dwctwo",	JZ_DWC2_BASE,   21},
-	{ "ohci",	JZ_OHCI_BASE,    5 },
-	{ "ehci",	JZ_EHCI_BASE,   20},
-	{ "dme",	JZ_DME_BASE,    -1},	/* irq via gpio abuse */
-	{ "jzgpio",	JZ_GPIO_A_BASE, 17},
-	{ "jzgpio",	JZ_GPIO_B_BASE, 16},
-	{ "jzgpio",	JZ_GPIO_C_BASE, 15},
-	{ "jzgpio",	JZ_GPIO_D_BASE, 14},
-	{ "jzgpio",	JZ_GPIO_E_BASE, 13},
-	{ "jzgpio",	JZ_GPIO_F_BASE, 12},
-	{ "jziic",	JZ_SMB0_BASE,   60},
-	{ "jziic",	JZ_SMB1_BASE,   59},
-	{ "jziic",	JZ_SMB2_BASE,   58},
-	{ "jziic",	JZ_SMB3_BASE,   57},
-	{ "jziic",	JZ_SMB4_BASE,   56},
-	{ "jzfb",	-1,           -1},
-	{ NULL,		-1,           -1}
+	{ "dwctwo",	JZ_DWC2_BASE,   21, CLK_OTG0 | CLK_UHC, CLK_OTG1},
+	{ "ohci",	JZ_OHCI_BASE,    5, CLK_UHC, 0},
+	{ "ehci",	JZ_EHCI_BASE,   20, CLK_UHC, 0},
+	{ "dme",	JZ_DME_BASE,    -1, 0, 0},
+	{ "jzgpio",	JZ_GPIO_A_BASE, 17, 0, 0},
+	{ "jzgpio",	JZ_GPIO_B_BASE, 16, 0, 0},
+	{ "jzgpio",	JZ_GPIO_C_BASE, 15, 0, 0},
+	{ "jzgpio",	JZ_GPIO_D_BASE, 14, 0, 0},
+	{ "jzgpio",	JZ_GPIO_E_BASE, 13, 0, 0},
+	{ "jzgpio",	JZ_GPIO_F_BASE, 12, 0, 0},
+	{ "jziic",	JZ_SMB0_BASE,   60, CLK_SMB0, 0},
+	{ "jziic",	JZ_SMB1_BASE,   59, CLK_SMB1, 0},
+	{ "jziic",	JZ_SMB2_BASE,   58, CLK_SMB2, 0},
+	{ "jziic",	JZ_SMB3_BASE,   57, 0, CLK_SMB3},
+	{ "jziic",	JZ_SMB4_BASE,   56, 0, CLK_SMB4},
+	{ "jzmmc",	JZ_MSC0_BASE,   37, CLK_MSC0, 0},
+	{ "jzmmc",	JZ_MSC1_BASE,   36, CLK_MSC1, 0},
+	{ "jzmmc",	JZ_MSC2_BASE,   35, CLK_MSC2, 0},
+	{ "jzfb",	JZ_LCDC0_BASE,  31, CLK_LCD, CLK_HDMI},
+	{ NULL,		-1,             -1, 0, 0}
 };
 
 void
@@ -113,7 +118,7 @@ apbus_match(device_t parent, cfdata_t match, void *aux)
 void
 apbus_attach(device_t parent, device_t self, void *aux)
 {
-	uint32_t reg, mpll, m, n, p, mclk, pclk, pdiv;
+	uint32_t reg, mpll, m, n, p, mclk, pclk, pdiv, cclk, cdiv;
 	aprint_normal("\n");
 
 	/* should have been called early on */
@@ -135,35 +140,26 @@ apbus_attach(device_t parent, device_t self, void *aux)
 	mclk = (48000 * (m + 1) / (n + 1)) / (p + 1);
 
 	reg = readreg(JZ_CPCCR);
-	pdiv = (reg & JZ_PDIV_M) >> JZ_PDIV_S;
+	pdiv = ((reg & JZ_PDIV_M) >> JZ_PDIV_S) + 1;
 	pclk = mclk / pdiv;
-#ifdef INGENIC_DEBUG
-	printf("mclk %d kHz\n", mclk);
-	printf("pclk %d kHz\n", pclk);
-#endif
+	cdiv = (reg & JZ_CDIV_M) + 1;
+	cclk = mclk / cdiv;
+
+	aprint_debug_dev(self, "mclk %d kHz\n", mclk);
+	aprint_debug_dev(self, "pclk %d kHz\n", pclk);
+	aprint_debug_dev(self, "CPU clock %d kHz\n", cclk);
 
 	/* enable clocks */
 	reg = readreg(JZ_CLKGR1);
-	reg &= ~(1 << 0);	/* SMB3 clock */
-	reg &= ~(1 << 8);	/* OTG1 clock */
-	reg &= ~(1 << 11);	/* AHB_MON clock */
-	reg &= ~(1 << 12);	/* SMB4 clock */
+	reg &= ~CLK_AHB_MON;	/* AHB_MON clock */
 	writereg(JZ_CLKGR1, reg);
-
-	reg = readreg(JZ_CLKGR0);
-	reg &= ~(1 << 2);	/* OTG0 clock */
-	reg &= ~(1 << 5);	/* SMB0 clock */
-	reg &= ~(1 << 6);	/* SMB1 clock */
-	reg &= ~(1 << 24);	/* UHC clock */
-	reg &= ~(1 << 25);	/* SMB2 clock */
-	writereg(JZ_CLKGR0, reg);
 
 	/* wake up the USB part */
 	reg = readreg(JZ_OPCR);
 	reg |= OPCR_SPENDN0 | OPCR_SPENDN1;
 	writereg(JZ_OPCR, reg);
 
-	/* setup GPIOs for I2C buses */
+	/* wire up GPIOs */
 	/* iic0 */
 	gpio_as_dev0(3, 30);
 	gpio_as_dev0(3, 31);
@@ -187,6 +183,36 @@ apbus_attach(device_t parent, device_t self, void *aux)
 	gpio_as_dev0(5, 24);
 	gpio_as_dev0(5, 25);
 
+	/* MSC0 */
+	gpio_as_dev1(0, 4);
+	gpio_as_dev1(0, 5);
+	gpio_as_dev1(0, 6);
+	gpio_as_dev1(0, 7);
+	gpio_as_dev1(0, 18);
+	gpio_as_dev1(0, 19);
+	gpio_as_dev1(0, 20);
+	gpio_as_dev1(0, 21);
+	gpio_as_dev1(0, 22);
+	gpio_as_dev1(0, 23);
+	gpio_as_dev1(0, 24);
+	gpio_as_intr_level_low(5, 20);	/* card detect */
+
+	/* MSC1, for wifi/bt */
+	gpio_as_dev0(3, 20);
+	gpio_as_dev0(3, 21);
+	gpio_as_dev0(3, 22);
+	gpio_as_dev0(3, 23);
+	gpio_as_dev0(3, 24);
+	gpio_as_dev0(3, 25);
+
+	/* MSC2, on expansion header */
+	gpio_as_dev0(1, 20);
+	gpio_as_dev0(1, 21);
+	gpio_as_dev0(1, 28);
+	gpio_as_dev0(1, 29);
+	gpio_as_dev0(1, 30);
+	gpio_as_dev0(1, 31);
+
 #ifdef INGENIC_DEBUG
 	printf("JZ_CLKGR0 %08x\n", readreg(JZ_CLKGR0));
 	printf("JZ_CLKGR1 %08x\n", readreg(JZ_CLKGR1));
@@ -205,7 +231,21 @@ apbus_attach(device_t parent, device_t self, void *aux)
 		aa.aa_dmat = &apbus_dmat;
 		aa.aa_bst = apbus_memt;
 		aa.aa_pclk = pclk;
+		aa.aa_mclk = mclk;
 
+		/* enable clocks as needed */
+		if (adv->clk0 != 0) {
+			reg = readreg(JZ_CLKGR0);
+			reg &= ~adv->clk0;
+			writereg(JZ_CLKGR0, reg);
+		}
+
+		if (adv->clk1 != 0) {
+			reg = readreg(JZ_CLKGR1);
+			reg &= ~adv->clk1;
+			writereg(JZ_CLKGR1, reg);
+		}
+	
 		(void) config_found_ia(self, "apbus", &aa, apbus_print);
 	}
 }

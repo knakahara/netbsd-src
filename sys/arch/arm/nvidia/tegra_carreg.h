@@ -1,0 +1,202 @@
+/* $NetBSD: tegra_carreg.h,v 1.5 2015/05/06 21:27:05 skrll Exp $ */
+
+/*-
+ * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+ * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+#ifndef _ARM_TEGRA_CARREG_H
+#define _ARM_TEGRA_CARREG_H
+
+#define CAR_CLK_OUT_ENB_L_REG	0x10
+#define CAR_CLK_OUT_ENB_H_REG	0x14
+#define CAR_CLK_OUT_ENB_U_REG	0x18
+
+#define CAR_PLLP_BASE_REG	0xa0
+#define CAR_PLLP_BASE_BYPASS		__BIT(31)
+#define CAR_PLLP_BASE_ENABLE		__BIT(30)
+#define CAR_PLLP_BASE_REF_DIS		__BIT(29)
+#define CAR_PLLP_BASE_OVERRIDE		__BIT(28)
+#define CAR_PLLP_BASE_LOCK		__BIT(27)
+#define CAR_PLLP_BASE_DIVP		__BITS(22,20)
+#define CAR_PLLP_BASE_DIVN		__BITS(17,8)
+#define CAR_PLLP_BASE_DIVM		__BITS(4,0)
+
+#define CAR_PLLP_OUTA_REG	0xa4
+#define CAR_PLLP_OUTB_REG	0xa8
+#define CAR_PLLP_OUTB_OUT4_RATIO	__BITS(31,24)
+#define CAR_PLLP_OUTB_OUT4_OVRRIDE	__BIT(18)
+#define CAR_PLLP_OUTB_OUT4_CLKEN	__BIT(17)
+#define CAR_PLLP_OUTB_OUT4_RSTN		__BIT(16)
+#define CAR_PLLP_OUTB_OUT3_RATIO	__BITS(15,8)
+#define CAR_PLLP_OUTB_OUT3_OVRRIDE	__BIT(2)
+#define CAR_PLLP_OUTB_OUT3_CLKEN	__BIT(1)
+#define CAR_PLLP_OUTB_OUT3_RSTN		__BIT(0)
+#define CAR_PLLP_MISC_REG	0xac
+
+#define CAR_PLLC_BASE_REG	0x80
+#define CAR_PLLC_BASE_ENABLE		__BIT(30)
+#define CAR_PLLC_BASE_REF_DIS		__BIT(29)
+#define CAR_PLLC_BASE_LOCK_OVERRIDE	__BIT(28)
+#define CAR_PLLC_BASE_LOCK		__BIT(27)
+#define CAR_PLLC_BASE_DIVP		__BITS(23,20)
+#define CAR_PLLC_BASE_DIVN		__BITS(15,8)
+#define CAR_PLLC_BASE_DIVM		__BITS(7,0)
+
+#define CAR_PLLX_BASE_REG	0xe0
+#define CAR_PLLX_BASE_BYPASS		__BIT(31)
+#define CAR_PLLX_BASE_ENABLE		__BIT(30)
+#define CAR_PLLX_BASE_REF_DIS		__BIT(29)
+#define CAR_PLLX_BASE_LOCK		__BIT(27)
+#define CAR_PLLX_BASE_DIVP		__BITS(23,20)
+#define CAR_PLLX_BASE_DIVN		__BITS(15,8)
+#define CAR_PLLX_BASE_DIVM		__BITS(7,0)
+
+#define CAR_PLLX_MISC_REG	0xe8
+
+#define CAR_CLKSRC_UARTA_REG		0x178
+#define CAR_CLKSRC_UARTB_REG		0x17c
+#define CAR_CLKSRC_UARTC_REG		0x1a0
+#define CAR_CLKSRC_UARTD_REG		0x1c0
+
+#define CAR_CLKSRC_UART_SRC		__BITS(31,29)
+#define CAR_CLKSRC_UART_SRC_PLLP_OUT0	0
+#define CAR_CLKSRC_UART_SRC_PLLC2_OUT0	1
+#define CAR_CLKSRC_UART_SRC_PLLC_OUT0	2
+#define CAR_CLKSRC_UART_SRC_PLLC3_OUT0	3
+#define CAR_CLKSRC_UART_SRC_PLLM_OUT0	4
+#define CAR_CLKSRC_UART_SRC_CLK_M	6
+#define CAR_CLKSRC_UART_DIV_ENB		__BIT(24)
+#define CAR_CLKSRC_UART_DIV		__BITS(15,0)
+
+#define CAR_CLKSRC_SDMMC1_REG		0x150
+#define CAR_CLKSRC_SDMMC2_REG		0x154
+#define CAR_CLKSRC_SDMMC4_REG		0x164
+#define CAR_CLKSRC_SDMMC3_REG		0x1bc
+
+#define CAR_CLKSRC_SDMMC_SRC		__BITS(31,29)
+#define CAR_CLKSRC_SDMMC_SRC_PLLP_OUT0	0
+#define CAR_CLKSRC_SDMMC_SRC_PLLC2_OUT0	1
+#define CAR_CLKSRC_SDMMC_SRC_PLLC_OUT0	2
+#define CAR_CLKSRC_SDMMC_SRC_PLLC3_OUT0	3
+#define CAR_CLKSRC_SDMMC_SRC_PLLM_OUT0	4
+#define CAR_CLKSRC_SDMMC_SRC_PLLE_OUT0	5
+#define CAR_CLKSRC_SDMMC_SRC_CLK_M	6
+#define CAR_CLKSRC_SDMMC_DIV		__BITS(7,0)
+
+#define CAR_RST_DEV_L_SET_REG		0x300
+#define CAR_RST_DEV_L_CLR_REG		0x304
+#define CAR_RST_DEV_H_SET_REG		0x308
+#define CAR_RST_DEV_H_CLR_REG		0x30c
+#define CAR_RST_DEV_U_SET_REG		0x310
+#define CAR_RST_DEV_U_CLR_REG		0x314
+
+#define CAR_CLK_ENB_L_SET_REG		0x320
+#define CAR_CLK_ENB_L_CLR_REG		0x324
+#define CAR_CLK_ENB_H_SET_REG		0x328
+#define CAR_CLK_ENB_H_CLR_REG		0x32c
+#define CAR_CLK_ENB_U_SET_REG		0x330
+#define CAR_CLK_ENB_U_CLR_REG		0x334
+
+#define CAR_DEV_L_CACHE2		__BIT(31)
+#define CAR_DEV_L_I2S0			__BIT(30)
+#define CAR_DEV_L_VCP			__BIT(29)
+#define CAR_DEV_L_HOST1X		__BIT(28)
+#define CAR_DEV_L_DISP1			__BIT(27)
+#define CAR_DEV_L_DISP2			__BIT(26)
+#define CAR_DEV_L_ISP			__BIT(23)
+#define CAR_DEV_L_USBD			__BIT(22)
+#define CAR_DEV_L_VI			__BIT(20)
+#define CAR_DEV_L_I2S2			__BIT(18)
+#define CAR_DEV_L_PWM			__BIT(17)
+#define CAR_DEV_L_SDMMC4		__BIT(15)
+#define CAR_DEV_L_SDMMC1		__BIT(14)
+#define CAR_DEV_L_I2C1			__BIT(12)
+#define CAR_DEV_L_I2S1			__BIT(11)
+#define CAR_DEV_L_SPDIF			__BIT(10)
+#define CAR_DEV_L_SDMMC2		__BIT(9)
+#define CAR_DEV_L_GPIO			__BIT(8)
+#define CAR_DEV_L_UARTB			__BIT(7)
+#define CAR_DEV_L_UARTA			__BIT(6)
+#define CAR_DEV_L_TMR			__BIT(5
+#define CAR_DEV_L_RTC			__BIT(4)
+#define CAR_DEV_L_ISPB			__BIT(3)
+#define CAR_DEV_L_CPU			__BIT(0)
+
+#define CAR_DEV_U_XUSB_DEV		__BIT(31)
+#define CAR_DEV_U_DEV1_OUT		__BIT(30)
+#define CAR_DEV_U_DEV2_OUT		__BIT(29)
+#define CAR_DEV_U_SUS_OUT		__BIT(28)
+#define CAR_DEV_U_MSENC			__BIT(27)
+#define CAR_DEV_U_XUSB_HOST		__BIT(25)
+#define CAR_DEV_U_CRAM2			__BIT(24)
+#define CAR_DEV_U_IRAMD			__BIT(23)
+#define CAR_DEV_U_IRAMC			__BIT(22)
+#define CAR_DEV_U_IRAMB			__BIT(21)
+#define CAR_DEV_U_IRAMA			__BIT(20)
+#define CAR_DEV_U_TSEC			__BIT(19)
+#define CAR_DEV_U_DSIB			__BIT(18)
+#define CAR_DEV_U_I2C_SLOW		__BIT(17)
+#define CAR_DEV_U_DTV			__BIT(15)
+#define CAR_DEV_U_SOC_THERM		__BIT(14)
+#define CAR_DEV_U_TRACECLKIN		__BIT(13)
+#define CAR_DEV_U_AVPUCQ		__BIT(11)
+#define CAR_DEV_U_CSITE			__BIT(9)
+#define CAR_DEV_U_AFI			__BIT(8)
+#define CAR_DEV_U_OWR			__BIT(7)
+#define CAR_DEV_U_PCIE			__BIT(6)
+#define CAR_DEV_U_SDMMC3		__BIT(5)
+#define CAR_DEV_U_SPI4			__BIT(4)
+#define CAR_DEV_U_I2C3			__BIT(3)
+#define CAR_DEV_U_UARTD			__BIT(1)
+
+#define CAR_DEV_H_BSEV			__BIT(31)
+#define CAR_DEV_H_BSEA			__BIT(30)
+#define CAR_DEV_H_VDE			__BIT(29)
+#define CAR_DEV_H_USB3			__BIT(27)
+#define CAR_DEV_H_USB2			__BIT(26)
+#define CAR_DEV_H_EMC			__BIT(25)
+#define CAR_DEV_H_MIPI_CAL		__BIT(24)
+#define CAR_DEV_H_UARTC			__BIT(23)
+#define CAR_DEV_H_I2C2			__BIT(22)
+#define CAR_DEV_H_CSI			__BIT(20)
+#define CAR_DEV_H_HDMI			__BIT(19)
+#define CAR_DEV_H_HSI			__BIT(18)
+#define CAR_DEV_H_DSI			__BIT(16)
+#define CAR_DEV_H_I2C5			__BIT(15)
+#define CAR_DEV_H_SPI3			__BIT(14)
+#define CAR_DEV_H_SPI2			__BIT(12)
+#define CAR_DEV_H_JTAG2TBC		__BIT(11)
+#define CAR_DEV_H_SNOR			__BIT(10)
+#define CAR_DEV_H_SPI1			__BIT(9)
+#define CAR_DEV_H_KFUSE			__BIT(8)
+#define CAR_DEV_H_FUSE			__BIT(7)
+#define CAR_DEV_H_PMC			__BIT(6)
+#define CAR_DEV_H_STAT_MON		__BIT(5)
+#define CAR_DEV_H_KBC			__BIT(4)
+#define CAR_DEV_H_APBDMA		__BIT(2)
+#define CAR_DEV_H_AHBDMA		__BIT(1)
+#define CAR_DEV_H_MEM			__BIT(0)
+
+#endif /* _ARM_TEGRA_CARREG_H */

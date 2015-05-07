@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_intr.h,v 1.2 2015/03/29 10:44:54 jmcneill Exp $ */
+/* $NetBSD: tegra_intr.h,v 1.3 2015/05/03 01:07:44 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -50,5 +50,8 @@
 #define TEGRA_INTR_HDA		TEGRA_INTR(81)
 #define TEGRA_INTR_UARTD	TEGRA_INTR(90)
 #define TEGRA_INTR_USB3		TEGRA_INTR(97)
+#define TEGRA_INTR_PCIE_INT	TEGRA_INTR(98)
+#define TEGRA_INTR_PCIE_MSI	TEGRA_INTR(99)
+#define TEGRA_INTR_PCIE_WAKE	TEGRA_INTR(100)
 
 #endif /* _ARM_TEGRA_INTR_H */

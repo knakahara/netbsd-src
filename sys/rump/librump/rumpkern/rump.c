@@ -1,4 +1,4 @@
-/*	$NetBSD: rump.c,v 1.317 2015/04/13 16:46:33 riastradh Exp $	*/
+/*	$NetBSD: rump.c,v 1.319 2015/04/22 18:12:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007-2011 Antti Kantee.  All Rights Reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rump.c,v 1.317 2015/04/13 16:46:33 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rump.c,v 1.319 2015/04/22 18:12:39 pooka Exp $");
 
 #include <sys/systm.h>
 #define ELFSIZE ARCH_ELFSIZE
@@ -492,6 +492,7 @@ rump_init(void)
 	mutex_exit(proc_lock);
 	if (initproc == NULL)
 		panic("where in the world is initproc?");
+	strlcpy(initproc->p_comm, "rumplocal", sizeof(initproc->p_comm));
 
 	rump_component_init(RUMP_COMPONENT_POSTINIT);
 
@@ -684,17 +685,6 @@ rump_getversion(void)
 }
 /* compat */
 __strong_alias(rump_pub_getversion,rump_getversion);
-
-int
-rump_nativeabi_p(void)
-{
-
-#ifdef _RUMP_NATIVE_ABI
-	return 1;
-#else
-	return 0;
-#endif
-}
 
 /*
  * Note: may be called unscheduled.  Not fully safe since no locking

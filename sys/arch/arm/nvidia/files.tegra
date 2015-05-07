@@ -1,4 +1,4 @@
-#	$NetBSD: files.tegra,v 1.2 2015/03/29 22:27:04 jmcneill Exp $
+#	$NetBSD: files.tegra,v 1.7 2015/05/05 00:25:44 jmcneill Exp $
 #
 # Configuration info for NVIDIA Tegra ARM Peripherals
 #
@@ -31,9 +31,24 @@ device	tegrapmc
 attach	tegrapmc at tegraio with tegra_pmc
 file	arch/arm/nvidia/tegra_pmc.c		tegra_pmc
 
+# Clock and Reset controller
+device	tegracar
+attach	tegracar at tegraio with tegra_car
+file	arch/arm/nvidia/tegra_car.c		tegra_car
+
+# GPIO controller
+device	tegragpio: gpiobus
+attach	tegragpio at tegraio with tegra_gpio
+file	arch/arm/nvidia/tegra_gpio.c		tegra_gpio
+
 # UART
 attach	com at tegraio with tegra_com
 file	arch/arm/nvidia/tegra_com.c		tegra_com needs-flag
+
+# RTC
+device	tegrartc
+attach	tegrartc at tegraio with tegra_rtc
+file	arch/arm/nvidia/tegra_rtc.c		tegra_rtc
 
 # USB 2.0
 attach	ehci at tegraio with tegra_ehci
@@ -42,6 +57,11 @@ file	arch/arm/nvidia/tegra_ehci.c		tegra_ehci
 # SDMMC
 attach	sdhc at tegraio with tegra_sdhc
 file	arch/arm/nvidia/tegra_sdhc.c		tegra_sdhc
+
+# PCIE
+device	tegrapcie: pcibus
+attach	tegrapcie at tegraio with tegra_pcie
+file	arch/arm/nvidia/tegra_pcie.c		tegra_pcie
 
 # SATA
 attach	ahcisata at tegraio with tegra_ahcisata
@@ -62,3 +82,6 @@ defparam opt_tegra.h			MEMSIZE
 # SOC parameters
 defflag	opt_tegra.h			SOC_TEGRAK1
 defflag	opt_tegra.h			SOC_TEGRA124: SOC_TEGRAK1
+
+# Board parameters
+defflag	opt_tegra.h			BOARD_JETSONTK1

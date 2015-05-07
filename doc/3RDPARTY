@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1219 2015/04/13 17:25:52 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1224 2015/05/02 15:23:49 roy Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.8.1
-Current Vers:	6.8.1
+Version:	6.8.2
+Current Vers:	6.8.2
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -420,8 +420,8 @@ Notes:
 There is a flex2netbsd script to help newer imports.
 
 Package:	gcc
-Version:	4.5.4/4.8.4
-Current Vers:	4.8.4/4.9.2
+Version:	4.8.4
+Current Vers:	4.8.4/5.1
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gcc/
 Home Page:	http://www.gnu.org/software/gcc/
@@ -432,7 +432,6 @@ Location:	gnu/dist/gcc4
 Location:	external/gpl3/gcc.old/dist
 Location:	external/gpl3/gcc/dist
 Notes:
-As of April 2014, there are three versions of gcc in the NetBSD tree.
 In the long term, we expect that there will often be two versions,
 in the "gcc" and "gcc.old" directories.  Having two versions allows
 migration from one version of gcc to another to happen for one port
@@ -972,8 +971,8 @@ Location:	external/bsd/openpam/dist
 Notes:
 
 Package:	openresolv
-Version:	3.6.1
-Current Vers:	3.6.1
+Version:	3.7.0
+Current Vers:	3.7.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/openresolv/
 Home Page:	http://roy.marples.name/projects/openresolv/
@@ -1338,8 +1337,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2015b / tzdata2015b
-Current Vers:	tzcode2015b / tzdata2015b
+Version:	tzcode2015d / tzdata2015b
+Current Vers:	tzcode2015d / tzdata2015d
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/
@@ -1437,8 +1436,8 @@ Location:	external/zlib/pigz/dist
 Notes:
 
 Package:	xz
-Version:	5.0.0
-Current Vers:	5.0.5 (stable) / 5.1.3alpha (devel)
+Version:	5.2.1
+Current Vers:	5.2.1
 Maintainer:	Lasse Collin <lasse.collin@tukanni.org>
 Archive Site:	http://tukaani.org/xz/
 Home Page:	http://tukaani.org/xz/

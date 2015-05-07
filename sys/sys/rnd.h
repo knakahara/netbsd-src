@@ -1,4 +1,4 @@
-/*	$NetBSD: rnd.h,v 1.47 2015/04/13 15:39:19 riastradh Exp $	*/
+/*	$NetBSD: rnd.h,v 1.49 2015/04/14 12:51:30 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -33,19 +33,11 @@
 #ifndef _SYS_RND_H_
 #define	_SYS_RND_H_
 
-#ifndef _KERNEL
-#include <sys/cdefs.h>
-#endif /* !_KERNEL */
+#ifdef _KERNEL
 
 #include <sys/types.h>
-#include <sys/rndio.h>		/* XXX provisional until users converted */
 
-#ifdef _KERNEL
-#include <sys/queue.h>
-#include <sys/rndpool.h>	/* XXX provisional until users converted */
-#include <sys/rndsource.h>	/* XXX provisional until users converted */
-#include <sys/rngtest.h>
-#include <sys/systm.h>
+struct file;
 
 #define	RND_DEV_RANDOM	0	/* minor for blocking until unpredictable */
 #define	RND_DEV_URANDOM	1	/* minor for randomly generating data */
@@ -53,6 +45,7 @@
 void		rnd_init(void);
 void		rnd_init_softint(void);
 void		rnd_seed(void *, size_t);
+int		rnd_system_ioctl(struct file *, u_long, void *);
 
 extern int	rnd_initial_entropy;
 

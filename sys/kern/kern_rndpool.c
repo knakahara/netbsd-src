@@ -1,4 +1,4 @@
-/*      $NetBSD: kern_rndpool.c,v 1.8 2015/04/08 13:45:01 riastradh Exp $        */
+/*      $NetBSD: kern_rndpool.c,v 1.16 2015/04/21 04:41:36 riastradh Exp $        */
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -31,13 +31,13 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_rndpool.c,v 1.8 2015/04/08 13:45:01 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_rndpool.c,v 1.16 2015/04/21 04:41:36 riastradh Exp $");
 
 #include <sys/param.h>
-#include <sys/systm.h>
+#include <sys/rndpool.h>
 #include <sys/sha1.h>
+#include <sys/systm.h>
 
-#include <sys/rnd.h>
 #include <dev/rnd_private.h>
 
 /*
@@ -48,8 +48,6 @@ __KERNEL_RCSID(0, "$NetBSD: kern_rndpool.c,v 1.8 2015/04/08 13:45:01 riastradh E
 #define	TAP3	31
 #define	TAP4	 9
 #define	TAP5	 7
-
-static inline void rndpool_add_one_word(rndpool_t *, u_int32_t);
 
 void
 rndpool_init(rndpool_t *rp)
@@ -64,8 +62,6 @@ rndpool_init(rndpool_t *rp)
 	rp->stats.poolsize = RND_POOLWORDS;
 	rp->stats.threshold = RND_ENTROPY_THRESHOLD;
 	rp->stats.maxentropy = RND_POOLBITS;
-
-	KASSERT(RND_ENTROPY_THRESHOLD * 2 <= SHA1_DIGEST_LENGTH);
 }
 
 u_int32_t
@@ -95,32 +91,6 @@ void rndpool_get_stats(rndpool_t *rp, void *rsp, int size)
 {
 
 	memcpy(rsp, &rp->stats, size);
-}
-
-void
-rndpool_increment_entropy_count(rndpool_t *rp, u_int32_t  entropy)
-{
-
-	rp->stats.curentropy += entropy;
-	rp->stats.added += entropy;
-	if (rp->stats.curentropy > RND_POOLBITS) {
-		rp->stats.discarded += (rp->stats.curentropy - RND_POOLBITS);
-		rp->stats.curentropy = RND_POOLBITS;
-	}
-}
-
-u_int32_t *
-rndpool_get_pool(rndpool_t *rp)
-{
-
-	return (rp->pool);
-}
-
-u_int32_t
-rndpool_get_poolsize(void)
-{
-
-	return (RND_POOLWORDS);
 }
 
 /*
@@ -282,7 +252,8 @@ rndpool_extract_data(rndpool_t *rp, void *p, u_int32_t len, u_int32_t mode)
 		 * that the next hash will generate a different value
 		 * if no new values were added to the pool.
 		 */
-		for (i = 0; i < 5; i++) {
+		CTASSERT(RND_ENTROPY_THRESHOLD * 2 == SHA1_DIGEST_LENGTH);
+		for (i = 0; i < SHA1_DIGEST_LENGTH/4; i++) {
 			u_int32_t word;
 			memcpy(&word, &digest[i * 4], 4);
 			rndpool_add_one_word(rp, word);
@@ -308,8 +279,8 @@ rndpool_extract_data(rndpool_t *rp, void *p, u_int32_t len, u_int32_t mode)
 
 	}
 
-	memset(&hash, 0, sizeof(hash));
-	memset(digest, 0, sizeof(digest));
+	explicit_memset(&hash, 0, sizeof(hash));
+	explicit_memset(digest, 0, sizeof(digest));
 
 	return (len - remain);
 }

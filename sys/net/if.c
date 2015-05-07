@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.309 2015/04/07 23:30:36 roy Exp $	*/
+/*	$NetBSD: if.c,v 1.314 2015/04/22 20:49:44 roy Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2008 The NetBSD Foundation, Inc.
@@ -90,7 +90,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.309 2015/04/07 23:30:36 roy Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.314 2015/04/22 20:49:44 roy Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_inet.h"
@@ -239,7 +239,8 @@ ifinit(void)
 	sysctl_net_pktq_setup(NULL, PF_INET);
 #endif
 #ifdef INET6
-	sysctl_net_pktq_setup(NULL, PF_INET6);
+	if (in6_present)
+		sysctl_net_pktq_setup(NULL, PF_INET6);
 #endif
 
 	if_listener = kauth_listen_scope(KAUTH_SCOPE_NETWORK,
@@ -1422,9 +1423,8 @@ void
 if_link_state_change(struct ifnet *ifp, int link_state)
 {
 	int s;
-#if defined(DEBUG) || defined(INET6)
 	int old_link_state;
-#endif
+	struct domain *dp;
 
 	s = splnet();
 	if (ifp->if_link_state == link_state) {
@@ -1432,9 +1432,7 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 		return;
 	}
 
-#if defined(DEBUG) || defined(INET6)
 	old_link_state = ifp->if_link_state;
-#endif
 	ifp->if_link_state = link_state;
 #ifdef DEBUG
 	log(LOG_DEBUG, "%s: link state %s (was %s)\n", ifp->if_xname,
@@ -1446,20 +1444,24 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 		"UNKNOWN");
 #endif
 
-#ifdef INET6
 	/*
 	 * When going from UNKNOWN to UP, we need to mark existing
-	 * IPv6 addresses as tentative and restart DAD as we may have
+	 * addresses as tentative and restart DAD as we may have
 	 * erroneously not found a duplicate.
 	 *
 	 * This needs to happen before rt_ifmsg to avoid a race where
 	 * listeners would have an address and expect it to work right
 	 * away.
 	 */
-	if (in6_present && link_state == LINK_STATE_UP &&
+	if (link_state == LINK_STATE_UP &&
 	    old_link_state == LINK_STATE_UNKNOWN)
-		in6_if_link_down(ifp);
-#endif
+	{
+		DOMAIN_FOREACH(dp) {
+			if (dp->dom_if_link_state_change != NULL)
+				dp->dom_if_link_state_change(ifp,
+				    LINK_STATE_DOWN);
+		}
+	}
 
 	/* Notify that the link state has changed. */
 	rt_ifmsg(ifp);
@@ -1469,16 +1471,64 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 		carp_carpdev_state(ifp);
 #endif
 
-#ifdef INET6
-	if (in6_present) {
-		if (link_state == LINK_STATE_DOWN)
-			in6_if_link_down(ifp);
-		else if (link_state == LINK_STATE_UP)
-			in6_if_link_up(ifp);
+	DOMAIN_FOREACH(dp) {
+		if (dp->dom_if_link_state_change != NULL)
+			dp->dom_if_link_state_change(ifp, link_state);
 	}
-#endif
 
 	splx(s);
+}
+
+/*
+ * Default action when installing a local route on a point-to-point
+ * interface.
+ */
+void
+p2p_rtrequest(int req, struct rtentry *rt,
+    __unused const struct rt_addrinfo *info)
+{
+	struct ifnet *ifp = rt->rt_ifp;
+	struct ifaddr *ifa, *lo0ifa;
+
+	switch (req) {
+	case RTM_ADD:
+		if ((rt->rt_flags & RTF_LOCAL) == 0)
+			break;
+
+		IFADDR_FOREACH(ifa, ifp) {
+			if (equal(rt_getkey(rt), ifa->ifa_addr))
+				break;
+		}
+		if (ifa == NULL)
+			break;
+
+		/*
+		 * Ensure lo0 has an address of the same family.
+		 */
+		IFADDR_FOREACH(lo0ifa, lo0ifp) {
+			if (lo0ifa->ifa_addr->sa_family ==
+			    ifa->ifa_addr->sa_family)
+				break;
+		}
+		if (lo0ifa == NULL)
+			break;
+
+		rt->rt_ifp = lo0ifp;
+		rt->rt_flags &= ~RTF_LLINFO;
+
+		/*
+		 * Make sure to set rt->rt_ifa to the interface
+		 * address we are using, otherwise we will have trouble
+		 * with source address selection.
+		 */
+		if (ifa != rt->rt_ifa)
+			rt_replace_ifa(rt, ifa);
+		break;
+	case RTM_DELETE:
+	case RTM_RESOLVE:
+	default:
+		break;
+	}
 }
 
 /*
@@ -1490,6 +1540,7 @@ void
 if_down(struct ifnet *ifp)
 {
 	struct ifaddr *ifa;
+	struct domain *dp;
 
 	ifp->if_flags &= ~IFF_UP;
 	nanotime(&ifp->if_lastchange);
@@ -1501,10 +1552,10 @@ if_down(struct ifnet *ifp)
 		carp_carpdev_state(ifp);
 #endif
 	rt_ifmsg(ifp);
-#ifdef INET6
-	if (in6_present)
-		in6_if_down(ifp);
-#endif
+	DOMAIN_FOREACH(dp) {
+		if (dp->dom_if_down)
+			dp->dom_if_down(ifp);
+	}
 }
 
 /*
@@ -1518,6 +1569,7 @@ if_up(struct ifnet *ifp)
 #ifdef notyet
 	struct ifaddr *ifa;
 #endif
+	struct domain *dp;
 
 	ifp->if_flags |= IFF_UP;
 	nanotime(&ifp->if_lastchange);
@@ -1531,10 +1583,10 @@ if_up(struct ifnet *ifp)
 		carp_carpdev_state(ifp);
 #endif
 	rt_ifmsg(ifp);
-#ifdef INET6
-	if (in6_present)
-		in6_if_up(ifp);
-#endif
+	DOMAIN_FOREACH(dp) {
+		if (dp->dom_if_up)
+			dp->dom_if_up(ifp);
+	}
 }
 
 /*
@@ -2014,13 +2066,11 @@ doifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 	}
 
 	if (((oif_flags ^ ifp->if_flags) & IFF_UP) != 0) {
-#ifdef INET6
-		if (in6_present && (ifp->if_flags & IFF_UP) != 0) {
+		if ((ifp->if_flags & IFF_UP) != 0) {
 			int s = splnet();
-			in6_if_up(ifp);
+			if_up(ifp);
 			splx(s);
 		}
-#endif
 	}
 #ifdef COMPAT_OIFREQ
 	if (cmd != ocmd)

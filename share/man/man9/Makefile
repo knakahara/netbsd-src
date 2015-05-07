@@ -1,4 +1,4 @@
-#       $NetBSD: Makefile,v 1.383 2015/03/30 01:25:36 riastradh Exp $
+#       $NetBSD: Makefile,v 1.386 2015/04/27 07:03:57 knakahara Exp $
 
 #	Makefile for section 9 (kernel function and variable) manual pages.
 
@@ -39,10 +39,11 @@ MAN=	accept_filter.9 accf_data.9 accf_http.9 \
 	microseq.9 microtime.9 microuptime.9 mi_switch.9 module.9 \
 	mstohz.9 mutex.9 m_tag.9 namecache.9 \
 	namei.9 nullop.9 opencrypto.9 optstr.9 \
-	panic.9 pathbuf.9 pci.9 pci_configure_bus.9 pci_intr.9 pckbport.9 \
-	pcmcia.9 pcq.9 pcu.9 percpu.9 pfil.9 physio.9 pmap.9 pmatch.9 \
-	pmc.9 pmf.9 pool.9 pool_cache.9 powerhook_establish.9 ppi.9 \
-	ppsratecheck.9 preempt.9 proc_find.9 pserialize.9 putter.9 \
+	panic.9 pathbuf.9 pci.9 pci_configure_bus.9 pci_intr.9 \
+	pci_intr_distribute.9 pci_msi.9 pckbport.9 pcmcia.9 pcq.9 pcu.9 \
+	percpu.9 pfil.9 physio.9 pmap.9 pmatch.9 pmc.9 pmf.9 pool.9 \
+	pool_cache.9 powerhook_establish.9 ppi.9 ppsratecheck.9 preempt.9 \
+	proc_find.9 pserialize.9 putter.9 \
 	radio.9 ras.9 rasops.9 ratecheck.9 resettodr.9 rnd.9 rndsink.9 \
 	roundup.9 rssadapt.9 rt_timer.9 rwlock.9 RUN_ONCE.9 STACK.9 \
 	scanc.9 \
@@ -445,7 +446,6 @@ MLINKS+=kprintf.9 printf.9 kprintf.9 printf_nolog.9 kprintf.9 sprintf.9 \
 	kprintf.9 device_printf.9
 MLINKS+=kthread.9 kthread_exit.9 \
 	kthread.9 kthread_create.9 \
-	kthread.9 kthread_destroy.9 \
 	kthread.9 kthread_join.9
 MLINKS+=linedisc.9 ttyldisc_add.9 \
 	linedisc.9 ttyldisc_lookup.9 \
@@ -572,6 +572,22 @@ MLINKS+=pci.9 pci_conf_read.9 \
 	pci.9 PCI_VENDOR.9 \
 	pci.9 PCI_PRODUCT.9 \
 	pci.9 PCI_REVISION.9
+MLINKS+=pci_msi.9 pci_msix.9 \
+	pci_msi.9 pci_intx_alloc.9 \
+	pci_msi.9 pci_intx_release.9 \
+	pci_msi.9 pci_msi_count.9 \
+	pci_msi.9 pci_msi_alloc.9 \
+	pci_msi.9 pci_msi_alloc_exact.9 \
+	pci_msi.9 pci_msi_release.9 \
+	pci_msi.9 pci_msi_establish.9 \
+	pci_msi.9 pci_msi_disestablish.9 \
+	pci_msi.9 pci_msix_count.9 \
+	pci_msi.9 pci_msix_alloc.9 \
+	pci_msi.9 pci_msix_alloc_exact.9 \
+	pci_msi.9 pci_msix_alloc_map.9 \
+	pci_msi.9 pci_msix_release.9 \
+	pci_msi.9 pci_msix_establish.9 \
+	pci_msi.9 pci_msix_disestablish.9
 MLINKS+=pci_configure_bus.9 pci_conf_hook.9 \
 	pci_configure_bus.9 pci_conf_interrupt.9
 MLINKS+=pckbport.9 pckbport_attach.9 \

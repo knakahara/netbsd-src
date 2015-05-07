@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.144 2015/03/28 14:09:58 jmcneill Exp $
+#	$NetBSD: Makefile,v 1.150 2015/05/03 02:54:07 pgoyette Exp $
 
 .include <bsd.own.mk>
 
@@ -89,10 +89,16 @@ SUBDIR+=	securelevel
 SUBDIR+=	skipjack
 SUBDIR+=	smbfs
 SUBDIR+=	spdmem
+SUBDIR+=	sysmon
+SUBDIR+=	sysmon_envsys
+SUBDIR+=	sysmon_power
+SUBDIR+=	sysmon_taskq
+SUBDIR+=	sysmon_wdog
 SUBDIR+=	sysvbfs
 SUBDIR+=	suser
 SUBDIR+=	swcrypto
 SUBDIR+=	swsensor
+SUBDIR+=	swwdog
 SUBDIR+=	tmpfs
 SUBDIR+=	uatp
 SUBDIR+=	udf
@@ -141,6 +147,7 @@ SUBDIR+=	hdaudioverbose
 SUBDIR+=	hpet
 SUBDIR+=	odcm
 SUBDIR+=	powernow
+SUBDIR+=	tco
 SUBDIR+=	tprof_pmi
 SUBDIR+=	tprof_amdpmi
 SUBDIR+=	vmt
@@ -218,6 +225,7 @@ SUBDIR+=	sisdrm
 SUBDIR+=	tdfxdrm
 SUBDIR+=	viac7temp
 SUBDIR+=	viadrm
+SUBDIR+=	viadrmums
 .endif
 
 .if ${MACHINE_ARCH} == "i386" || \

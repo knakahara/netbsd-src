@@ -1,4 +1,4 @@
-/*	$NetBSD: pic.c,v 1.32 2015/04/12 15:32:19 matt Exp $	*/
+/*	$NetBSD: pic.c,v 1.35 2015/04/18 14:09:32 skrll Exp $	*/
 /*-
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -33,7 +33,7 @@
 #include "opt_multiprocessor.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pic.c,v 1.32 2015/04/12 15:32:19 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pic.c,v 1.35 2015/04/18 14:09:32 skrll Exp $");
 
 #include <sys/param.h>
 #include <sys/atomic.h>
@@ -42,6 +42,8 @@ __KERNEL_RCSID(0, "$NetBSD: pic.c,v 1.32 2015/04/12 15:32:19 matt Exp $");
 #include <sys/intr.h>
 #include <sys/kernel.h>
 #include <sys/kmem.h>
+#include <sys/mutex.h>
+#include <sys/once.h>
 #include <sys/xcall.h>
 #include <sys/ipi.h>
 
@@ -98,10 +100,14 @@ struct intrsource **pic_iplsource[NIPL] = {
 	[0 ... NIPL-1] = pic__iplsources,
 };
 size_t pic_ipl_offset[NIPL+1];
+
+static kmutex_t pic_lock;
 size_t pic_sourcebase;
 static struct evcnt pic_deferral_ev = 
     EVCNT_INITIALIZER(EVCNT_TYPE_MISC, NULL, "deferred", "intr");
 EVCNT_ATTACH_STATIC(pic_deferral_ev);
+
+static int pic_init(void);
 
 #ifdef __HAVE_PIC_SET_PRIORITY
 void
@@ -117,6 +123,13 @@ pic_set_priority(struct cpu_info *ci, int newipl)
 #endif
 
 #ifdef MULTIPROCESSOR
+int
+pic_ipi_ast(void *arg)
+{
+	setsoftast(curcpu());
+	return 1;
+}
+
 int
 pic_ipi_nop(void *arg)
 {
@@ -146,7 +159,16 @@ pic_ipi_ddb(void *arg)
 	kdb_trap(-1, arg);
 	return 1;
 }
+
+#ifdef __HAVE_PREEMPTION
+int
+pic_ipi_kpreempt(void *arg)
+{
+	atomic_or_uint(&curcpu()->ci_astpending, __BIT(1));
+	return 1;
+}
 #endif
+#endif /* MULTIPROCESSOR */
 
 void
 intr_cpu_init(struct cpu_info *ci)
@@ -556,7 +578,7 @@ pic_do_pending_ints(register_t psw, int newipl, void *frame)
 	percpu_putref(pic_pending_percpu);
 #endif
 #endif /* __HAVE_PIC_PENDING_INTRS */
-#ifdef __HAVE_PREEEMPTION
+#ifdef __HAVE_PREEMPTION
 	if (newipl == IPL_NONE && (ci->ci_astpending & __BIT(1))) {
 		pic_set_priority(ci, IPL_SCHED);
 		kpreempt(0);
@@ -606,10 +628,23 @@ pic_pending_zero(void *v0, void *v1, struct cpu_info *ci)
 }
 #endif /* __HAVE_PIC_PENDING_INTRS && MULTIPROCESSOR */
 
+static int
+pic_init(void)
+{
+
+	mutex_init(&pic_lock, MUTEX_DEFAULT, IPL_HIGH);
+
+	return 0;
+}
+
 void
 pic_add(struct pic_softc *pic, int irqbase)
 {
 	int slot, maybe_slot = -1;
+	size_t sourcebase;
+	static ONCE_DECL(pic_once);
+
+	RUN_ONCE(&pic_once, pic_init);
 
 	KASSERT(strlen(pic->pic_name) > 0);
 
@@ -625,6 +660,7 @@ pic_add(struct pic_softc *pic, int irqbase)
 	}
 #endif /* __HAVE_PIC_PENDING_INTRS && MULTIPROCESSOR */
 
+	mutex_enter(&pic_lock);
 	for (slot = 0; slot < PIC_MAXPICS; slot++) {
 		struct pic_softc * const xpic = pic_list[slot];
 		if (xpic == NULL) {
@@ -653,6 +689,10 @@ pic_add(struct pic_softc *pic, int irqbase)
 	KASSERTMSG(pic->pic_maxsources <= PIC_MAXSOURCES, "%zu",
 	    pic->pic_maxsources);
 	KASSERT(pic_sourcebase + pic->pic_maxsources <= PIC_MAXMAXSOURCES);
+	sourcebase = pic_sourcebase;
+	pic_sourcebase += pic->pic_maxsources;
+
+	mutex_exit(&pic_lock);
 
 	/*
 	 * Allocate a pointer to each cpu's evcnts and then, for each cpu,
@@ -670,9 +710,8 @@ pic_add(struct pic_softc *pic, int irqbase)
 	 */
 	percpu_foreach(pic->pic_percpu, pic_percpu_allocate, pic);
 
-	pic->pic_sources = &pic_sources[pic_sourcebase];
+	pic->pic_sources = &pic_sources[sourcebase];
 	pic->pic_irqbase = irqbase;
-	pic_sourcebase += pic->pic_maxsources;
 	pic->pic_id = slot;
 #ifdef __HAVE_PIC_SET_PRIORITY
 	KASSERT((slot == 0) == (pic->pic_ops->pic_set_priority != NULL));

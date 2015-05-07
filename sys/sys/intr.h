@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.h,v 1.17 2014/05/25 15:42:01 rmind Exp $	*/
+/*	$NetBSD: intr.h,v 1.18 2015/04/27 06:42:53 knakahara Exp $	*/
 
 /*-
  * Copyright (c) 2007 The NetBSD Foundation, Inc.
@@ -67,7 +67,6 @@ uint64_t	intr_get_count(void *, u_int);
 void		intr_get_assigned(void *, kcpuset_t *);
 void		intr_get_available(kcpuset_t *);
 const char	*intr_get_devname(void *);
-int		intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
 int		intr_construct_intrids(const kcpuset_t *, char ***, int *);
 void		intr_destruct_intrids(char **, int);
 

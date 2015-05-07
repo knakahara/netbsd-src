@@ -1,4 +1,4 @@
-/*      $NetBSD: rnd_private.h,v 1.7 2015/04/13 15:13:50 riastradh Exp $     */
+/*      $NetBSD: rnd_private.h,v 1.11 2015/04/14 13:14:20 riastradh Exp $     */
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -36,7 +36,9 @@
 #include <sys/types.h>
 #include <sys/mutex.h>
 #include <sys/queue.h>
-#include <sys/rnd.h>
+#include <sys/rndio.h>
+#include <sys/rndpool.h>
+#include <sys/rndsource.h>
 
 /*
  * Number of bytes returned per hash.  This value is used in both
@@ -45,42 +47,14 @@
  */
 #define RND_ENTROPY_THRESHOLD   10
 
-/*
- * Used by rnd_extract_data() and rndpool_extract_data() to describe how
- * "good" the data has to be.
- */
-#define RND_EXTRACT_ANY		0  /* extract anything, even if no entropy */
-#define RND_EXTRACT_GOOD	1  /* return as many good bytes
-				      (short read ok) */
-
 bool	rnd_extract(void *, size_t);
 bool	rnd_tryextract(void *, size_t);
 void	rnd_getmore(size_t);
-void	rnd_wakeup_readers(void);
 
 /*
  * Flag indicating rnd_init has run.
  */
 extern int		rnd_ready;
-
-/*
- * Bootloader-supplied entropy.  Use only in tests against NULL to
- * determine whether the bootloader supplied entropy.
- */
-extern rndsave_t	*boot_rsp;
-
-/*
- * List of rndsources.
- */
-LIST_HEAD(rndsource_head, krndsource);
-
-/*
- * Global entropy pool state.  Access to everything here is serialized
- * by rndpool_mtx.
- */
-extern kmutex_t			rndpool_mtx;
-extern rndpool_t		rnd_pool;
-extern struct rndsource_head	rnd_sources;
 
 /*
  * Debugging flags.

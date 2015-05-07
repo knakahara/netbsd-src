@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_var.h,v 1.2 2015/03/29 22:27:04 jmcneill Exp $ */
+/* $NetBSD: tegra_var.h,v 1.8 2015/05/03 16:40:12 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -31,6 +31,7 @@
 
 #include <sys/types.h>
 #include <sys/bus.h>
+#include <sys/gpio.h>
 
 #include "opt_tegra.h"
 
@@ -49,14 +50,17 @@ struct tegraio_attach_args {
 	bus_space_tag_t tio_a4x_bst;
 	bus_space_handle_t tio_bsh;
 	bus_dma_tag_t tio_dmat;
+	bus_dma_tag_t tio_coherent_dmat;
 };
 
 extern struct bus_space armv7_generic_bs_tag;
 extern struct bus_space armv7_generic_a4x_bs_tag;
 extern bus_space_handle_t tegra_host1x_bsh;
+extern bus_space_handle_t tegra_ppsb_bsh;
 extern bus_space_handle_t tegra_apb_bsh;
 extern bus_space_handle_t tegra_ahb_a2_bsh;
 extern struct arm32_bus_dma_tag tegra_dma_tag;
+extern struct arm32_bus_dma_tag tegra_coherent_dma_tag;
 
 #define CHIP_ID_TEGRA20		0x20
 #define CHIP_ID_TEGRA30		0x30
@@ -67,8 +71,24 @@ extern struct arm32_bus_dma_tag tegra_dma_tag;
 u_int	tegra_chip_id(void);
 const char *tegra_chip_name(void);
 void	tegra_bootstrap(void);
+void	tegra_dma_bootstrap(psize_t);
+
+u_int	tegra_car_osc_rate(void);
+u_int	tegra_car_pllc_rate(void);
+u_int	tegra_car_pllx_rate(void);
+u_int	tegra_car_pllp0_rate(void);
+u_int	tegra_car_uart_rate(u_int);
+u_int	tegra_car_periph_sdmmc_rate(u_int);
+int	tegra_car_periph_sdmmc_set_div(u_int, u_int);
+
+struct tegra_gpio_pin;
+struct tegra_gpio_pin *tegra_gpio_acquire(const char *, u_int);
+void	tegra_gpio_release(struct tegra_gpio_pin *);
+int	tegra_gpio_read(struct tegra_gpio_pin *);
+void	tegra_gpio_write(struct tegra_gpio_pin *, int);
 
 void	tegra_pmc_reset(void);
+void	tegra_pmc_power(u_int, bool);
 
 psize_t	tegra_mc_memsize(void);
 

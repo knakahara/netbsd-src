@@ -1,4 +1,4 @@
-.\"     $NetBSD: vnode.9,v 1.61 2014/03/24 13:42:40 hannken Exp $
+.\"     $NetBSD: vnode.9,v 1.68 2015/04/20 19:36:55 riastradh Exp $
 .\"
 .\" Copyright (c) 2001, 2005, 2006 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -27,7 +27,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd March 24, 2014
+.Dd April 20, 2015
 .Dt VNODE 9
 .Os
 .Sh NAME
@@ -67,7 +67,7 @@
 .Ft void
 .Fn vrele_async "struct vnode *vp"
 .Ft int
-.Fn vget "struct vnode *vp" "int lockflag"
+.Fn vget "struct vnode *vp" "int lockflag" "int wait"
 .Ft void
 .Fn vput "struct vnode *vp"
 .Ft void
@@ -110,26 +110,49 @@
 .Ft void
 .Fn vprint "const char *label" "struct vnode *vp"
 .Sh DESCRIPTION
-The vnode is the focus of all file activity in
-.Nx .
-There is a unique vnode allocated for each active file, directory,
-mounted-on file, fifo, domain socket, symbolic link and device.
-The kernel has no concept of a file's underlying structure and so it
-relies on the information stored in the vnode to describe the file.
-Thus, the vnode associated with a file holds all the administration
-information pertaining to it.
-.Pp
-When a process requests an operation on a file, the
+A
+.Em vnode
+represents an on-disk file in use by the system.
+Each
 .Xr vfs 9
-interface passes control to a file system type dependent function to carry
-out the operation.
-If the file system type dependent function finds that a vnode
-representing the file is not in main memory, it dynamically allocates
-a new vnode from the system main memory pool.
-Once allocated, the vnode is attached to the data structure pointer
-associated with the cause of the vnode allocation and it remains
-resident in the main memory until the system decides that it is no
-longer needed and can be recycled.
+file system provides a set of
+.Xr vnodeops 9
+operations on vnodes, invoked by file-system-independent system calls
+and supported by file-system-independent library routines.
+.Pp
+Each mounted file system provides a vnode for the root of the file
+system, via
+.Xr VFS_ROOT 9 .
+Other vnodes are obtained by
+.Xr VOP_LOOKUP 9 .
+Users of vnodes usually invoke these indirectly via
+.Xr namei 9
+to obtain vnodes from paths.
+.Pp
+Each file system usually maintains a cache mapping recently used inode
+numbers, or the equivalent, to vnodes, and a cache mapping recently
+used file names to vnodes.
+If memory is scarce, the system may decide to
+.Em reclaim
+an unused cached vnode, calling
+.Xr VOP_RECLAIM 9
+to remove it from the caches and to free file-system-specific memory
+associated with it.
+A file system may also choose to immediately reclaim a cached vnode
+once it is unused, in
+.Xr VOP_INACTIVE 9 ,
+if the vnode has been deleted on disk.
+.Pp
+When a file system retrieves a vnode from a cache, the vnode may not
+have any users, and another thread in the system may be simultaneously
+deciding to reclaim it.
+Thus, to retrieve a vnode from a cache, one must use
+.Fn vget ,
+not
+.Fn vref ,
+to acquire the first reference, and be prepared for
+.Fn vget
+to fail if another thread is reclaiming the vnode.
 .Pp
 The vnode has the following structure:
 .Bd -literal
@@ -221,12 +244,6 @@ This vnode is currently locked to change underlying type.
 This vnode is on syncer work-list.
 .It Dv VI_MARKER
 A dummy marker vnode.
-.It Dv VI_LAYER
-This vnode is on a layered file system.
-.It Dv VI_LOCKSHARE
-This vnode shares its
-.Em v_interlock
-with other vnodes.
 .It Dv VI_CLEAN
 This vnode has been reclaimed and is no longer attached to a file system.
 .It Dv VU_DIROP
@@ -527,38 +544,79 @@ are zero, the vnode is placed on the freelist.
 .It Fn vrele_async "vp"
 Will asychronously release the vnode in different context than the caller,
 sometime after the call.
-.It Fn vget "vp" "lockflags"
+.It Fn vget "vp" "lockflags" "wait"
 Reclaim vnode
 .Fa vp
-from the freelist, increment its reference count and lock it.
-The argument
+from the freelist and increment its reference count.
+.Pp
+The vnode
+.Fa vp
+may be changing state: another thread may be initializing it from disk,
+or revoking it with
+.Xr revoke 2 ,
+or reclaiming it with
+.Xr VOP_RECLAIM 9 .
+In that case,
+.Fn vget
+will wait until the state has changed, if
 .Fa lockflags
-specifies the
-.Xr rwlock 9
-flags used to lock the vnode.
-If the
-.Dv VI_XLOCK
-flag is set in
-.Fa vp Ns 's
-.Em v_flag ,
-vnode
+is
+.Li 0
+and
+.Fa wait
+is
+.Li true ;
+or will return
+.Er EBUSY
+if
+.Fa lockflags
+is
+.Dv LK_NOWAIT
+and
+.Fa wait
+is
+.Li false .
+.Pp
+(The extra argument enables the compiler to detect old code which
+additionally used
+.Fn vget
+to lock the vnode.)
+.Pp
+Returns
+.Bl -tag -offset abcd -width ENOENT -compact
+.It Er EBUSY
+if
 .Fa vp
-is being recycled in
-.Fn vgone
-and the calling thread sleeps until the transition is complete.
-When it is awakened, an error is returned to indicate that the vnode is
-no longer usable.
+was changing state and
+.Fa wait
+is false.
+.It Er ENOENT
+if the system was reclaiming
+.Fa vp
+with
+.Xr VOP_RECLAIM 9 .
+.It Li 0
+on success.
+.El
 .It Fn vput "vp"
-Unlock vnode
-.Fa vp
-and decrement its
-.Em v_usecount .
-Depending on the reference counts, move the vnode to the holdlist or
-the freelist.
-This operation is functionally equivalent to calling
+Legacy convenience routine for unlocking and releasing
+.Fa vp .
+Equivalent to:
+.Bd -literal -offset abcd
+.No "VOP_UNLOCK(" Ns Fa vp Ns Li ");"
+.No "vrele(" Ns Fa vp Ns Li ");"
+.Ed
+.Pp
+Note that this is
+.Em not
+an inverse of
+.Fn vget .
+The name appears so for hysterical raisins.
+New code should prefer using
 .Xr VOP_UNLOCK 9
-followed by
-.Fn vrele .
+and
+.Fn vrele
+directly.
 .It Fn vhold "vp"
 Mark the vnode
 .Fa vp

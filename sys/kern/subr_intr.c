@@ -47,6 +47,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <machine/limits.h>
 
+#include <dev/pci/pcivar.h>
+
 #ifdef INTR_DEBUG
 #define DPRINTF(msg) printf msg
 #else
@@ -146,7 +148,7 @@ intr_avert_intr(u_int cpu_idx)
 	for (i = 0; i < nids; i++) {
 		ich = intr_get_handler(ids[i]);
 		KASSERT(ich != NULL);
-		error = intr_distribute(ich, cpuset, NULL);
+		error = pci_intr_distribute(ich, cpuset, NULL);
 		if (error)
 			break;
 	}
@@ -359,7 +361,7 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 		kcpuset_destroy(kcpuset);
 		return EINVAL;
 	}
-	error = intr_distribute(ich, kcpuset, NULL);
+	error = pci_intr_distribute(ich, kcpuset, NULL);
 	mutex_exit(&cpu_lock);
 
 	kcpuset_destroy(kcpuset);
