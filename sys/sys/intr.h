@@ -62,11 +62,10 @@ void	softint_trigger(uintptr_t);
 #endif
 void	softint_dispatch(lwp_t *, int);
 
-void		*intr_get_handler(const char *);
-uint64_t	intr_get_count(void *, u_int);
-void		intr_get_assigned(void *, kcpuset_t *);
+uint64_t	intr_get_count(const char *, u_int);
+void		intr_get_assigned(const char *, kcpuset_t *);
 void		intr_get_available(kcpuset_t *);
-const char	*intr_get_devname(void *);
+const char	*intr_get_devname(const char *);
 int		intr_construct_intrids(const kcpuset_t *, char ***, int *);
 void		intr_destruct_intrids(char **, int);
 

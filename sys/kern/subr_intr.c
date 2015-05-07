@@ -123,11 +123,8 @@ static int
 intr_avert_intr(u_int cpu_idx)
 {
 	kcpuset_t *cpuset;
-	void *ich;
 	char **ids;
 	int error, i, nids;
-
-	KASSERT(mutex_owned(&cpu_lock));
 
 	kcpuset_create(&cpuset, true);
 	kcpuset_set(cpuset, cpu_idx);
@@ -146,9 +143,7 @@ intr_avert_intr(u_int cpu_idx)
 	}
 
 	for (i = 0; i < nids; i++) {
-		ich = intr_get_handler(ids[i]);
-		KASSERT(ich != NULL);
-		error = pci_intr_distribute(ich, cpuset, NULL);
+		error = pci_intr_distribute_handler(ids[i], cpuset, NULL);
 		if (error)
 			break;
 	}
@@ -182,9 +177,7 @@ intr_list_size(void)
 	ilsize += sizeof(struct intr_list);
 
 	/* il_line body */
-	mutex_enter(&cpu_lock);
 	error = intr_construct_intrids(kcpuset_running, &ids, &nids);
-	mutex_exit(&cpu_lock);
 	if (error)
 		return 0;
 	ilsize += intr_list_line_size() * nids;
@@ -228,11 +221,8 @@ intr_list(void *data, int length)
 	intr_get_available(avail);
 	kcpuset_create(&assigned, true);
 
-	mutex_enter(&cpu_lock);
-
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
 	if (ret != 0) {
-		mutex_exit(&cpu_lock);
 		DPRINTF(("%s: intr_construct_intrids() failed\n", __func__));
 		ret = -ret;
 		goto out;
@@ -241,7 +231,6 @@ intr_list(void *data, int length)
 	line_size = intr_list_line_size();
 	/* ensure interrupts are not added after above intr_list_size(). */
 	if (ilsize < sizeof(struct intr_list) + line_size * nids) {
-		mutex_exit(&cpu_lock);
 		intr_destruct_intrids(ids, nids);
 		DPRINTF(("%s: interrupts are added during execution.\n", __func__));
 		ret = -ENOMEM;
@@ -249,27 +238,22 @@ intr_list(void *data, int length)
 	}
 
 	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
-		void *ich;
-
-		ich = intr_get_handler(ids[intr_idx]);
-		KASSERT(ich != NULL);
 		strncpy(illine->ill_intrid, ids[intr_idx], INTRIDBUF);
-		strncpy(illine->ill_xname, intr_get_devname(ich), INTRDEVNAMEBUF);
+		strncpy(illine->ill_xname, intr_get_devname(ids[intr_idx]),
+		    INTRDEVNAMEBUF);
 
-		intr_get_assigned(ich, assigned);
+		intr_get_assigned(ids[intr_idx], assigned);
 		for (cpu_idx = 0; cpu_idx < ncpu; cpu_idx++) {
 			struct intr_list_line_cpu *illcpu =
 				&illine->ill_cpu[cpu_idx];
 
 			illcpu->illc_assigned =
 				kcpuset_isset(assigned, cpu_idx) ? true : false;
-			illcpu->illc_count = intr_get_count(ich, cpu_idx);
+			illcpu->illc_count = intr_get_count(ids[intr_idx], cpu_idx);
 		}
 
 		illine = (struct intr_list_line *)((char *)illine + line_size);
 	}
-
-	mutex_exit(&cpu_lock);
 
 	ret = ilsize;
 	il->il_version = INTR_LIST_VERSION;
@@ -332,7 +316,6 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 	cpuset_t *ucpuset;
 	kcpuset_t *kcpuset;
 	int error;
-	void *ich;
 
 	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_INTR,
 	    KAUTH_REQ_SYSTEM_INTR_AFFINITY, NULL, NULL, NULL);
@@ -354,15 +337,7 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 		return EINVAL;
 	}
 
-	mutex_enter(&cpu_lock);
-	ich = intr_get_handler(iset->intrid);
-	if (ich == NULL) {
-		mutex_exit(&cpu_lock);
-		kcpuset_destroy(kcpuset);
-		return EINVAL;
-	}
-	error = pci_intr_distribute(ich, kcpuset, NULL);
-	mutex_exit(&cpu_lock);
+	error = pci_intr_distribute_handler(iset->intrid, kcpuset, NULL);
 
 	kcpuset_destroy(kcpuset);
 	return error;
@@ -452,8 +427,8 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 		mutex_exit(&cpu_lock);
 		return error;
 	}
-	error = intr_avert_intr(cpu_idx);
 	mutex_exit(&cpu_lock);
+	error = intr_avert_intr(cpu_idx);
 
 	kcpuset_destroy(kcpuset);
 	return error;

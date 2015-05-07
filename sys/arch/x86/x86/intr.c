@@ -1939,7 +1939,7 @@ intr_is_affinity_intrsource(struct intrsource *isp, const kcpuset_t *cpuset)
 	return kcpuset_isset(cpuset, cpu_index(ci));
 }
 
-void *
+static struct intrhand *
 intr_get_handler(const char *intrid)
 {
 	struct intrsource *isp;
@@ -1954,7 +1954,7 @@ intr_get_handler(const char *intrid)
 }
 
 uint64_t
-intr_get_count(void *ich, u_int cpu_idx)
+intr_get_count(const char *intrid, u_int cpu_idx)
 {
 	struct cpu_info *ci;
 	struct intrsource *isp;
@@ -1963,10 +1963,17 @@ intr_get_count(void *ich, u_int cpu_idx)
 	cpuid_t cpuid;
 	int i, slot;
 
+
+	mutex_enter(&cpu_lock);
+	ih = intr_get_handler(intrid);
+	mutex_exit(&cpu_lock);
+
+	if (ih == NULL)
+		return 0;
+
 	ci = cpu_lookup(cpu_idx);
 	cpuid = ci->ci_cpuid;
 
-	ih = ich;
 	slot = ih->ih_slot;
 	isp = ih->ih_cpu->ci_isources[slot];
 
@@ -1984,16 +1991,21 @@ intr_get_count(void *ich, u_int cpu_idx)
 }
 
 void
-intr_get_assigned(void *ich, kcpuset_t *cpuset)
+intr_get_assigned(const char *intrid, kcpuset_t *cpuset)
 {
 	struct cpu_info *ci;
 	struct intrhand *ih;
 
-	ih = ich;
-	ci = ih->ih_cpu;
-	KASSERT(ci != NULL);
+	mutex_enter(&cpu_lock);
+	ih = intr_get_handler(intrid);
+	mutex_exit(&cpu_lock);
 
 	kcpuset_zero(cpuset);
+
+	if (ih == NULL)
+		return;
+
+	ci = ih->ih_cpu;
 	kcpuset_set(cpuset, cpu_index(ci));
 }
 
@@ -2012,29 +2024,34 @@ intr_get_available(kcpuset_t *cpuset)
 }
 
 const char *
-intr_get_devname(void *ich)
+intr_get_devname(const char *intrid)
 {
 	struct intrsource *isp;
 	struct intrhand *ih;
 	int slot;
 
-	ih = ich;
+	mutex_enter(&cpu_lock);
+	ih = intr_get_handler(intrid);
+	mutex_exit(&cpu_lock);
+
+	if (ih == NULL)
+		return "";
+
 	slot = ih->ih_slot;
 	isp = ih->ih_cpu->ci_isources[slot];
 
 	return isp->is_xname;
 }
 
-int
-intr_distribute(struct intrhand *ih, const kcpuset_t *newset, kcpuset_t *oldset)
+static int
+intr_distribute_nolock(struct intrhand *ih, const kcpuset_t *newset,
+    kcpuset_t *oldset)
 {
 	struct intrsource *isp;
 	int ret, slot;
 
 	if (ih == NULL)
 		return EINVAL;
-
-	mutex_enter(&cpu_lock);
 
 	slot = ih->ih_slot;
 	isp = ih->ih_cpu->ci_isources[slot];
@@ -2044,6 +2061,37 @@ intr_distribute(struct intrhand *ih, const kcpuset_t *newset, kcpuset_t *oldset)
 		intr_get_affinity(isp, oldset);
 
 	ret = intr_set_affinity(isp, newset);
+
+	return ret;
+}
+
+int
+intr_distribute(struct intrhand *ih, const kcpuset_t *newset, kcpuset_t *oldset)
+{
+	int ret;
+
+	mutex_enter(&cpu_lock);
+	ret = intr_distribute_nolock(ih, newset, oldset);
+	mutex_exit(&cpu_lock);
+
+	return ret;
+}
+
+int
+intr_distribute_handler(const char *intrid, const kcpuset_t *newset,
+    kcpuset_t *oldset)
+{
+	int ret;
+	struct intrhand *ih;
+
+	mutex_enter(&cpu_lock);
+
+	ih = intr_get_handler(intrid);
+	if (ih == NULL) {
+		mutex_exit(&cpu_lock);
+		return ENOENT;
+	}
+	ret = intr_distribute_nolock(ih, newset, oldset);
 
 	mutex_exit(&cpu_lock);
 
@@ -2064,22 +2112,19 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 		return 0;
 
 	*count = 0;
+	mutex_enter(&cpu_lock);
 	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		if (intr_is_affinity_intrsource(isp, cpuset))
 			(*count)++;
 	}
+	mutex_exit(&cpu_lock);
 	if (*count == 0)
 		return 0;
 
 	ids = kmem_zalloc(sizeof(char*) * (*count), KM_SLEEP);
 	if (ids == NULL)
 		return ENOMEM;
-
-	i = 0;
-	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
-		if (!intr_is_affinity_intrsource(isp, cpuset))
-			continue;
-
+	for (i = 0; i < *count; i++) {
 		ids[i] = kmem_zalloc(INTRIDBUF, KM_SLEEP);
 		if (ids[i] == NULL) {
 			int j;
@@ -2089,10 +2134,24 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 			kmem_free(ids, sizeof(char*) * (*count));
 			return ENOMEM;
 		}
+	}
+
+	i = 0;
+	mutex_enter(&cpu_lock);
+	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
+		/* Ignore devices attached after counting "*count". */
+		if (i >= *count) {
+			DPRINTF(("New devices are attached after counting.\n"));
+			break;
+		}
+
+		if (!intr_is_affinity_intrsource(isp, cpuset))
+			continue;
 
 		strncpy(ids[i], isp->is_intrid, INTRIDBUF);
 		i++;
 	}
+	mutex_exit(&cpu_lock);
 
 	*intrids = ids;
 	return 0;

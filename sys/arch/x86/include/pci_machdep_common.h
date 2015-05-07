@@ -121,6 +121,8 @@ void		*pci_intr_establish(pci_chipset_tag_t, pci_intr_handle_t,
 		    int, int (*)(void *), void *);
 void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 int		pci_intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
+int		pci_intr_distribute_handler(const char *, const kcpuset_t *,
+		    kcpuset_t *);
 
 /*
  * If device drivers use MSI/MSI-X, they should use these API for INTx

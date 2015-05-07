@@ -34,6 +34,7 @@
 #include <sys/kcpuset.h>
 
 int intr_distribute(struct intrhand *, const kcpuset_t *, kcpuset_t *);
+int intr_distribute_handler(const char *, const kcpuset_t *, kcpuset_t *);
 
 #endif /* _KERNEL */
 

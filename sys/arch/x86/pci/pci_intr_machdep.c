@@ -347,6 +347,16 @@ pci_intr_distribute(void *cookie, const kcpuset_t *newset, kcpuset_t *oldset)
 	return intr_distribute(cookie, newset, oldset);
 }
 
+int
+pci_intr_distribute_handler(const char *intrid, const kcpuset_t *newset,
+    kcpuset_t *oldset)
+{
+
+	/* XXX Is pc_ov->ov_intr_distribute_handler required? */
+
+	return intr_distribute_handler(intrid, newset, oldset);
+}
+
 #if NIOAPIC > 0
 int
 pci_intx_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
