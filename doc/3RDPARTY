@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1221 2015/04/23 13:51:53 wiz Exp $
+#	$NetBSD: 3RDPARTY,v 1.1224 2015/05/02 15:23:49 roy Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -305,8 +305,8 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	6.8.1
-Current Vers:	6.8.1
+Version:	6.8.2
+Current Vers:	6.8.2
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/dhcpcd/
 Home Page:	http://roy.marples.name/projects/dhcpcd/
@@ -971,8 +971,8 @@ Location:	external/bsd/openpam/dist
 Notes:
 
 Package:	openresolv
-Version:	3.6.1
-Current Vers:	3.6.1
+Version:	3.7.0
+Current Vers:	3.7.0
 Maintainer:	roy
 Archive Site:	ftp://roy.marples.name/pub/openresolv/
 Home Page:	http://roy.marples.name/projects/openresolv/
@@ -1337,8 +1337,8 @@ Notes:
 Added changes from a5 -> a12 manually.
 
 Package:	tz
-Version:	tzcode2015b / tzdata2015b
-Current Vers:	tzcode2015b / tzdata2015b
+Version:	tzcode2015d / tzdata2015b
+Current Vers:	tzcode2015d / tzdata2015d
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/

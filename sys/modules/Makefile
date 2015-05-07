@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.146 2015/04/23 23:22:27 pgoyette Exp $
+#	$NetBSD: Makefile,v 1.150 2015/05/03 02:54:07 pgoyette Exp $
 
 .include <bsd.own.mk>
 
@@ -147,6 +147,7 @@ SUBDIR+=	hdaudioverbose
 SUBDIR+=	hpet
 SUBDIR+=	odcm
 SUBDIR+=	powernow
+SUBDIR+=	tco
 SUBDIR+=	tprof_pmi
 SUBDIR+=	tprof_amdpmi
 SUBDIR+=	vmt
@@ -224,6 +225,7 @@ SUBDIR+=	sisdrm
 SUBDIR+=	tdfxdrm
 SUBDIR+=	viac7temp
 SUBDIR+=	viadrm
+SUBDIR+=	viadrmums
 .endif
 
 .if ${MACHINE_ARCH} == "i386" || \
