@@ -216,7 +216,8 @@ intr_list(void *data, int length)
 
 	il = (struct intr_list *)data;
 
-	illine = (struct intr_list_line *)((char *)il + sizeof(struct intr_list));
+	illine = (struct intr_list_line *)
+		((char *)il + sizeof(struct intr_list));
 	il->il_lineoffset = (off_t)illine - (off_t)il;
 
 	kcpuset_create(&avail, true);
@@ -225,7 +226,8 @@ intr_list(void *data, int length)
 
 	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
 	if (ret != 0) {
-		DPRINTF(("%s: intr_construct_intrids() failed\n", __func__));
+		DPRINTF(("%s: intr_construct_intrids() failed\n",
+			__func__));
 		ret = -ret;
 		goto out;
 	}
@@ -234,7 +236,8 @@ intr_list(void *data, int length)
 	/* ensure interrupts are not added after above intr_list_size(). */
 	if (ilsize < sizeof(struct intr_list) + line_size * nids) {
 		intr_destruct_intrids(ids, nids);
-		DPRINTF(("%s: interrupts are added during execution.\n", __func__));
+		DPRINTF(("%s: interrupts are added during execution.\n",
+			__func__));
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -251,7 +254,8 @@ intr_list(void *data, int length)
 
 			illcpu->illc_assigned =
 				kcpuset_isset(assigned, cpu_idx) ? true : false;
-			illcpu->illc_count = intr_get_count(ids[intr_idx], cpu_idx);
+			illcpu->illc_count =
+				intr_get_count(ids[intr_idx], cpu_idx);
 		}
 
 		illine = (struct intr_list_line *)((char *)illine + line_size);
