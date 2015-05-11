@@ -1,4 +1,4 @@
-/*	$NetBSD: disks.c,v 1.7 2015/01/02 19:43:13 abs Exp $ */
+/*	$NetBSD: disks.c,v 1.9 2015/05/10 10:14:02 martin Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -108,7 +108,6 @@ static int fsck_preen(const char *, int, const char *);
 static void fixsb(const char *, const char *, char);
 static bool is_gpt(const char *);
 static int incoregpt(pm_devs_t *, partinfo *);
-static bool have_gpt_binary(void);
 
 #ifndef DISK_NAMES
 #define DISK_NAMES "wd", "sd", "ld", "raid"
@@ -577,26 +576,15 @@ find_disks(const char *doingwhat)
 	return numdisks;
 }
 
-static bool
-have_gpt_binary(void)
-{
-	static bool did_test = false;
-	static bool have_gpt;
-
-	if (!did_test) {
-		have_gpt = binary_available("gpt");
-		did_test = true;
-	}
-
-	return have_gpt;
-}
 
 void
 label_read(void)
 {
+	check_available_binaries();
+
 	/* Get existing/default label */
 	memset(&pm->oldlabel, 0, sizeof pm->oldlabel);
-	if (!have_gpt_binary() || !pm->gpt)
+	if (!have_gpt || !pm->gpt)
 		incorelabel(pm->diskdev, pm->oldlabel);
 	else
 		incoregpt(pm, pm->oldlabel);
@@ -666,14 +654,16 @@ fmt_fspart(menudesc *m, int ptn, void *arg)
 int
 write_disklabel (void)
 {
+	int rv = 0;
 
 #ifdef DISKLABEL_CMD
 	/* disklabel the disk */
-	return run_program(RUN_DISPLAY, "%s -f /tmp/disktab %s '%s'",
+	rv = run_program(RUN_DISPLAY, "%s -f /tmp/disktab %s '%s'",
 	    DISKLABEL_CMD, pm->diskdev, pm->bsddiskname);
-#else
-	return 0;
+	if (rv == 0)
+		update_wedges(pm->diskdev);
 #endif
+	return rv;
 }
 
 
@@ -1020,8 +1010,7 @@ foundffs(struct data *list, size_t num)
 	error = target_mount("", list[0].u.s_val, ' '-'a', list[1].u.s_val);
 	if (error != 0) {
 		msg_display(MSG_mount_failed, list[0].u.s_val);
-		process_menu(MENU_noyes, NULL);
-		if (!yesno)
+		if (!ask_noyes(NULL))
 			return error;
 	}
 	return 0;
@@ -1071,8 +1060,7 @@ fsck_preen(const char *disk, int ptn, const char *fsname)
 	free(prog);
 	if (error != 0) {
 		msg_display(MSG_badfs, disk, ptn, error);
-		process_menu(MENU_noyes, NULL);
-		if (yesno)
+		if (ask_noyes(NULL))
 			error = 0;
 		/* XXX at this point maybe we should run a full fsck? */
 	}
@@ -1481,7 +1469,9 @@ incoregpt(pm_devs_t *pm_cur, partinfo *lp)
 static bool
 is_gpt(const char *dev)
 {
-	if (!have_gpt_binary())
+	check_available_binaries();
+
+	if (!have_gpt)
 		return false;
 
 	return !run_program(RUN_SILENT | RUN_ERROR_OK,
