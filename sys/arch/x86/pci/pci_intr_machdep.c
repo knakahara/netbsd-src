@@ -226,15 +226,15 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 {
 	pci_chipset_tag_t ipc;
 
-	if (INT_VIA_MSI(ih))
-		return pci_msi_string(pc, ih, buf, len);
-
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)
 			continue;
 		return (*ipc->pc_ov->ov_intr_string)(ipc->pc_ctx, pc, ih,
 		    buf, len);
 	}
+
+	if (INT_VIA_MSI(ih))
+		return x86_pci_msi_string(pc, ih, buf, len);
 
 	return intr_string(ih & ~MPSAFE_MASK, buf, len);
 }

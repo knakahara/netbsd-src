@@ -177,6 +177,7 @@ __KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.84 2015/05/09 13:05:51 christos Exp $");
 #endif
 
 #include <x86/pci/msipic.h>
+#include <x86/pci/pci_msi_machdep.h>
 
 #if NPCI == 0
 #define msipic_is_msi_pic(PIC)	(false)
@@ -487,7 +488,7 @@ create_intrid(int legacy_irq, struct pic *pic, int pin, char *buf, size_t len)
 		else if (pic->pic_type == PIC_MSIX)
 			MSI_INT_MAKE_MSIX(pih);
 
-		return pci_msi_string(NULL, pih, buf, len);
+		return x86_pci_msi_string(NULL, pih, buf, len);
 	}
 #endif
 

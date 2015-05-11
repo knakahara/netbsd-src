@@ -29,6 +29,8 @@
 #ifndef _X86_PCI_PCI_MSI_MACHDEP_H_
 #define _X86_PCI_PCI_MSI_MACHDEP_H_
 
+const char	*x86_pci_msi_string(pci_chipset_tag_t, pci_intr_handle_t,
+		    char *, size_t);
 void		x86_pci_msi_release(pci_chipset_tag_t, pci_intr_handle_t *,
 		    int);
 void		*x86_pci_msi_establish(pci_chipset_tag_t, pci_intr_handle_t,
