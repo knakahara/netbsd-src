@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_machdep.c,v 1.10 2015/05/03 17:24:45 jmcneill Exp $ */
+/* $NetBSD: tegra_machdep.c,v 1.15 2015/05/14 00:02:00 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tegra_machdep.c,v 1.10 2015/05/03 17:24:45 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tegra_machdep.c,v 1.15 2015/05/14 00:02:00 jmcneill Exp $");
 
 #include "opt_tegra.h"
 #include "opt_machdep.h"
@@ -93,7 +93,7 @@ __KERNEL_RCSID(0, "$NetBSD: tegra_machdep.c,v 1.10 2015/05/03 17:24:45 jmcneill 
 #endif
 
 BootConfig bootconfig;
-static char bootargs[TEGRA_MAX_BOOT_STRING];
+char bootargs[TEGRA_MAX_BOOT_STRING] = "";
 char *boot_args = NULL;
 u_int uboot_args[4] = { 0 };	/* filled in by tegra_start.S (not in bss) */
 
@@ -303,14 +303,6 @@ initarm(void *arg)
 	arm32_kernel_vm_init(KERNEL_VM_BASE, ARM_VECTORS_HIGH, 0, devmap,
 	    mapallmem_p);
 
-	if (mapallmem_p) {
-		if (uboot_args[3] < ram_size) {
-			const char * const args = (const char *)
-			    (uboot_args[3] + KERNEL_BASE_VOFFSET);
-			strlcpy(bootargs, args, sizeof(bootargs));
-		}
-	}
-
 	DPRINTF("bootargs: %s\n", bootargs);
 
 	boot_args = bootargs;
@@ -381,6 +373,10 @@ tegra_device_register(device_t self, void *aux)
 		return;
 	}
 
+	if (device_is_a(self, "cpu") && device_unit(self) == 0) {
+		tegra_cpuinit();
+	}
+
 #ifdef BOARD_JETSONTK1
 	if (device_is_a(self, "sdhc")
 	    && device_is_a(device_parent(self), "tegraio")) {
@@ -391,6 +387,23 @@ tegra_device_register(device_t self, void *aux)
 			prop_dictionary_set_cstring(dict, "cd-gpio", "V2");
 			prop_dictionary_set_cstring(dict, "power-gpio", "R0");
 			prop_dictionary_set_cstring(dict, "wp-gpio", "Q4");
+		}
+	}
+
+	if (device_is_a(self, "ahcisata")
+	    && device_is_a(device_parent(self), "tegraio")) {
+		prop_dictionary_set_cstring(dict, "power-gpio", "EE2");
+	}
+
+	if (device_is_a(self, "ehci")
+	    && device_is_a(device_parent(self), "tegraio")) {
+		struct tegraio_attach_args * const tio = aux;
+		const struct tegra_locators * const loc = &tio->tio_loc;
+
+		if (loc->loc_port == 0) {
+			prop_dictionary_set_cstring(dict, "vbus-gpio", "N4");
+		} else if (loc->loc_port == 2) {
+			prop_dictionary_set_cstring(dict, "vbus-gpio", "N5");
 		}
 	}
 #endif

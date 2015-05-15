@@ -1,4 +1,4 @@
-#	$NetBSD: files.tegra,v 1.7 2015/05/05 00:25:44 jmcneill Exp $
+#	$NetBSD: files.tegra,v 1.10 2015/05/13 11:06:13 jmcneill Exp $
 #
 # Configuration info for NVIDIA Tegra ARM Peripherals
 #
@@ -14,6 +14,7 @@ file	arch/arm/arm32/armv7_generic_space.c
 file	arch/arm/arm/bus_space_a4x.S
 
 file	arch/arm/nvidia/tegra_soc.c
+file	arch/arm/nvidia/tegra_cpufreq.c
 file	arch/arm/nvidia/soc_tegra124.c		soc_tegra124
 
 # On-board I/O
@@ -41,9 +42,19 @@ device	tegragpio: gpiobus
 attach	tegragpio at tegraio with tegra_gpio
 file	arch/arm/nvidia/tegra_gpio.c		tegra_gpio
 
+# MPIO / Pinmux
+device	tegrampio
+attach	tegrampio at tegraio with tegra_mpio
+file	arch/arm/nvidia/tegra_mpio.c		tegra_mpio
+
 # UART
 attach	com at tegraio with tegra_com
 file	arch/arm/nvidia/tegra_com.c		tegra_com needs-flag
+
+# I2C
+device	tegrai2c: i2cbus, i2cexec
+attach	tegrai2c at tegraio with tegra_i2c
+file	arch/arm/nvidia/tegra_i2c.c		tegra_i2c
 
 # RTC
 device	tegrartc
@@ -78,6 +89,9 @@ defparam opt_tegra.h			CONMODE
 
 # Memory parameters
 defparam opt_tegra.h			MEMSIZE
+
+# CPU parameters
+defparam opt_tegra.h			CPUFREQ_BOOT
 
 # SOC parameters
 defflag	opt_tegra.h			SOC_TEGRAK1

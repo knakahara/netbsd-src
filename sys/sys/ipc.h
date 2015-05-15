@@ -1,4 +1,4 @@
-/*	$NetBSD: ipc.h,v 1.33 2012/03/13 18:41:02 elad Exp $	*/
+/*	$NetBSD: ipc.h,v 1.35 2015/05/13 01:23:10 pgoyette Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -50,6 +50,7 @@
 
 #include <sys/featuretest.h>
 #include <sys/types.h>
+#include <sys/sysctl.h>
 
 struct ipc_perm {
 	uid_t		uid;	/* user id */
@@ -114,6 +115,7 @@ struct kauth_cred;
 int	ipcperm(struct kauth_cred *, struct ipc_perm *, int);
 
 void	sysvipcinit(void);
+void	sysvipcfini(void);
 
 /*
  * sysctl helper routine for kern.ipc.sysvipc_info subtree.
@@ -128,6 +130,12 @@ void	sysvipcinit(void);
 	(dst).mode = (src).mode; \
 	(dst)._seq = (src)._seq; \
 } while (/*CONSTCOND*/ 0);
+
+/*
+ * Set-up the sysctl routine for COMPAT_50
+ */
+
+void sysvipc50_set_compat_sysctl(int (*)(SYSCTLFN_PROTO));
 
 #endif /* _KERNEL */
 

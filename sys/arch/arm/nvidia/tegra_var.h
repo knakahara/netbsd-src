@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_var.h,v 1.8 2015/05/03 16:40:12 jmcneill Exp $ */
+/* $NetBSD: tegra_var.h,v 1.15 2015/05/13 11:06:13 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -72,14 +72,24 @@ u_int	tegra_chip_id(void);
 const char *tegra_chip_name(void);
 void	tegra_bootstrap(void);
 void	tegra_dma_bootstrap(psize_t);
+void	tegra_cpuinit(void);
 
 u_int	tegra_car_osc_rate(void);
 u_int	tegra_car_pllc_rate(void);
+u_int	tegra_car_plle_rate(void);
 u_int	tegra_car_pllx_rate(void);
+void	tegra_car_pllx_set_rate(u_int, u_int, u_int);
+u_int	tegra_car_pllu_rate(void);
 u_int	tegra_car_pllp0_rate(void);
 u_int	tegra_car_uart_rate(u_int);
 u_int	tegra_car_periph_sdmmc_rate(u_int);
 int	tegra_car_periph_sdmmc_set_div(u_int, u_int);
+int	tegra_car_periph_usb_enable(u_int);
+void	tegra_car_periph_hda_enable(void);
+void	tegra_car_periph_sata_enable(void);
+int	tegra_car_periph_i2c_enable(u_int, u_int);
+void	tegra_car_utmip_init(void);
+void	tegra_car_utmip_enable(u_int);
 
 struct tegra_gpio_pin;
 struct tegra_gpio_pin *tegra_gpio_acquire(const char *, u_int);
@@ -87,12 +97,43 @@ void	tegra_gpio_release(struct tegra_gpio_pin *);
 int	tegra_gpio_read(struct tegra_gpio_pin *);
 void	tegra_gpio_write(struct tegra_gpio_pin *, int);
 
+struct tegra_mpio_padctlgrp {
+	int	preemp;
+	int	hsm;
+	int	schmt;
+	int	drv_type;
+	int	drvdn;
+	int	drvup;
+	int	slwr;
+	int	slwf;
+};
+void	tegra_mpio_padctlgrp_read(u_int, struct tegra_mpio_padctlgrp *);
+void	tegra_mpio_padctlgrp_write(u_int, const struct tegra_mpio_padctlgrp *);
+
+void	tegra_mpio_pinmux_set_config(u_int, int, const char *);
+void	tegra_mpio_pinmux_set_io_reset(u_int, bool);
+void	tegra_mpio_pinmux_set_rcv_sel(u_int, bool);
+void	tegra_mpio_pinmux_get_config(u_int, int *, const char **);
+const char *tegra_mpio_pinmux_get_pm(u_int);
+bool	tegra_mpio_pinmux_get_io_reset(u_int);
+bool	tegra_mpio_pinmux_get_rcv_sel(u_int);
+
 void	tegra_pmc_reset(void);
 void	tegra_pmc_power(u_int, bool);
 
 psize_t	tegra_mc_memsize(void);
 
+#define TEGRA_CPUFREQ_MAX	16
+struct tegra_cpufreq_func {
+	u_int (*set_rate)(u_int);
+	u_int (*get_rate)(void);
+	size_t (*get_available)(u_int *, size_t);
+};
+void	tegra_cpufreq_register(const struct tegra_cpufreq_func *);
+void	tegra_cpufreq_init(void);
+
 #if defined(SOC_TEGRA124)
+void	tegra124_cpuinit(void);
 void	tegra124_mpinit(void);
 #endif
 

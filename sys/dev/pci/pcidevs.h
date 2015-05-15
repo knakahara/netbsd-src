@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs.h,v 1.1216 2015/05/04 21:18:34 ryo Exp $	*/
+/*	$NetBSD: pcidevs.h,v 1.1219 2015/05/13 02:27:25 nonaka Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.1221 2015/05/03 06:29:21 msaitoh Exp
+ *	NetBSD: pcidevs,v 1.1225 2015/05/13 02:23:10 nonaka Exp
  */
 
 /*
@@ -1579,6 +1579,7 @@
 #define	PCI_PRODUCT_ATHEROS_AR9300	0x0030		/* AR9300 Wireless LAN */
 #define	PCI_PRODUCT_ATHEROS_AR9485	0x0032		/* AR9485 Wireless LAN */
 #define	PCI_PRODUCT_ATHEROS_AR9462	0x0034		/* AR9462 Wireless LAN */
+#define	PCI_PRODUCT_ATHEROS_QCA988X	0x003c		/* QCA986x/988x Wireless LAN */
 #define	PCI_PRODUCT_ATHEROS_AR5201_AP	0x0207		/* AR5201 Wireless LAN Reference Card (Early AP11) */
 #define	PCI_PRODUCT_ATHEROS_AR5201_DEFAULT	0x1107		/* AR5201 Wireless LAN (no eeprom) */
 #define	PCI_PRODUCT_ATHEROS_AR5212_DEFAULT	0x1113		/* AR5212 Wireless LAN (no eeprom) */
@@ -2095,6 +2096,7 @@
 #define	PCI_PRODUCT_DLINK_DWL610	0x3300		/* DWL-610 802.11b WLAN */
 #define	PCI_PRODUCT_DLINK_DL4000	0x4000		/* DL-4000 Gigabit Ethernet */
 #define	PCI_PRODUCT_DLINK_DGE550SX	0x4001		/* DGE-550SX */
+#define	PCI_PRODUCT_DLINK_DFE520TX	0x4200		/* DFE-520TX 10/100 Ethernet */
 #define	PCI_PRODUCT_DLINK_DGE528T	0x4300		/* DGE-528T Gigabit Ethernet */
 #define	PCI_PRODUCT_DLINK_DGE560T	0x4b00		/* DGE-560T Gigabit Ethernet */
 #define	PCI_PRODUCT_DLINK_DGE560T_2	0x4b01		/* DGE-560T_2 Gigabit Ethernet */
@@ -5378,6 +5380,7 @@
 
 /* Samsung Electronics products */
 #define	PCI_PRODUCT_SAMSUNGELEC3_XP941	0xa800		/* XP941 M.2 SSD */
+#define	PCI_PRODUCT_SAMSUNGELEC3_SM951	0xa801		/* SM951 M.2 SSD */
 
 /* Samsung Semiconductor products */
 #define	PCI_PRODUCT_SAMSUNGSEMI_KS8920	0x8920		/* KS8920 10/100 Ethernet */
