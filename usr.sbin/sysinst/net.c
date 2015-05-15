@@ -1,4 +1,4 @@
-/*	$NetBSD: net.c,v 1.18 2015/05/10 10:14:02 martin Exp $	*/
+/*	$NetBSD: net.c,v 1.20 2015/05/11 13:07:57 martin Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -490,10 +490,9 @@ config_network(void)
 	int menu_no;
 	int num_devs;
 	int selected_net;
-
-	int i, rv;
+	int i;
 #ifdef INET6
-	int v6config = 1;
+	int v6config = 1, rv;
 #endif
 
 	FILE *f;
@@ -748,7 +747,7 @@ again:
 		     !is_v6kernel() ? "<not supported>" : net_ip6);
 #endif
 done:
-	if (!ask_yesno(deconst(MSG_netok_ok)))
+	if (!ask_yesno(MSG_netok_ok))
 		goto again;
 
 	run_program(0, "/sbin/ifconfig lo0 127.0.0.1");
@@ -1065,7 +1064,7 @@ mnt_net_config(void)
 
 	if (!network_up)
 		return;
-	if (!ask_yesno(deconst(MSG_mntnetconfig)))
+	if (!ask_yesno(MSG_mntnetconfig))
 		return;
 
 	/* Write hostname to /etc/rc.conf */
@@ -1154,7 +1153,7 @@ config_dhcp(char *inter)
 
 	if (!file_mode_match(DHCPCD, S_IFREG))
 		return 0;
-	if (ask_yesno(deconst(MSG_Perform_autoconfiguration))) {
+	if (ask_yesno(MSG_Perform_autoconfiguration)) {
 		/* spawn off dhcpcd and wait for parent to exit */
 		dhcpautoconf = run_program(RUN_DISPLAY | RUN_PROGRESS,
 		    "%s -d -n %s", DHCPCD, inter);
