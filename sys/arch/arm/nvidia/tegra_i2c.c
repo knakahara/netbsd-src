@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_i2c.c,v 1.1 2015/05/10 23:50:21 jmcneill Exp $ */
+/* $NetBSD: tegra_i2c.c,v 1.4 2015/05/17 01:26:22 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -29,7 +29,7 @@
 #include "locators.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tegra_i2c.c,v 1.1 2015/05/10 23:50:21 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tegra_i2c.c,v 1.4 2015/05/17 01:26:22 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/bus.h>
@@ -52,6 +52,7 @@ struct tegra_i2c_softc {
 	bus_space_tag_t		sc_bst;
 	bus_space_handle_t	sc_bsh;
 	void *			sc_ih;
+	u_int			sc_port;
 
 	struct i2c_controller	sc_ic;
 	kmutex_t		sc_lock;
@@ -107,6 +108,7 @@ tegra_i2c_attach(device_t parent, device_t self, void *aux)
 	sc->sc_bst = tio->tio_bst;
 	bus_space_subregion(tio->tio_bst, tio->tio_bsh,
 	    loc->loc_offset, loc->loc_size, &sc->sc_bsh);
+	sc->sc_port = loc->loc_port;
 	mutex_init(&sc->sc_lock, MUTEX_DEFAULT, IPL_VM);
 	cv_init(&sc->sc_cv, device_xname(self));
 
@@ -123,7 +125,7 @@ tegra_i2c_attach(device_t parent, device_t self, void *aux)
 	aprint_normal_dev(self, "interrupting on irq %d\n", loc->loc_intr);
 
 	/* Recommended setting for standard mode */
-	tegra_car_periph_i2c_enable(loc->loc_port, 204000000);
+	tegra_car_periph_i2c_enable(loc->loc_port, 20400000);
 
 	tegra_i2c_init(sc);
 
@@ -139,13 +141,30 @@ tegra_i2c_attach(device_t parent, device_t self, void *aux)
 static void
 tegra_i2c_init(struct tegra_i2c_softc *sc)
 {
+	int retry = 10000;
+
 	I2C_WRITE(sc, I2C_CLK_DIVISOR_REG,
 	    __SHIFTIN(0x19, I2C_CLK_DIVISOR_STD_FAST_MODE) |
 	    __SHIFTIN(0x1, I2C_CLK_DIVISOR_HSMODE));
 
 	I2C_WRITE(sc, I2C_INTERRUPT_MASK_REG, 0);
-	I2C_WRITE(sc, I2C_CNFG_REG, I2C_CNFG_NEW_MASTER_FSM);
+	I2C_WRITE(sc, I2C_CNFG_REG,
+	    I2C_CNFG_NEW_MASTER_FSM | I2C_CNFG_PACKET_MODE_EN);
 	I2C_SET_CLEAR(sc, I2C_SL_CNFG_REG, I2C_SL_CNFG_NEWSL, 0);
+	I2C_WRITE(sc, I2C_FIFO_CONTROL_REG,
+	    __SHIFTIN(7, I2C_FIFO_CONTROL_TX_FIFO_TRIG) |
+	    __SHIFTIN(0, I2C_FIFO_CONTROL_RX_FIFO_TRIG));
+
+	I2C_WRITE(sc, I2C_BUS_CONFIG_LOAD_REG,
+	    I2C_BUS_CONFIG_LOAD_MSTR_CONFIG_LOAD);
+	while (--retry > 0) {
+		if (I2C_READ(sc, I2C_BUS_CONFIG_LOAD_REG) == 0)
+			break;
+		delay(10);
+	}
+	if (retry == 0) {
+		device_printf(sc->sc_dev, "config load timeout\n");
+	}
 }
 
 static int
@@ -236,49 +255,53 @@ done:
 	if ((flags & I2C_F_POLL) == 0) {
 		I2C_WRITE(sc, I2C_INTERRUPT_MASK_REG, 0);
 	}
+
+	if (error) {
+		tegra_i2c_init(sc);
+	}
+
 	return error;
 }
 
 static int
 tegra_i2c_wait(struct tegra_i2c_softc *sc, int flags)
 {
-	const struct timeval timeout = { .tv_sec = 1, .tv_usec = 0 };
-	struct timeval tnow, tend;
-	uint32_t stat;
-	int error;
+	int error, retry;
+	uint32_t stat = 0;
 
-	getmicrotime(&tnow);
-	timeradd(&tnow, &timeout, &tend);
+	retry = (flags & I2C_F_POLL) ? 100000 : 100;
 
-	for (;;) {
-		getmicrotime(&tnow);
-		if (timercmp(&tnow, &tend, >=)) {
-			return ETIMEDOUT;
-		}
+	while (--retry > 0) {
 		if ((flags & I2C_F_POLL) == 0) {
-			struct timeval trem;
-			timersub(&tend, &tnow, &trem);
-			const u_int ms = (trem.tv_sec * 1000) +
-			    (trem.tv_usec / 1000);
-			KASSERT(ms > 0);
 			error = cv_timedwait_sig(&sc->sc_cv, &sc->sc_lock,
-			    max(mstohz(ms), 1));
+			    max(mstohz(10), 1));
 			if (error) {
 				return error;
 			}
 		}
-		stat = I2C_READ(sc, I2C_STATUS_REG);
-		if ((stat & I2C_STATUS_BUSY) == 0) {
+		stat = I2C_READ(sc, I2C_INTERRUPT_STATUS_REG);
+		if (stat & I2C_INTERRUPT_STATUS_PACKET_XFER_COMPLETE) {
 			break;
 		}
 		if (flags & I2C_F_POLL) {
-			delay(1);
+			delay(10);
 		}
 	}
+	if (retry == 0) {
+		stat = I2C_READ(sc, I2C_INTERRUPT_STATUS_REG);
+		device_printf(sc->sc_dev, "timed out, status = %#x\n", stat);
+		return ETIMEDOUT;
+	}
 
+	const uint32_t err_mask =
+	    I2C_INTERRUPT_STATUS_NOACK |
+	    I2C_INTERRUPT_STATUS_ARB_LOST |
+	    I2C_INTERRUPT_MASK_TIMEOUT;
 
-	if (__SHIFTOUT(stat, I2C_STATUS_CMD1_STAT) != 0)
+	if (stat & err_mask) {
+		device_printf(sc->sc_dev, "error, status = %#x\n", stat);
 		return EIO;
+	}
 
 	return 0;
 }
@@ -287,33 +310,55 @@ static int
 tegra_i2c_write(struct tegra_i2c_softc *sc, i2c_addr_t addr, const uint8_t *buf,
     size_t buflen, int flags)
 {
-	uint32_t data, cnfg;
-	size_t n;
+	const uint8_t *p = buf;
+	size_t n, resid = buflen;
+	uint32_t data;
+	int retry;
 
-	if (buflen > 4)
-		return EINVAL;
+	const uint32_t istatus = I2C_READ(sc, I2C_INTERRUPT_STATUS_REG);
+	I2C_WRITE(sc, I2C_INTERRUPT_STATUS_REG, istatus);
 
-	I2C_WRITE(sc, I2C_CMD_ADDR0_REG, addr << 1);
-	for (n = 0, data = 0; n < buflen; n++) {
-		data |= (uint32_t)buf[n] << (n * 8);
+	/* Generic Header 0 */
+	I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG,
+	    __SHIFTIN(I2C_IOPACKET_WORD0_PROTHDRSZ_REQ,
+		      I2C_IOPACKET_WORD0_PROTHDRSZ) |
+	    __SHIFTIN(sc->sc_port, I2C_IOPACKET_WORD0_CONTROLLERID) |
+	    __SHIFTIN(1, I2C_IOPACKET_WORD0_PKTID) |
+	    __SHIFTIN(I2C_IOPACKET_WORD0_PROTOCOL_I2C,
+		      I2C_IOPACKET_WORD0_PROTOCOL) |
+	    __SHIFTIN(I2C_IOPACKET_WORD0_PKTTYPE_REQ,
+		      I2C_IOPACKET_WORD0_PKTTYPE));
+	/* Generic Header 1 */
+	I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG,
+	    __SHIFTIN(buflen - 1, I2C_IOPACKET_WORD1_PAYLOADSIZE));
+	/* I2C Master Transmit Packet Header */
+	I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG,
+	    I2C_IOPACKET_XMITHDR_IE |
+	    __SHIFTIN((addr << 1), I2C_IOPACKET_XMITHDR_SLAVE_ADDR));
+
+	/* Transmit data */
+	while (resid > 0) {
+		retry = 10000;
+		while (--retry > 0) {
+			const uint32_t fs = I2C_READ(sc, I2C_FIFO_STATUS_REG);
+			const u_int cnt =
+			    __SHIFTOUT(fs, I2C_FIFO_STATUS_TX_FIFO_EMPTY_CNT);
+			if (cnt > 0)
+				break;
+			delay(10);
+		}
+		if (retry == 0) {
+			device_printf(sc->sc_dev, "TX FIFO timeout\n");
+			return ETIMEDOUT;
+		}
+
+		for (n = 0, data = 0; n < min(resid, 4); n++) {
+			data |= (uint32_t)p[n] << (n * 8);
+		}
+		I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG, data);
+		resid -= min(resid, 4);
+		p += min(resid, 4);
 	}
-	I2C_WRITE(sc, I2C_CMD_DATA1_REG, data);
-
-	cnfg = I2C_READ(sc, I2C_CNFG_REG);
-	cnfg &= ~I2C_CNFG_DEBOUNCE_CNT;
-	cnfg |= __SHIFTIN(2, I2C_CNFG_DEBOUNCE_CNT);
-	cnfg &= ~I2C_CNFG_LENGTH;
-	cnfg |= __SHIFTIN(buflen - 1, I2C_CNFG_LENGTH);
-	cnfg &= ~I2C_CNFG_SLV2;
-	cnfg &= ~I2C_CNFG_CMD1;
-	cnfg &= ~I2C_CNFG_NOACK;
-	cnfg &= ~I2C_CNFG_A_MOD;
-	I2C_WRITE(sc, I2C_CNFG_REG, cnfg);
-
-	I2C_SET_CLEAR(sc, I2C_BUS_CONFIG_LOAD_REG,
-	    I2C_BUS_CONFIG_LOAD_MSTR_CONFIG_LOAD, 0);
-
-	I2C_SET_CLEAR(sc, I2C_CNFG_REG, I2C_CNFG_SEND, 0);
 
 	return tegra_i2c_wait(sc, flags);
 }
@@ -322,31 +367,54 @@ static int
 tegra_i2c_read(struct tegra_i2c_softc *sc, i2c_addr_t addr, uint8_t *buf,
     size_t buflen, int flags)
 {
-	uint32_t data, cnfg;
-	int error;
-	size_t n;
+	uint8_t *p = buf;
+	size_t n, resid = buflen;
+	uint32_t data;
+	int retry;
 
-	if (buflen > 4)
-		return EINVAL;
+	const uint32_t istatus = I2C_READ(sc, I2C_INTERRUPT_STATUS_REG);
+	I2C_WRITE(sc, I2C_INTERRUPT_STATUS_REG, istatus);
 
-	I2C_WRITE(sc, I2C_CMD_ADDR0_REG, (addr << 1) | 1);
-	cnfg = I2C_READ(sc, I2C_CNFG_REG);
-	cnfg &= ~I2C_CNFG_SLV2;
-	cnfg |= I2C_CNFG_CMD1;
-	cnfg &= ~I2C_CNFG_LENGTH;
-	cnfg |= __SHIFTIN(buflen - 1, I2C_CNFG_LENGTH);
-	I2C_WRITE(sc, I2C_CNFG_REG, cnfg);
+	/* Generic Header 0 */
+	I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG,
+	    __SHIFTIN(I2C_IOPACKET_WORD0_PROTHDRSZ_REQ,
+		      I2C_IOPACKET_WORD0_PROTHDRSZ) |
+	    __SHIFTIN(sc->sc_port, I2C_IOPACKET_WORD0_CONTROLLERID) |
+	    __SHIFTIN(1, I2C_IOPACKET_WORD0_PKTID) |
+	    __SHIFTIN(I2C_IOPACKET_WORD0_PROTOCOL_I2C,
+		      I2C_IOPACKET_WORD0_PROTOCOL) |
+	    __SHIFTIN(I2C_IOPACKET_WORD0_PKTTYPE_REQ,
+		      I2C_IOPACKET_WORD0_PKTTYPE));
+	/* Generic Header 1 */
+	I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG,
+	    __SHIFTIN(buflen - 1, I2C_IOPACKET_WORD1_PAYLOADSIZE));
+	/* I2C Master Transmit Packet Header */
+	I2C_WRITE(sc, I2C_TX_PACKET_FIFO_REG,
+	    I2C_IOPACKET_XMITHDR_IE | I2C_IOPACKET_XMITHDR_READ |
+	    __SHIFTIN((addr << 1) | 1, I2C_IOPACKET_XMITHDR_SLAVE_ADDR));
 
-	I2C_SET_CLEAR(sc, I2C_CNFG_REG, I2C_CNFG_SEND, 0);
+	while (resid > 0) {
+		retry = 10000;
+		while (--retry > 0) {
+			const uint32_t fs = I2C_READ(sc, I2C_FIFO_STATUS_REG);
+			const u_int cnt =
+			    __SHIFTOUT(fs, I2C_FIFO_STATUS_RX_FIFO_FULL_CNT);
+			if (cnt > 0)
+				break;
+			delay(10);
+		}
+		if (retry == 0) {
+			device_printf(sc->sc_dev, "RX FIFO timeout\n");
+			return ETIMEDOUT;
+		}
 
-	error = tegra_i2c_wait(sc, flags);
-	if (error)
-		return error;
-
-	data = I2C_READ(sc, I2C_CMD_DATA1_REG);
-	for (n = 0; n < buflen; n++) {
-		buf[n] = (data >> (n * 8)) & 0xff;
+		data = I2C_READ(sc, I2C_RX_FIFO_REG);
+		for (n = 0; n < min(resid, 4); n++) {
+			p[n] = (data >> (n * 8)) & 0xff;
+		}
+		resid -= min(resid, 4);
+		p += min(resid, 4);
 	}
 
-	return 0;
+	return tegra_i2c_wait(sc, flags);
 }

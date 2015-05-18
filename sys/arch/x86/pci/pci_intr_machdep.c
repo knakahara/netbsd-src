@@ -1,4 +1,4 @@
-/*	$NetBSD: pci_intr_machdep.c,v 1.30 2015/04/27 07:03:58 knakahara Exp $	*/
+/*	$NetBSD: pci_intr_machdep.c,v 1.33 2015/05/15 08:36:41 knakahara Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 2009 The NetBSD Foundation, Inc.
@@ -73,7 +73,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.30 2015/04/27 07:03:58 knakahara Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.33 2015/05/15 08:36:41 knakahara Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -102,6 +102,7 @@ __KERNEL_RCSID(0, "$NetBSD: pci_intr_machdep.c,v 1.30 2015/04/27 07:03:58 knakah
 #include <machine/mpconfig.h>
 #include <machine/mpbiosvar.h>
 #include <machine/pic.h>
+#include <x86/pci/pci_msi_machdep.h>
 #endif
 
 #ifdef MPBIOS
@@ -225,15 +226,15 @@ pci_intr_string(pci_chipset_tag_t pc, pci_intr_handle_t ih, char *buf,
 {
 	pci_chipset_tag_t ipc;
 
-	if (INT_VIA_MSI(ih))
-		return pci_msi_string(pc, ih, buf, len);
-
 	for (ipc = pc; ipc != NULL; ipc = ipc->pc_super) {
 		if ((ipc->pc_present & PCI_OVERRIDE_INTR_STRING) == 0)
 			continue;
 		return (*ipc->pc_ov->ov_intr_string)(ipc->pc_ctx, pc, ih,
 		    buf, len);
 	}
+
+	if (INT_VIA_MSI(ih))
+		return x86_pci_msi_string(pc, ih, buf, len);
 
 	return intr_string(ih & ~MPSAFE_MASK, buf, len);
 }
@@ -292,6 +293,13 @@ pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
 		    pc, ih, level, func, arg);
 	}
 
+	if (INT_VIA_MSI(ih)) {
+		if (MSI_INT_IS_MSIX(ih))
+			return x86_pci_msix_establish(pc, ih, level, func, arg);
+		else
+			return x86_pci_msi_establish(pc, ih, level, func, arg);
+	}
+
 	pic = &i8259_pic;
 	pin = irq = APIC_IRQ_LEGACY_IRQ(ih);
 	mpsafe = ((ih & MPSAFE_MASK) != 0);
@@ -328,6 +336,7 @@ pci_intr_disestablish(pci_chipset_tag_t pc, void *cookie)
 		return;
 	}
 
+	/* MSI/MSI-X processing is switched in intr_disestablish(). */
 	intr_disestablish(cookie);
 }
 
@@ -341,6 +350,20 @@ pci_intr_distribute(void *cookie, const kcpuset_t *newset, kcpuset_t *oldset)
 }
 
 #if NIOAPIC > 0
+static void
+x86_pci_intx_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
+{
+	char intrstr_buf[INTRIDBUF];
+	const char *intrstr;
+
+	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
+	mutex_enter(&cpu_lock);
+	intr_free_io_intrsource(intrstr);
+	mutex_exit(&cpu_lock);
+
+	kmem_free(pih, sizeof(*pih));
+}
+
 int
 pci_intx_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **pih)
 {
@@ -382,19 +405,20 @@ error:
 }
 
 void
-pci_intx_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
+pci_intr_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih, int count)
 {
-	char intrstr_buf[INTRIDBUF];
-	const char *intrstr;
-
 	if (pih == NULL)
 		return;
 
-	intrstr = pci_intr_string(NULL, *pih, intrstr_buf, sizeof(intrstr_buf));
-	mutex_enter(&cpu_lock);
-	intr_free_io_intrsource(intrstr);
-	mutex_exit(&cpu_lock);
+	if (INT_VIA_MSI(*pih)) {
+		if (MSI_INT_IS_MSIX(*pih))
+			return x86_pci_msix_release(pc, pih, count);
+		else
+			return x86_pci_msi_release(pc, pih, count);
+	} else {
+		KASSERT(count == 1);
+		return x86_pci_intx_release(pc, pih);
+	}
 
-	kmem_free(pih, sizeof(*pih));
 }
 #endif
