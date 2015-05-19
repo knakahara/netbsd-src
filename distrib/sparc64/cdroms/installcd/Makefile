@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.21 2015/04/18 08:56:57 martin Exp $
+#	$NetBSD: Makefile,v 1.23 2015/05/19 06:58:52 martin Exp $
 CDBASE=		sparc64cd		# gives ${CDBASE}.iso
 CDRELEASE=	true			# include $RELEASEDIR/$MACHINE
 

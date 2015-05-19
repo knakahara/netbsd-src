@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.bootcd,v 1.25 2014/05/31 10:18:47 martin Exp $
+#	$NetBSD: Makefile.bootcd,v 1.27 2015/05/19 06:58:52 martin Exp $
 #
 # Makefile snipped to create a CD/DVD ISO
 #

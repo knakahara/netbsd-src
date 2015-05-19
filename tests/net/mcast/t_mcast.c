@@ -1,4 +1,4 @@
-/*	$NetBSD: t_mcast.c,v 1.12 2015/05/17 15:48:57 ozaki-r Exp $	*/
+/*	$NetBSD: t_mcast.c,v 1.15 2015/05/19 04:14:04 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 2014 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 #include <sys/cdefs.h>
 #ifdef __RCSID
-__RCSID("$NetBSD: t_mcast.c,v 1.12 2015/05/17 15:48:57 ozaki-r Exp $");
+__RCSID("$NetBSD: t_mcast.c,v 1.15 2015/05/19 04:14:04 ozaki-r Exp $");
 #else
 extern const char *__progname;
 #define getprogname() __progname
@@ -88,12 +88,12 @@ struct message {
 static int
 addmc(int s, struct addrinfo *ai, bool bug)
 {
-	struct ip_mreq 	m4;
+	struct ip_mreq m4;
 	struct ipv6_mreq m6;
 	struct sockaddr_in *s4;
 	struct sockaddr_in6 *s6;
 	unsigned int ifc;
-	
+
 	switch (ai->ai_family) {
 	case AF_INET:
 		s4 = (void *)ai->ai_addr;
@@ -127,11 +127,11 @@ addmc(int s, struct addrinfo *ai, bool bug)
 		ifc = 1;
 		if (setsockopt(s, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
 		    &ifc, sizeof(ifc)) == -1)
-		    	return -1;
+			return -1;
 		ifc = 224;
 		if (setsockopt(s, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
 		    &ifc, sizeof(ifc)) == -1)
-		    	return -1;
+			return -1;
 		ifc = 1;
 		if (setsockopt(s, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifc,
 		    sizeof(ifc)) == -1)
@@ -140,7 +140,7 @@ addmc(int s, struct addrinfo *ai, bool bug)
 		ifc = 1;
 #endif
 		m6.ipv6mr_interface = ifc;
-	        m6.ipv6mr_multiaddr = s6->sin6_addr;
+		m6.ipv6mr_multiaddr = s6->sin6_addr;
 		return setsockopt(s, IPPROTO_IPV6, IPV6_JOIN_GROUP,
 		    &m6, sizeof(m6));
 	default:
@@ -228,7 +228,7 @@ out:
 	}
 	freeaddrinfo(ai0);
 	if (s == -1)
-		ERRX(1, "%s (%s)", cause, strerror(lasterrno));
+		ERRX(EXIT_FAILURE, "%s (%s)", cause, strerror(lasterrno));
 	return s;
 }
 
@@ -316,9 +316,25 @@ run(const char *host, const char *port, size_t n, bool conn, bool bug)
 				    strerror(errno));
 			goto again;
 		default:
-			if (status != 0)
-				ERRX(EXIT_FAILURE, "pid exited with %d",
+			if (WIFSIGNALED(status)) {
+				if (WTERMSIG(status) == SIGTERM)
+					ERRX(EXIT_FAILURE,
+					    "receiver got terminated due to " \
+					    "deadline (%d usec)", 100);
+				else
+					ERRX(EXIT_FAILURE,
+					    "receiver got signaled (%s)",
+					    strsignal(WTERMSIG(status)));
+			} else if (WIFEXITED(status)) {
+				if (WEXITSTATUS(status) != 0)
+					ERRX(EXIT_FAILURE,
+					    "receiver exited with status %d",
+					    WEXITSTATUS(status));
+			} else {
+				ERRX(EXIT_FAILURE,
+				    "receiver exited with unexpected status %d",
 				    status);
+			}
 			break;
 		}
 		return;
@@ -467,14 +483,14 @@ ATF_TC_BODY(unconninet6, tc)
 ATF_TP_ADD_TCS(tp)
 {
 	debug++;
-        ATF_TP_ADD_TC(tp, conninet4);
-        ATF_TP_ADD_TC(tp, connmappedinet4);
-        ATF_TP_ADD_TC(tp, connmappedbuginet4);
-        ATF_TP_ADD_TC(tp, conninet6);
-        ATF_TP_ADD_TC(tp, unconninet4);
-        ATF_TP_ADD_TC(tp, unconnmappedinet4);
-        ATF_TP_ADD_TC(tp, unconnmappedbuginet4);
-        ATF_TP_ADD_TC(tp, unconninet6);
+	ATF_TP_ADD_TC(tp, conninet4);
+	ATF_TP_ADD_TC(tp, connmappedinet4);
+	ATF_TP_ADD_TC(tp, connmappedbuginet4);
+	ATF_TP_ADD_TC(tp, conninet6);
+	ATF_TP_ADD_TC(tp, unconninet4);
+	ATF_TP_ADD_TC(tp, unconnmappedinet4);
+	ATF_TP_ADD_TC(tp, unconnmappedbuginet4);
+	ATF_TP_ADD_TC(tp, unconninet6);
 
 	return atf_no_error();
 }

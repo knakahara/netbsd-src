@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.cdrom,v 1.13 2015/04/18 08:56:56 martin Exp $
+# $NetBSD: Makefile.cdrom,v 1.15 2015/05/19 06:58:52 martin Exp $
 
 .include <bsd.own.mk>
 
