@@ -1,4 +1,4 @@
-/*	$NetBSD: if_fddisubr.c,v 1.89 2015/05/20 09:17:18 ozaki-r Exp $	*/
+/*	$NetBSD: if_fddisubr.c,v 1.91 2015/05/25 08:31:34 ozaki-r Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -96,12 +96,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_fddisubr.c,v 1.89 2015/05/20 09:17:18 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_fddisubr.c,v 1.91 2015/05/25 08:31:34 ozaki-r Exp $");
 
 #include "opt_gateway.h"
 #include "opt_inet.h"
 #include "opt_atalk.h"
-#include "opt_ipx.h"
 #include "opt_mbuftrace.h"
 
 
@@ -135,11 +134,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_fddisubr.c,v 1.89 2015/05/20 09:17:18 ozaki-r Exp
 #endif
 #include <net/if_fddi.h>
 
-#ifdef IPX
-#include <netipx/ipx.h>
-#include <netipx/ipx_if.h>
-#endif
-
 #ifdef INET6
 #ifndef INET
 #include <netinet/in.h>
@@ -152,10 +146,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_fddisubr.c,v 1.89 2015/05/20 09:17:18 ozaki-r Exp
 #include "carp.h"
 #if NCARP > 0
 #include <netinet/ip_carp.h>
-#endif
-
-#ifdef DECNET
-#include <netdnet/dn.h>
 #endif
 
 #ifdef NETATALK
@@ -316,16 +306,6 @@ fddi_output(struct ifnet *ifp0, struct mbuf *m0, const struct sockaddr *dst,
 		break;
 	}
 #endif /* AF_ARP */
-#ifdef IPX
-	case AF_IPX:
-		etype = htons(ETHERTYPE_IPX);
- 		memcpy(edst, &(((struct sockaddr_ipx *)dst)->sipx_addr.x_host),
-		    sizeof (edst));
-		/* If broadcasting on a simplex interface, loopback a copy */
-		if ((m->m_flags & M_BCAST) && (ifp->if_flags & IFF_SIMPLEX))
-			mcopy = m_copy(m, 0, (int)M_COPYALL);
-		break;
-#endif
 #ifdef NETATALK
 	case AF_APPLETALK: {
 		struct at_ifaddr *aa;
@@ -462,7 +442,7 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 #if defined(INET) || defined(INET6)
 	pktqueue_t *pktq = NULL;
 #endif
-#if defined(DECNET) || defined(IPX) || defined(NETATALK)
+#if defined(NETATALK)
 	struct ifqueue *inq = NULL;
 	int isr = 0;
 	int s;
@@ -506,7 +486,7 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 
 	l = (struct llc *)(fh+1);
 	switch (l->llc_dsap) {
-#if defined(INET) || defined(INET6) || defined(DECNET) || defined(IPX) || defined(NETATALK)
+#if defined(INET) || defined(INET6) || defined(NETATALK)
 	case LLC_SNAP_LSAP:
 	{
 		uint16_t etype;
@@ -557,7 +537,7 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 
 		case ETHERTYPE_ARP:
 #if !defined(__bsdi__) || _BSDI_VERSION >= 199401
-#if defined(DECNET) || defined(IPX) || defined(NETATALK)
+#if defined(NETATALK)
 			isr = NETISR_ARP;
 			inq = &arpintrq;
 #endif
@@ -566,12 +546,6 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 			arpinput(ifp, m);
 			return;
 #endif
-#endif
-#ifdef IPX
-		case ETHERTYPE_IPX:
-			isr = NETISR_IPX;
-			inq = &ipxintrq;
-			break;
 #endif
 #ifdef INET6
 		case ETHERTYPE_IPV6:
@@ -582,12 +556,6 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 			pktq = ip6_pktq;
 			break;
 
-#endif
-#ifdef DECNET
-		case ETHERTYPE_DECNET:
-			isr = NETISR_DECNET;
-			inq = &decnetintrq;
-			break;
 #endif
 #ifdef NETATALK
 		case ETHERTYPE_ATALK:
@@ -609,7 +577,7 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 
 	default:
 		ifp->if_noproto++;
-#if defined(INET) || defined(INET6) || defined(DECNET) || defined(IPX) || defined(NETATALK)
+#if defined(INET) || defined(INET6) || defined(NETATALK)
 	dropanyway:
 #endif
 		m_freem(m);
@@ -624,7 +592,7 @@ fddi_input(struct ifnet *ifp, struct mbuf *m)
 		return;
 	}
 #endif
-#if defined(DECNET) || defined(IPX) || defined(NETATALK)
+#if defined(NETATALK)
 	if (!inq) {
 		m_freem(m);
 	}
