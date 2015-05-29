@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.849 2015/05/21 00:12:10 rjs Exp $
+#	$NetBSD: bsd.own.mk,v 1.851 2015/05/28 14:36:45 rjs Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -820,6 +820,7 @@ MACHINE_GNU_PLATFORM?=${MACHINE_GNU_ARCH}--netbsd
 .if !empty(MACHINE_ARCH:M*arm*)
 # Flags to pass to CC for using the old APCS ABI on ARM for compat or stand.
 ARM_APCS_FLAGS=	-mabi=apcs-gnu -mfloat-abi=soft
+ARM_APCS_FLAGS+=${${ACTIVE_CC} == "gcc":? -marm :}
 ARM_APCS_FLAGS+=${${ACTIVE_CC} == "clang":? -target ${MACHINE_GNU_ARCH}--netbsdelf -B ${TOOLDIR}/${MACHINE_GNU_PLATFORM}/bin :}
 .endif
 
@@ -1306,12 +1307,6 @@ X11SRCDIR.xf86-input-${_i}?=	${X11SRCDIRMIT}/xf86-input-${_i}/dist
 	tdfx tga trident tseng vesa vga vmware wsfb xgi
 X11SRCDIR.xf86-video-${_v}?=	${X11SRCDIRMIT}/xf86-video-${_v}/dist
 .endfor
-
-# Build the ati 6.x (UMS supported) or 7.x (KMS demanded) drivers
-.if ${MACHINE_ARCH} == "x86_64" || ${MACHINE_ARCH} == "i386"
-MKX11RADEONKMS?=		yes
-.endif
-MKX11RADEONKMS?=		no
 
 # Only install the radeon firmware on DRM-happy systems.
 .if ${MACHINE_ARCH} == "x86_64" || ${MACHINE_ARCH} == "i386"
