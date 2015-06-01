@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1961 2015/05/24 22:23:01 christos Exp $
+#	$NetBSD: mi,v 1.1965 2015/05/30 18:00:09 joerg Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -350,6 +350,7 @@
 ./usr/include/cdk/swindow.h			comp-obsolete		obsolete
 ./usr/include/cdk/template.h			comp-obsolete		obsolete
 ./usr/include/cdk/viewer.h			comp-obsolete		obsolete
+./usr/include/clang-3.6/stdatomic.h	comp-c-include		llvm
 ./usr/include/complex.h				comp-c-include
 ./usr/include/cpio.h				comp-c-include
 ./usr/include/crypto/cryptodev.h		comp-c-include
@@ -582,8 +583,8 @@
 ./usr/include/dev/isapnp/isapnpvar.h		comp-obsolete		obsolete
 ./usr/include/dev/iscsi/iscsi.h			comp-c-include		iscsi
 ./usr/include/dev/iscsi/iscsi_ioctl.h		comp-c-include		iscsi
-./usr/include/dev/iscsi/iscsi_perf.h		comp-c-include		iscsi
-./usr/include/dev/iscsi/iscsi_test.h		comp-c-include		iscsi
+./usr/include/dev/iscsi/iscsi_perf.h		comp-obsolete		obsolete
+./usr/include/dev/iscsi/iscsi_test.h		comp-obsolete		obsolete
 ./usr/include/dev/keylock.h			comp-c-include
 ./usr/include/dev/kttcpio.h			comp-c-include
 ./usr/include/dev/lockstat.h			comp-c-include
@@ -3914,6 +3915,8 @@
 ./usr/lib/librumpnet_shmif_p.a			comp-c-proflib		profile,rump
 ./usr/lib/librumpnet_sockin.a			comp-c-lib		rump
 ./usr/lib/librumpnet_sockin_p.a			comp-c-proflib		profile,rump
+./usr/lib/librumpnet_tap.a			comp-c-lib		rump
+./usr/lib/librumpnet_tap_p.a			comp-c-proflib		profile,rump
 ./usr/lib/librumpnet_virtif.a			comp-c-lib		rump
 ./usr/lib/librumpnet_virtif_p.a			comp-c-proflib		profile,rump
 ./usr/lib/librumpuser.a				comp-c-lib		rump

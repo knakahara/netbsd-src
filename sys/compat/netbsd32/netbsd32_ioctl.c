@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_ioctl.c,v 1.74 2015/05/27 21:56:43 matt Exp $	*/
+/*	$NetBSD: netbsd32_ioctl.c,v 1.80 2015/06/01 00:15:08 roy Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Matthew R. Green
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_ioctl.c,v 1.74 2015/05/27 21:56:43 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_ioctl.c,v 1.80 2015/06/01 00:15:08 roy Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -64,6 +64,9 @@ __KERNEL_RCSID(0, "$NetBSD: netbsd32_ioctl.c,v 1.74 2015/05/27 21:56:43 matt Exp
 
 #include <net/if.h>
 #include <net/route.h>
+
+#include <net/if_pppoe.h>
+#include <net/if_sppp.h>
 
 #include <net/bpf.h>
 #include <netinet/in.h>
@@ -160,10 +163,43 @@ netbsd32_to_ifmediareq(struct netbsd32_ifmediareq *s32p, struct ifmediareq *p, u
 }
 
 static inline void
+netbsd32_to_pppoediscparms(struct netbsd32_pppoediscparms *s32p,
+    struct pppoediscparms *p, u_long cmd)
+{
+
+	memcpy(p->ifname, s32p->ifname, sizeof p->ifname);
+	memcpy(p->eth_ifname, s32p->eth_ifname, sizeof p->eth_ifname);
+	p->ac_name = (char *)NETBSD32PTR64(s32p->ac_name);
+	p->ac_name_len = s32p->ac_name_len;
+	p->service_name = (char *)NETBSD32PTR64(s32p->service_name);
+	p->service_name_len = s32p->service_name_len;
+}
+
+static inline void
+netbsd32_to_spppauthcfg(struct netbsd32_spppauthcfg *s32p,
+    struct spppauthcfg *p, u_long cmd)
+{
+
+	memcpy(p->ifname, s32p->ifname, sizeof p->ifname);
+	p->hisauth = s32p->hisauth;
+	p->myauth = s32p->myauth;
+	p->myname_length = s32p->myname_length;
+	p->mysecret_length = s32p->mysecret_length;
+	p->hisname_length = s32p->hisname_length;
+	p->hissecret_length = s32p->hissecret_length;
+	p->myauthflags = s32p->myauthflags;
+	p->hisauthflags = s32p->hisauthflags;
+	p->myname = (char *)NETBSD32PTR64(s32p->myname);
+	p->mysecret = (char *)NETBSD32PTR64(s32p->mysecret);
+	p->hisname = (char *)NETBSD32PTR64(s32p->hisname);
+	p->hissecret = (char *)NETBSD32PTR64(s32p->hissecret);
+}
+
+static inline void
 netbsd32_to_ifdrv(struct netbsd32_ifdrv *s32p, struct ifdrv *p, u_long cmd)
 {
 
-	memcpy(p->ifd_name, s32p->ifd_name, sizeof s32p->ifd_name);
+	memcpy(p->ifd_name, s32p->ifd_name, sizeof p->ifd_name);
 	p->ifd_cmd = s32p->ifd_cmd;
 	p->ifd_len = s32p->ifd_len;
 	p->ifd_data = (void *)NETBSD32PTR64(s32p->ifd_data);
@@ -502,9 +538,43 @@ netbsd32_from_ifmediareq(struct ifmediareq *p, struct netbsd32_ifmediareq *s32p,
 }
 
 static inline void
+netbsd32_from_pppoediscparms(struct pppoediscparms *p,
+    struct netbsd32_pppoediscparms *s32p, u_long cmd)
+{
+
+	memcpy(s32p->ifname, p->ifname, sizeof s32p->ifname);
+	memcpy(s32p->eth_ifname, p->eth_ifname, sizeof s32p->eth_ifname);
+	NETBSD32PTR32(s32p->ac_name, p->ac_name);
+	s32p->ac_name_len = p->ac_name_len;
+	NETBSD32PTR32(s32p->service_name, p->service_name);
+	s32p->service_name_len = p->service_name_len;
+}
+
+static inline void
+netbsd32_from_spppauthcfg(struct spppauthcfg *p,
+    struct netbsd32_spppauthcfg *s32p, u_long cmd)
+{
+
+	memcpy(s32p->ifname, p->ifname, sizeof s32p->ifname);
+	s32p->hisauth = p->hisauth;
+	s32p->myauth = p->myauth;
+	s32p->myname_length = p->myname_length;
+	s32p->mysecret_length = p->mysecret_length;
+	s32p->hisname_length = p->hisname_length;
+	s32p->hissecret_length = p->hissecret_length;
+	s32p->myauthflags = p->myauthflags;
+	s32p->hisauthflags = p->hisauthflags;
+	NETBSD32PTR32(s32p->myname, p->myname);
+	NETBSD32PTR32(s32p->mysecret, p->mysecret);
+	NETBSD32PTR32(s32p->hisname, p->hisname);
+	NETBSD32PTR32(s32p->hissecret, p->hissecret);
+}
+
+static inline void
 netbsd32_from_ifdrv(struct ifdrv *p, struct netbsd32_ifdrv *s32p, u_long cmd)
 {
-	memcpy(p->ifd_name, s32p->ifd_name, sizeof s32p->ifd_name);
+
+	memcpy(s32p->ifd_name, p->ifd_name, sizeof s32p->ifd_name);
 	s32p->ifd_cmd = p->ifd_cmd;
 	s32p->ifd_len = p->ifd_len;
 	NETBSD32PTR32(s32p->ifd_data, p->ifd_data);
@@ -1038,6 +1108,15 @@ netbsd32_ioctl(struct lwp *l, const struct netbsd32_ioctl_args *uap, register_t 
 
 	case SIOCGIFMEDIA32:
 		IOCTL_STRUCT_CONV_TO(SIOCGIFMEDIA, ifmediareq);
+
+	case PPPOESETPARMS32:
+		IOCTL_STRUCT_CONV_TO(PPPOESETPARMS, pppoediscparms);
+	case PPPOEGETPARMS32:
+		IOCTL_STRUCT_CONV_TO(PPPOEGETPARMS, pppoediscparms);
+	case SPPPGETAUTHCFG32:
+		IOCTL_STRUCT_CONV_TO(SPPPGETAUTHCFG, spppauthcfg);
+	case SPPPSETAUTHCFG32:
+		IOCTL_STRUCT_CONV_TO(SPPPSETAUTHCFG, spppauthcfg);
 
 	case SIOCSDRVSPEC32:
 		IOCTL_STRUCT_CONV_TO(SIOCSDRVSPEC, ifdrv);
