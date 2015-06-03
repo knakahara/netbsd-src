@@ -1,4 +1,4 @@
-/*	$NetBSD: locore_mips3.S,v 1.102 2011/08/16 06:55:11 matt Exp $	*/
+/*	$NetBSD: locore_mips3.S,v 1.104 2015/06/02 05:09:15 matt Exp $	*/
 
 /*
  * Copyright (c) 1997 Jonathan Stone (hereinafter referred to as the author)
@@ -401,6 +401,26 @@ LEAF(mipsNN_cp0_watchhi_write)
 	 mtc0	a1, MIPS_COP_0_WATCH_HI, 7
 END(mipsNN_cp0_watchhi_write)
 
+/*
+ * void mipsNN_cp0_ebase_read(void *);
+ *	Get the value of the CP0 EBASE (PRID, select 1) register.
+ */
+LEAF(mipsNN_cp0_ebase_read)
+	jr	ra
+	 mfc0	v0, MIPS_COP_0_PRID, 1
+END(mipsNN_cp0_ebase_read)
+
+/*
+ * void mipsNN_cp0_ebase_write(void *);
+ *	Set the value of the CP0 EBASE (PRID, select 1) register.
+ */
+LEAF(mipsNN_cp0_ebase_write)
+	and	v0, v0, 0x1ff
+	xor	v0, v0, a0
+	jr	ra
+	 mtc0	v0, MIPS_COP_0_PRID, 1
+END(mipsNN_cp0_ebase_write)
+
 #if (MIPS32R2 + MIPS64R2) > 0
 /*
  * void mipsNN_cp0_userlocal_write(void *);
@@ -690,10 +710,10 @@ END(mips3_cp0_tlb_page_mask_probe)
 #ifdef MULTIPROCESSOR
 /*
  * The presence of this routine here will causes MIPS1 MULTIPROCESSOR kernels
- * to fail, as they should since we won't support much abominations.
+ * to fail, as they should since we won't support such abominations.
  *
- * MD code calls/jumps to with the pointer to this CPU's cpu_info in a1,
- * sp set to ci->ci_data.cpu_idlwp->l_md.md_utf.  gp will be overridden so
+ * MD code calls/jumps to this with the pointer to this CPU's cpu_info in a1,
+ * sp set to ci->ci_data.cpu_idlelwp->l_md.md_utf.  gp will be overridden so
  * 0 can be supplied if needed.  (This happens to match what CFE wants)
  */
 NESTED_NOPROFILE(cpu_trampoline, 0, ra)
@@ -702,8 +722,11 @@ NESTED_NOPROFILE(cpu_trampoline, 0, ra)
 	 * that the cpu_info is a KSEG0 address.
 	 */
 	move	a0, a1
-	PTR_L	MIPS_CURLWP, CPU_INFO_IDLELWP(a0)
+	// Loop until idlelwp is filled in.
+1:	PTR_L	MIPS_CURLWP, CPU_INFO_IDLELWP(a0)
 	nop
+	beqz	MIPS_CURLWP, 1b
+	 nop
 	PTR_S	MIPS_CURLWP, CPU_INFO_CURLWP(a0)
 
 #ifdef _LP64
@@ -713,6 +736,8 @@ NESTED_NOPROFILE(cpu_trampoline, 0, ra)
 #endif
 	mtc0	v0, MIPS_COP_0_STATUS		# reset to known state
 	COP0_SYNC
+
+	PTR_L	sp, L_MD_UTF(MIPS_CURLWP)	# fetch KSP
 
 	/*
 	 * Indicate that no one has called us.
@@ -725,6 +750,13 @@ NESTED_NOPROFILE(cpu_trampoline, 0, ra)
 	 * New execution constant needs GP to be loaded.
 	 */
 	PTR_LA	gp, _C_LABEL(_gp)
+#endif
+
+#if 0
+	LONG_L	t0, CPU_INFO_FLAGS(a0)
+	or	t0, t0, CPUF_PRESENT
+	LONG_S	t0, CPU_INFO_FLAGS(a0)
+	sync
 #endif
 
 	/*
