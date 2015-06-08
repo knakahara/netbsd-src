@@ -1,4 +1,4 @@
-#	$NetBSD: genassym.cf,v 1.55 2015/06/02 05:10:57 matt Exp $
+#	$NetBSD: genassym.cf,v 1.59 2015/06/07 06:07:49 matt Exp $
 #
 # Copyright (c) 1992, 1993
 #	The Regents of the University of California.  All rights reserved.
@@ -80,6 +80,7 @@ include <sys/proc.h>
 include <sys/mbuf.h>
 include <sys/mutex.h>
 include <sys/cpu.h>
+include <sys/bitops.h>
 
 include <uvm/uvm.h>
 
@@ -195,6 +196,7 @@ define	TF_REG_S5		offsetof(struct trapframe, tf_regs[_R_S5])
 define	TF_REG_S6		offsetof(struct trapframe, tf_regs[_R_S6])
 define	TF_REG_S7		offsetof(struct trapframe, tf_regs[_R_S7])
 define	TF_REG_T8		offsetof(struct trapframe, tf_regs[_R_T8])
+define	TF_MIPS_CURLWP		offsetof(struct trapframe, tf_regs[_R_T8])
 define	TF_REG_T9		offsetof(struct trapframe, tf_regs[_R_T9])
 define	TF_REG_K0		offsetof(struct trapframe, tf_regs[_R_K0])
 define	TF_REG_K1		offsetof(struct trapframe, tf_regs[_R_K1])
@@ -291,6 +293,8 @@ endif
 define	CPU_INFO_DIVISOR_DELAY	offsetof(struct cpu_info, ci_divisor_delay)
 define	CPU_INFO_MTX_COUNT	offsetof(struct cpu_info, ci_mtx_count)
 define	CPU_INFO_MTX_OLDSPL	offsetof(struct cpu_info, ci_mtx_oldspl)
+define	CPU_INFO_NMI_STACK	offsetof(struct cpu_info, ci_nmi_stack)
+
 ifdef MULTIPROCESSOR
 define	CPU_INFO_FLAGS		offsetof(struct cpu_info, ci_flags)
 define	CPU_INFO_KSP_TLB_SLOT	offsetof(struct cpu_info, ci_ksp_tlb_slot)
@@ -308,6 +312,9 @@ define	IPL_SCHED		IPL_SCHED
 define	IPL_DDB			IPL_DDB
 define	IPL_HIGH		IPL_HIGH
 
+define	V_MIPS3_SR_SR		ilog2(MIPS3_SR_SR)
+define	V_MIPS_SR_BEV		ilog2(MIPS_SR_BEV)
+
 ifdef __HAVE_PREEMPTION
 define	__HAVE_PREEMPTION	1
 define	CPU_INFO_SOFTINTS	offsetof(struct cpu_info, ci_softints)
@@ -324,3 +331,6 @@ define	MO_FPU_ID		offsetof(struct mips_options, mips_fpu_id)
 define	MO_NUM_TLB_ENTRIES	offsetof(struct mips_options, mips_num_tlb_entries)
 
 define	MCI_SDCACHE_SIZE	offsetof(struct mips_cache_info, mci_sdcache_size)
+
+define	MIPS_CURLWP_LABEL	MIPS_CURLWP_LABEL
+define	MIPS_CURLWP_REG		MIPS_CURLWP_REG

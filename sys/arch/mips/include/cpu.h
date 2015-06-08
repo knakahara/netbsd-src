@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.113 2015/06/02 05:05:28 matt Exp $	*/
+/*	$NetBSD: cpu.h,v 1.115 2015/06/07 06:07:49 matt Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -82,7 +82,7 @@ void		  cpuwatch_clr(cpu_watchpoint_t *);
 
 struct cpu_info {
 	struct cpu_data ci_data;	/* MI per-cpu data */
-	void *ci_xnext;			/* unused */
+	void *ci_nmi_stack;		/* NMI exception stack */
 	struct cpu_softc *ci_softc;	/* chip-dependent hook */
 	device_t ci_dev;		/* owning device */
 	cpuid_t ci_cpuid;		/* Machine-level identifier */
@@ -226,11 +226,10 @@ struct cpu_info {
 #define	CPU_ARCH_MIPS64R2	(1 << 8)
 
 /* Note: must be kept in sync with -ffixed-?? Makefile.mips. */
-#define MIPS_CURLWP             $24
+//	MIPS_CURLWP moved to <mips/regdef.h>
 #define MIPS_CURLWP_QUOTED      "$24"
 #define MIPS_CURLWP_LABEL	_L_T8
 #define MIPS_CURLWP_REG		_R_T8
-#define TF_MIPS_CURLWP(x)	TF_REG_T8(x)
 
 #ifndef _LOCORE
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu_subr.c,v 1.20 2015/06/01 22:55:13 matt Exp $	*/
+/*	$NetBSD: cpu_subr.c,v 1.23 2015/06/06 21:03:45 matt Exp $	*/
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -30,8 +30,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cpu_subr.c,v 1.20 2015/06/01 22:55:13 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cpu_subr.c,v 1.23 2015/06/06 21:03:45 matt Exp $");
 
+#include "opt_cputype.h"
 #include "opt_ddb.h"
 #include "opt_multiprocessor.h"
 
@@ -118,19 +119,14 @@ struct cpu_info *
 cpu_info_alloc(struct pmap_tlb_info *ti, cpuid_t cpu_id, cpuid_t cpu_package_id,
 	cpuid_t cpu_core_id, cpuid_t cpu_smt_id)
 {
-	struct pglist pglist;
-	int error;
-
 	KASSERT(cpu_id < MAXCPUS);
 
-#ifdef MIPS64O_OCTEON
-	const vaddr_t cpu_info_offset = 0x800;
+#ifdef MIPS64_OCTEON
 	vaddr_t exc_page = MIPS_UTLB_MISS_EXC_VEC + 0x1000*cpu_id;
-	__CTASSERT(sizeof(struct cpu_info) <= 0x800);
-	__CTASSERT(sizeof(struct pmap_tlb_info) <= 0x400);
+	__CTASSERT(sizeof(struct cpu_info) + sizeof(struct pmap_tlb_info) <= 0x1000 - 0x280);
 	
-	struct cpu_info * const ci = (void *) (va + cpu_info_offset);
-	memset((void *)va, 0, PAGE_SIZE);
+	struct cpu_info * const ci = ((struct cpu_info *)(exc_page + 0x1000)) - 1;
+	memset((void *)exc_page, 0, PAGE_SIZE);
 
 	if (ti == NULL) {
 		ti = ((struct pmap_tlb_info *)ci) - 1;
@@ -138,6 +134,8 @@ cpu_info_alloc(struct pmap_tlb_info *ti, cpuid_t cpu_id, cpuid_t cpu_package_id,
 	}
 #else
 	const vaddr_t cpu_info_offset = (vaddr_t)&cpu_info_store & PAGE_MASK; 
+	struct pglist pglist;
+	int error;
 
 	/*
 	* Grab a page from the first 512MB (mappable by KSEG0) to use to store
@@ -179,6 +177,7 @@ cpu_info_alloc(struct pmap_tlb_info *ti, cpuid_t cpu_id, cpuid_t cpu_package_id,
 #endif
 #endif /* MIPS64_OCTEON */
 
+	KASSERT(cpu_id != 0);
 	ci->ci_cpuid = cpu_id;
 	ci->ci_data.cpu_package_id = cpu_package_id;
 	ci->ci_data.cpu_core_id = cpu_core_id;
@@ -279,6 +278,7 @@ cpu_attach_common(device_t self, struct cpu_info *ci)
 		cpuid_infos[ci->ci_cpuid] = ci;
 		membar_producer();
 	}
+	KASSERT(cpuid_infos[ci->ci_cpuid] != NULL);
 	evcnt_attach_dynamic(&ci->ci_evcnt_synci_activate_rqst,
 	    EVCNT_TYPE_MISC, NULL, xname,
 	    "syncicache activate request");
@@ -684,7 +684,7 @@ cpu_ipi_error(const char *s, __cpuset_t succeeded, __cpuset_t expected)
 static int
 cpu_ipi_wait(volatile __cpuset_t *watchset, u_long mask)
 {
-	u_long limit = curcpu()->ci_cpu_freq;	/* some finite amount of time */
+	u_long limit = curcpu()->ci_cpu_freq/10;/* some finite amount of time */
 
 	while (limit--)
 		if (*watchset == mask)
@@ -860,9 +860,6 @@ cpu_hatch(struct cpu_info *ci)
 	tlb_invalidate_all();
 	mips3_cp0_wired_write(ti->ti_wired);
 
-	// Show this CPU as present.
-	atomic_or_ulong(&ci->ci_flags, CPUF_PRESENT);
-
 	/*
 	 * Setup HWRENA and USERLOCAL COP0 registers (MIPSxxR2).
 	 */
@@ -889,6 +886,9 @@ cpu_hatch(struct cpu_info *ci)
 	 * done on the local CPU).
 	 */
 	(*mips_locoresw.lsw_cpu_init)(ci);
+
+	// Show this CPU as present.
+	atomic_or_ulong(&ci->ci_flags, CPUF_PRESENT);
 
 	/*
 	 * Announce we are hatched
@@ -918,9 +918,11 @@ cpu_hatch(struct cpu_info *ci)
 	(*mips_locoresw.lsw_cpu_run)(ci);
 
 	/*
-	 * Now turn on interrupts.
+	 * Now turn on interrupts (and verify they are on).
 	 */
 	spl0();
+	KASSERTMSG(ci->ci_cpl == IPL_NONE, "cpl %d", ci->ci_cpl);
+	KASSERT(mips_cp0_status_read() & MIPS_SR_INT_IE);
 
 	/*
 	 * And do a tail call to idle_loop
@@ -947,6 +949,12 @@ cpu_boot_secondary_processors(void)
 		ci->ci_data.cpu_cc_skew = mips3_cp0_count_read();
 		atomic_or_ulong(&ci->ci_flags, CPUF_RUNNING);
 		CPUSET_ADD(cpus_running, cpu_index(ci));
+		// Spin until the cpu calls idle_loop
+		for (u_int i = 0; i < 100; i++) {
+			if (kcpuset_isset(kcpuset_running, cpu_index(ci)))
+				break;
+			delay(1000);
+		}
 	}
 }
 

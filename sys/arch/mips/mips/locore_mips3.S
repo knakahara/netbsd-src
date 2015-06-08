@@ -1,4 +1,4 @@
-/*	$NetBSD: locore_mips3.S,v 1.104 2015/06/02 05:09:15 matt Exp $	*/
+/*	$NetBSD: locore_mips3.S,v 1.108 2015/06/07 08:03:10 matt Exp $	*/
 
 /*
  * Copyright (c) 1997 Jonathan Stone (hereinafter referred to as the author)
@@ -122,7 +122,9 @@
  *============================================================================
  */
 	.set	noreorder
+#if __mips < 3
 	.set	mips3
+#endif
 
 #ifdef _LP64
 #define	_MFC0	dmfc0
@@ -172,19 +174,42 @@ END(mips3_wbflush)
 LEAF(mips_wait_idle)
 	mfc0	v0, MIPS_COP_0_STATUS
 	andi	v1, v0, MIPS_SR_INT_IE
+#if __mips >= 32
+	teqi	v1, 0
+#else
 	beqz	v1, 1f
 	 nop
+#endif
 	andi	v1, v0, MIPS_INT_MASK
+#if __mips >= 32
+	teqi	v1, 0
+#else
 	bnez	v1, 2f
 	 nop
 1:
 	move	a1, v0
 	PANIC("mips_wait_idle: interrupts disabled status=%#x")
+#endif
 
 2:	wait
 	nop
 	nop
 	nop
+	mfc0	v0, MIPS_COP_0_STATUS
+	andi	v1, v0, MIPS_SR_INT_IE
+#if __mips >= 32
+	teqi	v1, 0
+#else
+	beqz	v1, 1b
+	 nop
+#endif
+	andi	v1, v0, MIPS_INT_MASK
+#if __mips >= 32
+	teqi	v1, 0
+#else
+	bnez	v1, 2b
+	 nop
+#endif
 	jr	ra
 	 nop
 END(mips_wait_idle)
@@ -233,10 +258,10 @@ END(mips3_cp0_config_write)
 
 #if (MIPS32 + MIPS32R2 + MIPS64 + MIPS64R2) > 0
 	.set push
-#ifdef _LP64
-	.set mips64
-#else
+#ifdef __mips_o32
 	.set mips32
+#else
+	.set mips64
 #endif
 /*
  * uint32_t mipsNN_cp0_config1_read(void)
@@ -407,7 +432,7 @@ END(mipsNN_cp0_watchhi_write)
  */
 LEAF(mipsNN_cp0_ebase_read)
 	jr	ra
-	 mfc0	v0, MIPS_COP_0_PRID, 1
+	 mfc0	v0, MIPS_COP_0_EBASE
 END(mipsNN_cp0_ebase_read)
 
 /*
@@ -418,13 +443,13 @@ LEAF(mipsNN_cp0_ebase_write)
 	and	v0, v0, 0x1ff
 	xor	v0, v0, a0
 	jr	ra
-	 mtc0	v0, MIPS_COP_0_PRID, 1
+	 mtc0	v0, MIPS_COP_0_EBASE
 END(mipsNN_cp0_ebase_write)
 
 #if (MIPS32R2 + MIPS64R2) > 0
 /*
- * void mipsNN_cp0_userlocal_write(void *);
- *	Set the value of the CP0 USERLOCAL (TLB_CONTEXT, select 2) register.
+ * void mipsNN_cp0_hwrena_write(void *);
+ *	Set the value of the CP0 HWRENA register.
  */
 LEAF(mipsNN_cp0_hwrena_write)
 	jr	ra
@@ -437,7 +462,7 @@ END(mipsNN_cp0_hwrena_write)
  */
 LEAF(mipsNN_cp0_userlocal_write)
 	jr	ra
-	 _MTC0	a0, MIPS_COP_0_TLB_CONTEXT, 2
+	 _MTC0	a0, MIPS_COP_0_USERLOCAL
 END(mipsNN_cp0_userlocal_write)
 #endif /* (MIPS32R2 + MIPS64R2) > 0 */
 	.set	pop
@@ -496,6 +521,7 @@ LEAF(mips3_cp0_pg_mask_write)
 	JR_HB_RA
 END(mips3_cp0_pg_mask_write)
 
+#if __mips != 32
 LEAF(mips3_ld)
 #if defined(__mips_o32)
 	mfc0	t0, MIPS_COP_0_STATUS		# turn off interrupts
@@ -639,8 +665,12 @@ END(baderr64)
 LEAF(mips3_cp0_tlb_entry_hi_probe)
 	dmfc0	t0, MIPS_COP_0_TLB_HI
 	li	v0, -1		/* all 1s */
+#if defined(__mips_isa_rev) && __mips_isa_rev >= 2
+	dinsu	v0, zero, 62, 2
+#else
 	dsll	v0, v0, 2	/* except the top 2 */
 	dsrl	v0, v0, 2
+#endif
 	dmtc0	v0, MIPS_COP_0_TLB_HI
 	COP0_SYNC
 	dmfc0	v0, MIPS_COP_0_TLB_HI
@@ -689,6 +719,7 @@ LEAF(mips3_cp0_tlb_entry_lo_probe)
 	jr	ra
 	 nop
 END(mips3_cp0_tlb_entry_lo_probe)
+#endif /* __mips != 32 */
 
 /*
  * uint32_t mips3_cp0_tlb_page_mask_probe(void);
