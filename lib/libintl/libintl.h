@@ -1,4 +1,4 @@
-/*	$NetBSD: libintl.h,v 1.6 2015/06/05 20:12:56 christos Exp $	*/
+/*	$NetBSD: libintl.h,v 1.8 2015/06/08 15:04:20 christos Exp $	*/
 
 /*-
  * Copyright (c) 2000 Citrus Project,
@@ -38,7 +38,7 @@
  * for some of them. This is horrible.
  */
 #define pgettext_expr(msgctxt, msgid) pgettext((msgctxt), (msgid))
-#define dpggettext_expr(domainname, msgctxt, msgid) \
+#define dpgettext_expr(domainname, msgctxt, msgid) \
     dpgettext((domainname), (msgctxt), (msgid))
 #define dcpgettext_expr(domainname, msgctxt, msgid, category) \
     dcpgettext((domainname), (msgctxt), (msgid), (category))
@@ -77,6 +77,7 @@ const char *dcnpgettext(const char *, const char *, const char *,
 char *textdomain(const char *);
 char *bindtextdomain(const char *, const char *);
 char *bind_textdomain_codeset(const char *, const char *);
+
 __END_DECLS
 
 #endif /* _LIBINTL_H_ */
