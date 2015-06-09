@@ -3737,7 +3737,8 @@ wm_reset(struct wm_softc *sc)
 	/* Clear interrupt */
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	if (sc->sc_nintrs > 1) {
-		CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
+		if (sc->sc_type != WM_T_82574)
+			CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
 		CSR_WRITE(sc, WMREG_EIAC, 0);
 	}
 
@@ -3985,7 +3986,8 @@ wm_reset(struct wm_softc *sc)
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	reg = CSR_READ(sc, WMREG_ICR);
 	if (sc->sc_nintrs > 1) {
-		CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
+		if (sc->sc_type != WM_T_82574)
+			CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
 		CSR_WRITE(sc, WMREG_EIAC, 0);
 	}
 
@@ -4417,42 +4419,89 @@ wm_init_locked(struct ifnet *ifp)
 	/* Set up MSI-X */
 	if (sc->sc_nintrs > 1) {
 		uint32_t ivar;
-		switch (sc->sc_type) {
-		case WM_T_82580:
-		case WM_T_I350:
-		case WM_T_I354:
-		case WM_T_I210:
-		case WM_T_I211:
-			CSR_WRITE(sc, WMREG_GPIE, WMREG_GPIE_NSICR
-			    | WMREG_GPIE_MSIX_MODE | WMREG_GPIE_EIAME
-			    | WMREG_GPIE_PBA);
+
+		if (sc->sc_type == WM_T_82575) {
+			/* Interrupt control */
+			reg = CSR_READ(sc, WMREG_CTRL_EXT);
+			reg |= CTRL_EXT_PBA | CTRL_EXT_EIAME | CTRL_EXT_NSICR;
+			CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
 
 			/* TX */
-			ivar = CSR_READ(sc, WMREG_IVAR_Q(0));
-			ivar &= ~IVAR_TX_MASK_Q(0);
-			ivar |= __SHIFTIN(
-				(WM_TX_INTR_INDEX | IVAR_VALID),
-				IVAR_TX_MASK_Q(0));
-			CSR_WRITE(sc, WMREG_IVAR_Q(0), ivar);
-
+			CSR_WRITE(sc, WMREG_MSIXBM(WM_TX_INTR_INDEX),
+			    EITR_TX_QUEUE0);
 			/* RX */
-			ivar = CSR_READ(sc, WMREG_IVAR_Q(0));
-			ivar &= ~IVAR_RX_MASK_Q(0);
-			ivar |= __SHIFTIN(
-				(WM_RX_INTR_INDEX | IVAR_VALID),
-				IVAR_RX_MASK_Q(0));
-			CSR_WRITE(sc, WMREG_IVAR_Q(0), ivar);
+			CSR_WRITE(sc, WMREG_MSIXBM(WM_RX_INTR_INDEX),
+			    EITR_RX_QUEUE0);
+			/* Link status */
+			CSR_WRITE(sc, WMREG_MSIXBM(WM_LINK_INTR_INDEX),
+			    EITR_OTHER);
+		} else if (sc->sc_type == WM_T_82574) {
+			/* Interrupt control */
+			reg = CSR_READ(sc, WMREG_CTRL_EXT);
+			reg |= CTRL_EXT_PBA | CTRL_EXT_EIAME;
+			CSR_WRITE(sc, WMREG_CTRL_EXT, reg);
 
-			/* LINK */
-			ivar = (WM_LINK_INTR_INDEX | IVAR_VALID) << 8;
+			/* TX, RX and Link status */
+			ivar = __SHIFTIN((IVAR_VALID_82574 | WM_TX_INTR_INDEX),
+			    IVAR_TX_MASK_Q_82574(0));
+			ivar |= __SHIFTIN((IVAR_VALID_82574 |WM_RX_INTR_INDEX),
+			    IVAR_RX_MASK_Q_82574(0));
+			ivar |=__SHIFTIN((IVAR_VALID_82574|WM_LINK_INTR_INDEX),
+			    IVAR_OTHER_MASK);
+			CSR_WRITE(sc, WMREG_IVAR, ivar);
+		} else {
+			/* Interrupt control */
+			CSR_WRITE(sc, WMREG_GPIE, GPIE_NSICR
+			    | GPIE_MULTI_MSIX | GPIE_EIAME
+			    | GPIE_PBA);
+
+			switch (sc->sc_type) {
+			case WM_T_82580:
+			case WM_T_I350:
+			case WM_T_I354:
+			case WM_T_I210:
+			case WM_T_I211:
+				/* TX */
+				ivar = CSR_READ(sc, WMREG_IVAR_Q(0));
+				ivar &= ~IVAR_TX_MASK_Q(0);
+				ivar |= __SHIFTIN(
+					(WM_TX_INTR_INDEX | IVAR_VALID),
+					IVAR_TX_MASK_Q(0));
+				CSR_WRITE(sc, WMREG_IVAR_Q(0), ivar);
+
+				/* RX */
+				ivar = CSR_READ(sc, WMREG_IVAR_Q(0));
+				ivar &= ~IVAR_RX_MASK_Q(0);
+				ivar |= __SHIFTIN(
+					(WM_RX_INTR_INDEX | IVAR_VALID),
+					IVAR_RX_MASK_Q(0));
+				CSR_WRITE(sc, WMREG_IVAR_Q(0), ivar);
+				break;
+			case WM_T_82576:
+				/* TX */
+				ivar = CSR_READ(sc, WMREG_IVAR_Q_82576(0));
+				ivar &= ~IVAR_TX_MASK_Q_82576(0);
+				ivar |= __SHIFTIN(
+					(WM_TX_INTR_INDEX | IVAR_VALID),
+					IVAR_TX_MASK_Q_82576(0));
+				CSR_WRITE(sc, WMREG_IVAR_Q_82576(0), ivar);
+
+				/* RX */
+				ivar = CSR_READ(sc, WMREG_IVAR_Q_82576(0));
+				ivar &= ~IVAR_RX_MASK_Q_82576(0);
+				ivar |= __SHIFTIN(
+					(WM_RX_INTR_INDEX | IVAR_VALID),
+					IVAR_RX_MASK_Q_82576(0));
+				CSR_WRITE(sc, WMREG_IVAR_Q_82576(0), ivar);
+				break;
+			default:
+				break;
+			}
+
+			/* Link status */
+			ivar = __SHIFTIN((WM_LINK_INTR_INDEX | IVAR_VALID),
+			    IVAR_MISC_OTHER);
 			CSR_WRITE(sc, WMREG_IVAR_MISC, ivar);
-			break;
-		case WM_T_82576:
-			break;
-		case WM_T_82575:
-			break;
-		default:
-			break;
 		}
 	}
 
@@ -4461,12 +4510,24 @@ wm_init_locked(struct ifnet *ifp)
 	sc->sc_icr = ICR_TXDW | ICR_LSC | ICR_RXSEQ | ICR_RXDMT0 |
 	    ICR_RXO | ICR_RXT0;
 	if (sc->sc_nintrs > 1) {
-		uint32_t mask = (1 << WM_RX_INTR_INDEX) | (1 << WM_TX_INTR_INDEX) |
-		    (1 << WM_LINK_INTR_INDEX);
-		CSR_WRITE(sc, WMREG_EIAC, mask);
-		CSR_WRITE(sc, WMREG_EIAM, mask);
-		CSR_WRITE(sc, WMREG_EIMS, mask);
-		CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
+		uint32_t mask;
+		switch (sc->sc_type) {
+		case WM_T_82574:
+			CSR_WRITE(sc, WMREG_EIAC_82574,
+			    WMREG_EIAC_82574_MSIX_MASK);
+			sc->sc_icr |= WMREG_EIAC_82574_MSIX_MASK;
+			CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
+			break;
+		default:
+			mask = (1 << WM_RX_INTR_INDEX)
+			    | (1 << WM_TX_INTR_INDEX)
+			    | (1 << WM_LINK_INTR_INDEX);
+			CSR_WRITE(sc, WMREG_EIAC, mask);
+			CSR_WRITE(sc, WMREG_EIAM, mask);
+			CSR_WRITE(sc, WMREG_EIMS, mask);
+			CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
+			break;
+		}
 	} else {
 		CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
 	}
@@ -4678,7 +4739,8 @@ wm_stop_locked(struct ifnet *ifp, int disable)
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	sc->sc_icr = 0;
 	if (sc->sc_nintrs > 1) {
-		CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
+		if (sc->sc_type != WM_T_82574)
+			CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
 		CSR_WRITE(sc, WMREG_EIAC, 0);
 	}
 
