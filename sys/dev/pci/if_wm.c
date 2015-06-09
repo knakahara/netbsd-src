@@ -4453,7 +4453,7 @@ wm_init_locked(struct ifnet *ifp)
 			    IVAR_RX_MASK_Q_82574(0));
 			ivar |=__SHIFTIN((IVAR_VALID_82574|WM_LINK_INTR_INDEX),
 			    IVAR_OTHER_MASK);
-			CSR_WRITE(sc, WMREG_IVAR, ivar);
+			CSR_WRITE(sc, WMREG_IVAR, ivar | IVAR_INT_ON_ALL_WB);
 		} else {
 			/* Interrupt control */
 			CSR_WRITE(sc, WMREG_GPIE, GPIE_NSICR

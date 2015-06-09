@@ -464,6 +464,7 @@ struct livengood_tcpip_ctxdesc {
 #define IVAR_TX_MASK_Q_82574(x) (0x0000000f << ((x) == 0 ? 8 : 12))
 #define IVAR_RX_MASK_Q_82574(x) (0x0000000f << ((x) == 0 ? 0 : 4))
 #define IVAR_OTHER_MASK		__BITS(16, 19)
+#define IVAR_INT_ON_ALL_WB	__BIT(31)
 
 #define WMREG_IVAR_MISC	0x01740 /* IVAR for other causes */
 #define IVAR_MISC_TCPTIMER __BITS(0, 7)
