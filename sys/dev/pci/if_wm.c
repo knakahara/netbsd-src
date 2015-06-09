@@ -4417,25 +4417,43 @@ wm_init_locked(struct ifnet *ifp)
 	/* Set up MSI-X */
 	if (sc->sc_nintrs > 1) {
 		uint32_t ivar;
+		switch (sc->sc_type) {
+		case WM_T_82580:
+		case WM_T_I350:
+		case WM_T_I354:
+		case WM_T_I210:
+		case WM_T_I211:
+			CSR_WRITE(sc, WMREG_GPIE, WMREG_GPIE_NSICR
+			    | WMREG_GPIE_MSIX_MODE | WMREG_GPIE_EIAME
+			    | WMREG_GPIE_PBA);
 
-		CSR_WRITE(sc, WMREG_GPIE, WMREG_GPIE_NSICR | WMREG_GPIE_MSIX_MODE |
-		    WMREG_GPIE_EIAME | WMREG_GPIE_PBA);
+			/* TX */
+			ivar = CSR_READ(sc, WMREG_IVAR_Q(0));
+			ivar &= ~IVAR_TX_MASK_Q(0);
+			ivar |= __SHIFTIN(
+				(WM_TX_INTR_INDEX | IVAR_VALID),
+				IVAR_TX_MASK_Q(0));
+			CSR_WRITE(sc, WMREG_IVAR_Q(0), ivar);
 
-		/* TX */
-		ivar = CSR_READ(sc, WMREG_IVAR0);
-		ivar &= 0xFFFF00FF;
-		ivar |= (WM_TX_INTR_INDEX | WMREG_IVAR_VALID) << 8;
-		CSR_WRITE(sc, WMREG_IVAR0, ivar);
+			/* RX */
+			ivar = CSR_READ(sc, WMREG_IVAR_Q(0));
+			ivar &= ~IVAR_RX_MASK_Q(0);
+			ivar |= __SHIFTIN(
+				(WM_RX_INTR_INDEX | IVAR_VALID),
+				IVAR_RX_MASK_Q(0));
+			CSR_WRITE(sc, WMREG_IVAR_Q(0), ivar);
 
-		/* RX */
-		ivar = CSR_READ(sc, WMREG_IVAR0);
-		ivar &= 0xFFFFFF00;
-		ivar |= WM_RX_INTR_INDEX | WMREG_IVAR_VALID;
-		CSR_WRITE(sc, WMREG_IVAR0, ivar);
-
-		/* LINK */
-		ivar = (WM_LINK_INTR_INDEX | WMREG_IVAR_VALID) << 8;
-		CSR_WRITE(sc, WMREG_IVAR_MISC, ivar);
+			/* LINK */
+			ivar = (WM_LINK_INTR_INDEX | IVAR_VALID) << 8;
+			CSR_WRITE(sc, WMREG_IVAR_MISC, ivar);
+			break;
+		case WM_T_82576:
+			break;
+		case WM_T_82575:
+			break;
+		default:
+			break;
+		}
 	}
 
 	/* Set up the interrupt registers. */
