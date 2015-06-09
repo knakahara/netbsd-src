@@ -4524,9 +4524,13 @@ wm_init_locked(struct ifnet *ifp)
 			CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
 			break;
 		default:
-			mask = (1 << WM_RX_INTR_INDEX)
-			    | (1 << WM_TX_INTR_INDEX)
-			    | (1 << WM_LINK_INTR_INDEX);
+			if (sc->sc_type == WM_T_82575)
+				mask = EITR_RX_QUEUE0 |EITR_TX_QUEUE0
+				    | EITR_OTHER;
+			else
+				mask = (1 << WM_RX_INTR_INDEX)
+				    | (1 << WM_TX_INTR_INDEX)
+				    | (1 << WM_LINK_INTR_INDEX);
 			CSR_WRITE(sc, WMREG_EIAC, mask);
 			CSR_WRITE(sc, WMREG_EIAM, mask);
 			CSR_WRITE(sc, WMREG_EIMS, mask);
@@ -6441,10 +6445,12 @@ wm_tx_intr(void *arg)
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: TX: got Tx intr\n", device_xname(sc->sc_dev)));
 
-	if (sc->sc_type != WM_T_82574)
-		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_TX_INTR_INDEX);
-	else
+	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMC, ICR_TXQ0); /* 82574 only */
+	else if (sc->sc_type == WM_T_82575)
+		CSR_WRITE(sc, WMREG_EIMC, EITR_TX_QUEUE0);
+	else
+		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_TX_INTR_INDEX);
 
 	WM_TX_LOCK(sc);
 
@@ -6474,10 +6480,12 @@ wm_tx_intr(void *arg)
 out:
 	WM_TX_UNLOCK(sc);
 
-	if (sc->sc_type != WM_T_82574)
-		CSR_WRITE(sc, WMREG_EIMS, 1 << WM_TX_INTR_INDEX);
-	else
+	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMS, ICR_TXQ0); /* 82574 only */
+	else if (sc->sc_type == WM_T_82575)
+		CSR_WRITE(sc, WMREG_EIMS, EITR_TX_QUEUE0);
+	else
+		CSR_WRITE(sc, WMREG_EIMS, 1 << WM_TX_INTR_INDEX);
 
 	if (handled) {
 		/* Try to get more packets going. */
@@ -6501,10 +6509,12 @@ wm_rx_intr(void *arg)
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: RX: got Rx intr\n", device_xname(sc->sc_dev)));
 
-	if (sc->sc_type != WM_T_82574)
-		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_RX_INTR_INDEX);
-	else
+	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMC, ICR_RXQ0); /* 82574 only */
+	else if (sc->sc_type == WM_T_82575)
+		CSR_WRITE(sc, WMREG_EIMC, EITR_RX_QUEUE0);
+	else
+		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_RX_INTR_INDEX);
 
 	WM_RX_LOCK(sc);
 
@@ -6538,10 +6548,12 @@ wm_rx_intr(void *arg)
 out:
 	WM_RX_UNLOCK(sc);
 
-	if (sc->sc_type != WM_T_82574)
-		CSR_WRITE(sc, WMREG_EIMS, 1 << WM_RX_INTR_INDEX);
+	if (sc->sc_type == WM_T_82574)
+		CSR_WRITE(sc, WMREG_IMS, ICR_RXQ0);
+	else if (sc->sc_type == WM_T_82575)
+		CSR_WRITE(sc, WMREG_EIMS, EITR_RX_QUEUE0);
 	else
-		CSR_WRITE(sc, WMREG_IMS, ICR_RXQ0); /* 82574 only */
+		CSR_WRITE(sc, WMREG_EIMS, 1 << WM_RX_INTR_INDEX);
 
 	return 1;
 }
@@ -6560,10 +6572,12 @@ wm_link_intr(void *arg)
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: LINK: got link intr\n", device_xname(sc->sc_dev)));
 
-	if (sc->sc_type != WM_T_82574)
-		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_LINK_INTR_INDEX);
-	else
+	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMC, ICR_OTHER); /* 82574 only */
+	else if (sc->sc_type == WM_T_82575)
+		CSR_WRITE(sc, WMREG_EIMC, EITR_OTHER);
+	else
+		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_LINK_INTR_INDEX);
 	WM_TX_LOCK(sc);
 	if (sc->sc_stopping)
 		goto out;
@@ -6583,10 +6597,12 @@ wm_link_intr(void *arg)
 out:
 	WM_TX_UNLOCK(sc);
 	
-	if (sc->sc_type != WM_T_82574)
-		CSR_WRITE(sc, WMREG_EIMS, 1 << WM_LINK_INTR_INDEX);
-	else
+	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMS, ICR_OTHER); /* 82574 only */
+	else if (sc->sc_type == WM_T_82575)
+		CSR_WRITE(sc, WMREG_EIMS, EITR_OTHER);
+	else
+		CSR_WRITE(sc, WMREG_EIMS, 1 << WM_LINK_INTR_INDEX);
 
 	return 1;
 }
