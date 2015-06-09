@@ -120,21 +120,13 @@ void		*pci_intr_establish(pci_chipset_tag_t, pci_intr_handle_t,
 void		pci_intr_disestablish(pci_chipset_tag_t, void *);
 int		pci_intr_distribute(void *, const kcpuset_t *, kcpuset_t *);
 
+
 typedef enum {
 	PCI_INTR_TYPE_INTX = 0,
 	PCI_INTR_TYPE_MSI,
 	PCI_INTR_TYPE_MSIX,
+	PCI_INTR_TYPE_MAX
 } pci_intr_type_t;
-
-enum {
-	PCI_INTR_SIZE_NONE = 0,
-	PCI_INTR_SIZE_INTX,
-	PCI_INTR_SIZE_MSI,
-	PCI_INTR_SIZE_MSIX,
-	PCI_INTR_SIZE_MAX = PCI_INTR_SIZE_MSIX,
-};
-
-pci_intr_type_t	pci_intr_type(pci_intr_handle_t);
 
 /*
  * If device drivers use MSI/MSI-X, they should use these API for INTx
