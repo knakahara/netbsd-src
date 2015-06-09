@@ -432,6 +432,11 @@ struct livengood_tcpip_ctxdesc {
 #define	ICR_MDAC	(1U << 9)	/* MDIO access complete */
 #define	ICR_RXCFG	(1U << 10)	/* Receiving /C/ */
 #define	ICR_GPI(x)	(1U << (x))	/* general purpose interrupts */
+#define	ICR_RXQ0	__BIT(20)	/* 82574: Rx queue 0 interrupt */
+#define	ICR_RXQ1	__BIT(21)	/* 82574: Rx queue 1 interrupt */
+#define	ICR_TXQ0	__BIT(22)	/* 82574: Tx queue 0 interrupt */
+#define	ICR_TXQ1	__BIT(23)	/* 82574: Tx queue 1 interrupt */
+#define	ICR_OTHER	__BIT(24)	/* 82574: Other interrupt */
 #define	ICR_INT		(1U << 31)	/* device generated an interrupt */
 
 #define WMREG_ITR	0x00c4	/* Interrupt Throttling Register */
@@ -471,7 +476,8 @@ struct livengood_tcpip_ctxdesc {
 	/* See ICR bits. */
 
 #define	WMREG_EIAC_82574 0x00dc	/* Interrupt Auto Clear Register */
-#define	WMREG_EIAC_82574_MSIX_MASK	__BITS(20, 24)
+#define	WMREG_EIAC_82574_MSIX_MASK	(ICR_RXQ0 | ICR_RXQ1		\
+	| ICR_TXQ0 | ICR_TXQ1 | ICR_OTHER)
 
 #define	WMREG_RCTL	0x0100	/* Receive Control */
 #define	RCTL_EN		(1U << 1)	/* receiver enable */
