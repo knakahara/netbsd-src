@@ -3737,9 +3737,12 @@ wm_reset(struct wm_softc *sc)
 	/* Clear interrupt */
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	if (sc->sc_nintrs > 1) {
-		if (sc->sc_type != WM_T_82574)
+		if (sc->sc_type != WM_T_82574) {
 			CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
-		CSR_WRITE(sc, WMREG_EIAC, 0);
+			CSR_WRITE(sc, WMREG_EIAC, 0);
+		} else {
+			CSR_WRITE(sc, WMREG_EIAC_82574, 0);
+		}
 	}
 
 	/* Stop the transmit and receive processes. */
@@ -3986,9 +3989,11 @@ wm_reset(struct wm_softc *sc)
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	reg = CSR_READ(sc, WMREG_ICR);
 	if (sc->sc_nintrs > 1) {
-		if (sc->sc_type != WM_T_82574)
+		if (sc->sc_type != WM_T_82574) {
 			CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
-		CSR_WRITE(sc, WMREG_EIAC, 0);
+			CSR_WRITE(sc, WMREG_EIAC, 0);
+		} else
+			CSR_WRITE(sc, WMREG_EIAC_82574, 0);
 	}
 
 	/* reload sc_ctrl */
@@ -4739,9 +4744,11 @@ wm_stop_locked(struct ifnet *ifp, int disable)
 	CSR_WRITE(sc, WMREG_IMC, 0xffffffffU);
 	sc->sc_icr = 0;
 	if (sc->sc_nintrs > 1) {
-		if (sc->sc_type != WM_T_82574)
+		if (sc->sc_type != WM_T_82574) {
 			CSR_WRITE(sc, WMREG_EIMC, 0xffffffffU);
-		CSR_WRITE(sc, WMREG_EIAC, 0);
+			CSR_WRITE(sc, WMREG_EIAC, 0);
+		} else
+			CSR_WRITE(sc, WMREG_EIAC_82574, 0);
 	}
 
 	/* Release any queued transmit buffers. */
