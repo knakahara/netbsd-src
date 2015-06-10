@@ -1590,7 +1590,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		/* Round-robin affinity */
 		kcpuset_set(affinity, WM_TX_INTR_CPUID % ncpu);
 		error = pci_intr_distribute(vih, affinity, NULL);
-		if (error != 0) {
+		if (error == 0) {
 			aprint_normal_dev(sc->sc_dev,
 			    "for TX interrupting at %s affinity to %u\n",
 			    intrstr, WM_TX_INTR_CPUID % ncpu);
@@ -1622,10 +1622,10 @@ wm_attach(device_t parent, device_t self, void *aux)
 		kcpuset_zero(affinity);
 		kcpuset_set(affinity, WM_RX_INTR_CPUID % ncpu);
 		error = pci_intr_distribute(vih, affinity, NULL);
-		if (error != 0) {
+		if (error == 0) {
 			aprint_normal_dev(sc->sc_dev,
 			    "for RX interrupting at %s affinity to %u\n",
-			    intrstr, WM_TX_INTR_CPUID % ncpu);
+			    intrstr, WM_RX_INTR_CPUID % ncpu);
 		} else {
 			aprint_normal_dev(sc->sc_dev,
 			    "for RX interrupting at %s\n",
@@ -1654,10 +1654,10 @@ wm_attach(device_t parent, device_t self, void *aux)
 		kcpuset_zero(affinity);
 		kcpuset_set(affinity, WM_LINK_INTR_CPUID % ncpu);
 		error = pci_intr_distribute(vih, affinity, NULL);
-		if (error != 0) {
+		if (error == 0) {
 			aprint_normal_dev(sc->sc_dev,
 			    "for LINK interrupting at %s affinity to %u\n",
-			    intrstr, WM_TX_INTR_CPUID % ncpu);
+			    intrstr, WM_LINK_INTR_CPUID % ncpu);
 		} else {
 			aprint_normal_dev(sc->sc_dev,
 			    "for LINK interrupting at %s\n",
