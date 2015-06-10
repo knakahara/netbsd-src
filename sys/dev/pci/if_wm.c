@@ -5904,9 +5904,10 @@ wm_txeof(struct wm_softc *sc)
 {
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	struct wm_txsoft *txs;
-	uint8_t status;
-	int processed = 0;
+	bool processed = false;
+	int count = 0;
 	int i;
+	uint8_t status;
 
 	if (sc->sc_stopping)
 		return 0;
@@ -5935,7 +5936,8 @@ wm_txeof(struct wm_softc *sc)
 			break;
 		}
 
-		processed = 1;
+		processed = true;
+		count++;
 		DPRINTF(WM_DEBUG_TX,
 		    ("%s: TX: job %d done: descs %d..%d\n",
 		    device_xname(sc->sc_dev), i, txs->txs_firstdesc,
@@ -5978,6 +5980,9 @@ wm_txeof(struct wm_softc *sc)
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: TX: txsdirty -> %d\n", device_xname(sc->sc_dev), i));
 
+	if (count != 0)
+		rnd_add_uint32(&sc->rnd_source, count);
+
 	/*
 	 * If there are no more pending transmissions, cancel the watchdog
 	 * timer.
@@ -6000,6 +6005,7 @@ wm_rxeof(struct wm_softc *sc)
 	struct wm_rxsoft *rxs;
 	struct mbuf *m;
 	int i, len;
+	int count = 0;
 	uint8_t status, errors;
 	uint16_t vlantag;
 
@@ -6023,6 +6029,7 @@ wm_rxeof(struct wm_softc *sc)
 			break;
 		}
 
+		count++;
 		if (__predict_false(sc->sc_rxdiscard)) {
 			DPRINTF(WM_DEBUG_RX,
 			    ("%s: RX: discarding contents of descriptor %d\n",
@@ -6192,6 +6199,8 @@ wm_rxeof(struct wm_softc *sc)
 
 	/* Update the receive pointer. */
 	sc->sc_rxptr = i;
+	if (count != 0)
+		rnd_add_uint32(&sc->rnd_source, count);
 
 	DPRINTF(WM_DEBUG_RX,
 	    ("%s: RX: rxptr -> %d\n", device_xname(sc->sc_dev), i));
@@ -6362,7 +6371,7 @@ wm_intr_legacy(void *arg)
 {
 	struct wm_softc *sc = arg;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-	uint32_t icr;
+	uint32_t icr, rndval = 0;
 	int handled = 0;
 
 	DPRINTF(WM_DEBUG_TX,
@@ -6371,7 +6380,8 @@ wm_intr_legacy(void *arg)
 		icr = CSR_READ(sc, WMREG_ICR);
 		if ((icr & sc->sc_icr) == 0)
 			break;
-		rnd_add_uint32(&sc->rnd_source, icr);
+		if (rndval == 0)
+			rndval = icr;
 
 		WM_RX_LOCK(sc);
 
@@ -6421,6 +6431,8 @@ wm_intr_legacy(void *arg)
 		}
 	}
 
+	rnd_add_uint32(&sc->rnd_source, rndval);
+
 	if (handled) {
 		/* Try to get more packets going. */
 		ifp->if_start(ifp);
@@ -6462,10 +6474,6 @@ wm_txintr_msix(void *arg)
 
 out:
 	WM_TX_UNLOCK(sc);
-
-#if 0
-	rnd_add_uint32(&sc->rnd_source, icr);
-#endif
 
 	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMS, ICR_TXQ0); /* 82574 only */
@@ -6512,9 +6520,6 @@ wm_rxintr_msix(void *arg)
 
 out:
 	WM_RX_UNLOCK(sc);
-#if 0
-	rnd_add_uint32(&sc->rnd_source, icr);
-#endif
 
 	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMS, ICR_RXQ0);
@@ -6548,10 +6553,6 @@ wm_linkintr_msix(void *arg)
 	WM_TX_LOCK(sc);
 	if (sc->sc_stopping)
 		goto out;
-
-#if 0
-	rnd_add_uint32(&sc->rnd_source, icr);
-#endif
 
 	WM_EVCNT_INCR(&sc->sc_ev_linkintr);
 	wm_linkintr(sc, ICR_LSC);
