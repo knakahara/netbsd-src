@@ -1445,7 +1445,10 @@ wm_attach(device_t parent, device_t self, void *aux)
 			sc->sc_type = WM_T_82542_2_0;
 	}
 
-	/* Disable MSI for Errata 4 */
+	/*
+	 * Disable MSI for Errata 4
+	 * "Message Signaled Interrupt Feature May Corrupt Write Transactions"
+	 */
 	if (sc->sc_type == WM_T_82545)
 		pa->pa_flags &= ~PCI_FLAGS_MSI_OKAY;
 
@@ -1706,7 +1709,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 
 		sc->sc_nintrs = 1;
 	} else {
-		aprint_error_dev(sc, "failed to allocate interrput\n");
+		aprint_error_dev(sc->sc_dev, "failed to allocate interrput\n");
 		return;
 	}
 #endif /* WM_MSI_MSIX */
