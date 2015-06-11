@@ -1445,6 +1445,13 @@ wm_attach(device_t parent, device_t self, void *aux)
 			sc->sc_type = WM_T_82542_2_0;
 	}
 
+	/*
+	 * Disable MSI for Errata 4
+	 * "Message Signaled Interrupt Feature May Corrupt Write Transactions"
+	 */
+	if (sc->sc_type == WM_T_82545)
+		pa->pa_flags &= ~PCI_FLAGS_MSI_OKAY;
+
 	if ((sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
 	    || (sc->sc_type == WM_T_82580)
 	    || (sc->sc_type == WM_T_I350) || (sc->sc_type == WM_T_I354)
@@ -1684,7 +1691,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "MSI at %s\n", intrstr);
 
 		sc->sc_nintrs = 1;
-	} else if (pci_intx_alloc(pa, &sc->sc_intrs)) {
+	} else if (pci_intx_alloc(pa, &sc->sc_intrs) == 0) {
 		/* Last, try to use INTx */
 		intrstr = pci_intr_string(pc, sc->sc_intrs[0], intrbuf,
 		    sizeof(intrbuf));
@@ -1701,6 +1708,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 		sc->sc_nintrs = 1;
+	} else {
+		aprint_error_dev(sc->sc_dev, "failed to allocate interrput\n");
+		return;
 	}
 #endif /* WM_MSI_MSIX */
 
