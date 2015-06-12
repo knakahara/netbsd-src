@@ -324,6 +324,8 @@ struct wm_softc {
 					 * interrupt cookie.
 					 * legacy and msi use sc_ihs[0].
 					 */
+	pci_intr_handle_t *sc_intrs;	/* legacy and msi use sc_intrs[0] */
+	int sc_nintrs;			/* number of interrupts */
 
 	callout_t sc_tick_ch;		/* tick callout */
 	bool sc_stopping;
@@ -430,9 +432,6 @@ struct wm_softc {
 
 	kmutex_t *sc_tx_lock;		/* lock for tx operations */
 	kmutex_t *sc_rx_lock;		/* lock for rx operations */
-
-	int sc_nintrs;			/* number of interrupts */
-	pci_intr_handle_t *sc_intrs;	/* legacy and msi use sc_intrs[0] */
 };
 
 #define WM_TX_LOCK(_sc)		if ((_sc)->sc_tx_lock) mutex_enter((_sc)->sc_tx_lock)
@@ -1389,6 +1388,8 @@ wm_attach(device_t parent, device_t self, void *aux)
 	pci_chipset_tag_t pc = pa->pa_pc;
 #ifndef WM_MSI_MSIX
 	pci_intr_handle_t ih;
+#else
+	bool intr_established = false;
 #endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
@@ -1405,7 +1406,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 	pcireg_t preg, memtype;
 	uint16_t eeprom_data, apme_mask;
 	bool force_clear_smbi;
-	bool intr_established = false;
 	uint32_t link_mode;
 	uint32_t reg;
 	char intrbuf[PCI_INTRSTR_LEN];
@@ -4569,9 +4569,8 @@ wm_init_locked(struct ifnet *ifp)
 			CSR_WRITE(sc, WMREG_IMS, ICR_LSC);
 			break;
 		}
-	} else {
+	} else
 		CSR_WRITE(sc, WMREG_IMS, sc->sc_icr);
-	}
 
 	if ((sc->sc_type == WM_T_ICH8) || (sc->sc_type == WM_T_ICH9)
 	    || (sc->sc_type == WM_T_ICH10) || (sc->sc_type == WM_T_PCH)
