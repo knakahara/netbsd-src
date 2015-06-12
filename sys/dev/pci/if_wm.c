@@ -1405,6 +1405,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	pcireg_t preg, memtype;
 	uint16_t eeprom_data, apme_mask;
 	bool force_clear_smbi;
+	bool intr_established = false;
 	uint32_t link_mode;
 	uint32_t reg;
 	char intrbuf[PCI_INTRSTR_LEN];
@@ -1446,10 +1447,16 @@ wm_attach(device_t parent, device_t self, void *aux)
 	}
 
 	/*
-	 * Disable MSI for Errata 4
+	 * Disable MSI for Errata:
 	 * "Message Signaled Interrupt Feature May Corrupt Write Transactions"
+	 * 
+	 *  82544: Errata 25
+	 *  82540: Errata  6 (easy to reproduce device timeout)
+	 *  82545: Errata  4 (easy to reproduce device timeout)
+	 *  82546: Errata 26 (easy to reproduce device timeout)
+	 *  82541: Errata  7 (easy to reproduce device timeout)
 	 */
-	if (sc->sc_type == WM_T_82545)
+	if (sc->sc_type <= WM_T_82541_2)
 		pa->pa_flags &= ~PCI_FLAGS_MSI_OKAY;
 
 	if ((sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
@@ -1590,8 +1597,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 			aprint_error_dev(sc->sc_dev,
 			    "unable to establish MSI-X(for TX)%s%s\n",
 			    intrstr ? " at " : "", intrstr ? intrstr : "");
-			error = EBUSY;
-			return;
+			pci_intr_release(sc->sc_pc, sc->sc_intrs,
+			    WM_NINTR);
+			goto msi;
 		}
 		kcpuset_zero(affinity);
 		/* Round-robin affinity */
@@ -1623,8 +1631,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 			aprint_error_dev(sc->sc_dev,
 			    "unable to establish MSI-X(for RX)%s%s\n",
 			    intrstr ? " at " : "", intrstr ? intrstr : "");
-			error = EBUSY;
-			return;
+			pci_intr_release(sc->sc_pc, sc->sc_intrs,
+			    WM_NINTR);
+			goto msi;
 		}
 		kcpuset_zero(affinity);
 		kcpuset_set(affinity, WM_RX_INTR_CPUID % ncpu);
@@ -1655,8 +1664,9 @@ wm_attach(device_t parent, device_t self, void *aux)
 			aprint_error_dev(sc->sc_dev,
 			    "unable to establish MSI-X(for LINK)%s%s\n",
 			    intrstr ? " at " : "", intrstr ? intrstr : "");
-			error = EBUSY;
-			return;
+			pci_intr_release(sc->sc_pc, sc->sc_intrs,
+			    WM_NINTR);
+			goto msi;
 		}
 		kcpuset_zero(affinity);
 		kcpuset_set(affinity, WM_LINK_INTR_CPUID % ncpu);
@@ -1674,7 +1684,12 @@ wm_attach(device_t parent, device_t self, void *aux)
 
 		sc->sc_nintrs = WM_NINTR;
 		kcpuset_destroy(affinity);
-	} else if (pci_msi_alloc_exact(pa, &sc->sc_intrs, 1) == 0) {
+		intr_established = true;
+	}
+
+msi:
+	if ((intr_established == false)
+	    && (pci_msi_alloc_exact(pa, &sc->sc_intrs, 1) == 0)) {
 		/* 2nd, try to use MSI */
 		intrstr = pci_intr_string(pc, sc->sc_intrs[0], intrbuf,
 		    sizeof(intrbuf));
@@ -1685,13 +1700,19 @@ wm_attach(device_t parent, device_t self, void *aux)
 		    IPL_NET, wm_intr_legacy, sc);
 		if (sc->sc_ihs[0] == NULL) {
 			aprint_error_dev(sc->sc_dev, "unable to establish MSI\n");
-			error = EBUSY;
-			return;
+			pci_intr_release(sc->sc_pc, sc->sc_intrs,
+			    1);
+			goto intx;
 		}
 		aprint_normal_dev(sc->sc_dev, "MSI at %s\n", intrstr);
 
 		sc->sc_nintrs = 1;
-	} else if (pci_intx_alloc(pa, &sc->sc_intrs) == 0) {
+		intr_established = true;
+	}
+
+intx:
+	if ((intr_established == false)
+	    && (pci_intx_alloc(pa, &sc->sc_intrs) == 0)) {
 		/* Last, try to use INTx */
 		intrstr = pci_intr_string(pc, sc->sc_intrs[0], intrbuf,
 		    sizeof(intrbuf));
@@ -1702,13 +1723,17 @@ wm_attach(device_t parent, device_t self, void *aux)
 		    IPL_NET, wm_intr_legacy, sc);
 		if (sc->sc_ihs[0] == NULL) {
 			aprint_error_dev(sc->sc_dev, "unable to establish MSI\n");
-			error = EBUSY;
-			return;
+			pci_intr_release(sc->sc_pc, sc->sc_intrs, 1);
+			goto int_failed;
 		}
 		aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 
 		sc->sc_nintrs = 1;
-	} else {
+		intr_established = true;
+	}
+
+int_failed:
+	if (intr_established == false) {
 		aprint_error_dev(sc->sc_dev, "failed to allocate interrput\n");
 		return;
 	}
