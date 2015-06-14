@@ -299,7 +299,7 @@ struct livengood_tcpip_ctxdesc {
 #define	EERD_DATA_SHIFT	16	/* Offset to data in EEPROM read/write registers */
 
 #define	WMREG_CTRL_EXT	0x0018	/* Extended Device Control Register */
-#define	CTRL_EXT_NSICR		__BIT(0)
+#define	CTRL_EXT_NSICR		__BIT(0) /* Non Interrupt clear on read */
 #define	CTRL_EXT_GPI_EN(x)	(1U << (x)) /* gpin interrupt enable */
 #define	CTRL_EXT_SWDPINS_SHIFT	4
 #define	CTRL_EXT_SWDPINS_MASK	0x0d
@@ -326,10 +326,10 @@ struct livengood_tcpip_ctxdesc {
 #define	CTRL_EXT_LINK_MODE_TBI		0x00C00000
 #define	CTRL_EXT_LINK_MODE_PCIE_SERDES	0x00C00000
 #define	CTRL_EXT_PHYPDEN	0x00100000
-#define	CTRL_EXT_EIAME		__BIT(24)
+#define	CTRL_EXT_EIAME		__BIT(24) /* Extended Interrupt Auto Mask En */
 #define CTRL_EXT_I2C_ENA	0x02000000  /* I2C enable */
 #define	CTRL_EXT_DRV_LOAD	0x10000000
-#define	CTRL_EXT_PBA		__BIT(31)
+#define	CTRL_EXT_PBA		__BIT(31) /* PBA Support */
 
 #define	WMREG_MDIC	0x0020	/* MDI Control Register */
 #define	MDIC_DATA(x)	((x) & 0xffff)
@@ -765,7 +765,7 @@ struct livengood_tcpip_ctxdesc {
 
 #define WMREG_EICR	0x01580  /* Ext. Interrupt Cause Read - R/clr */
 
-#define WMREG_MSIXBM(x)	(0x1600 + (x) * 4)
+#define WMREG_MSIXBM(x)	(0x1600 + (x) * 4) /* MSI-X Allocation */
 
 #define EITR_RX_QUEUE0	0x00000001 /* Rx Queue 0 Interrupt */
 #define EITR_RX_QUEUE1	0x00000002 /* Rx Queue 1 Interrupt */
