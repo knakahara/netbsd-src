@@ -1,4 +1,4 @@
-/*	$NetBSD: mips_param.h,v 1.35 2015/06/07 06:07:49 matt Exp $	*/
+/*	$NetBSD: mips_param.h,v 1.37 2015/06/11 15:43:36 matt Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -107,7 +107,7 @@
 
 #ifdef _LP64
 #define	NSEGPG		(NBPG/8)
-#define NBXSEG		(NSEGPG*NBSEG)	/* bytes/xsegment */
+#define NBXSEG		((uint64_t)NSEGPG*NBSEG) /* bytes/xsegment */
 #define	XSEGOFSET	(NBSEG-1)	/* byte offset into segment */
 #define	XSEGSHIFT	(SEGSHIFT+(PGSHIFT-3))	/* LOG2(NBXSEG) */
 #endif

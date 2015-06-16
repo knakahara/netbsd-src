@@ -1,4 +1,4 @@
-/*	$NetBSD: mips_machdep.c,v 1.266 2015/06/08 18:22:23 macallan Exp $	*/
+/*	$NetBSD: mips_machdep.c,v 1.269 2015/06/11 15:48:57 matt Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -111,7 +111,7 @@
  */
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: mips_machdep.c,v 1.266 2015/06/08 18:22:23 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mips_machdep.c,v 1.269 2015/06/11 15:48:57 matt Exp $");
 
 #define __INTR_PRIVATE
 #include "opt_cputype.h"
@@ -489,6 +489,13 @@ static const struct pridtab cputab[] = {
 	  MIPS_CP0FL_CONFIG | MIPS_CP0FL_CONFIG1 | MIPS_CP0FL_CONFIG2 |
 	  MIPS_CP0FL_CONFIG3 | MIPS_CP0FL_CONFIG6 | MIPS_CP0FL_CONFIG7,
 	  0, "1004K" },
+	{ MIPS_PRID_CID_MTI, MIPS_1074K, -1, -1,	-1, 0,
+	  MIPS32_FLAGS | CPU_MIPS_DOUBLE_COUNT,
+	  MIPS_CP0FL_USE |
+	  MIPS_CP0FL_EBASE | MIPS_CP0FL_USERLOCAL | MIPS_CP0FL_HWRENA |
+	  MIPS_CP0FL_CONFIG | MIPS_CP0FL_CONFIG1 | MIPS_CP0FL_CONFIG2 |
+	  MIPS_CP0FL_CONFIG3 | MIPS_CP0FL_CONFIG6 | MIPS_CP0FL_CONFIG7,
+	  0, "1074K" },
 
 	{ MIPS_PRID_CID_BROADCOM, MIPS_BCM3302, -1, -1, -1, 0,
 	  MIPS32_FLAGS | CPU_MIPS_DOUBLE_COUNT, 0, 0, "BCM3302"	},
@@ -1809,7 +1816,6 @@ cpu_dump(void)
 		cpuhdrp->pg_v      = MIPS1_PG_V;
 	}
 	cpuhdrp->sysmappa   = MIPS_KSEG0_TO_PHYS(Sysmap);
-	cpuhdrp->sysmapsize = Sysmapsize;
 	cpuhdrp->nmemsegs   = mem_cluster_cnt;
 
 	/*
@@ -2388,7 +2394,7 @@ mm_md_kernacc(void *ptr, vm_prot_t prot, bool *handled)
 	if (v < MIPS_XKPHYS_START) {
 		return EFAULT;
 	}
-	if (MIPS_XKPHYS_P(v) && v > MIPS_PHYS_TO_XKPHYS_CACHED(mips_avail_end +
+	if (MIPS_XKPHYS_P(v) && v > MIPS_PHYS_TO_XKPHYS_CACHED(pmap_limits.avail_end +
 	    mips_round_page(MSGBUFSIZE))) {
 		return EFAULT;
 	}
@@ -2403,7 +2409,7 @@ mm_md_kernacc(void *ptr, vm_prot_t prot, bool *handled)
 	if (v < MIPS_KSEG0_START) {
 		return EFAULT;
 	}
-	if (v < MIPS_PHYS_TO_KSEG0(mips_avail_end +
+	if (v < MIPS_PHYS_TO_KSEG0(pmap_limits.avail_end +
 	    mips_round_page(MSGBUFSIZE))) {
 		*handled = true;
 		return 0;
