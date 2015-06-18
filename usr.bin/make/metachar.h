@@ -1,8 +1,11 @@
-/* $NetBSD: ansi.h,v 1.5 2015/06/17 14:32:32 martin Exp $ */
+/*	$NetBSD: metachar.h,v 1.1 2015/06/17 15:34:55 christos Exp $	*/
 
 /*-
- * Copyright (c) 2007 Jared D. McNeill <jmcneill@invisible.ca>
+ * Copyright (c) 2015 The NetBSD Foundation, Inc.
  * All rights reserved.
+ *
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Christos Zoulas.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,36 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef _ARCH_USERMODE_INCLUDE_ANSI_H
-#define _ARCH_USERMODE_INCLUDE_ANSI_H
+#ifndef _METACHAR_H
+#define _METACHAR_H
 
 #include <sys/cdefs.h>
-#include <machine/int_types.h>
 
-#define _BSD_CLOCK_T_		unsigned int
-#define _BSD_TIME_T_		__int64_t
-#define _BSD_CLOCKID_T_		int
-#define _BSD_TIMER_T_		int
-#define _BSD_SUSECONDS_T_	int
-#define _BSD_USECONDS_T_	unsigned int
-#define _BSD_WCHAR_T_		int
-#define _BSD_WINT_T_		int
+__BEGIN_DECLS
+extern unsigned char _metachar[];
 
-#if defined(__i386__)
-#define _BSD_PTRDIFF_T_		int
-#define _BSD_SIZE_T_		unsigned int
-#define _BSD_SSIZE_T_		int
-#elif defined(__x86_64__)
-#define _BSD_PTRDIFF_T_		long
-#define _BSD_SIZE_T_		unsigned long
-#define _BSD_SSIZE_T_		long
-#elif defined(__arm__)
-#define _BSD_PTRDIFF_T_		long int
-#define _BSD_SIZE_T_		unsigned long int
-#define _BSD_SSIZE_T_		long int
-#else
-#error "platform not supported"
-#endif
+#define ismeta(c)	_metachar[(c) & 0x7f]
 
-#endif /* !_ARCH_USERMODE_INCLUDE_ANSI_H */
+static inline int
+hasmeta(const char *cmd)
+{
+	while (!ismeta(*cmd))
+		cmd++;
+
+	return *cmd != '\0';
+}
+__END_DECLS
+
+#endif /* _METACHAR_H */
