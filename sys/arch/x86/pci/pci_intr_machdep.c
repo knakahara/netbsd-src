@@ -425,19 +425,25 @@ error:
  * counts : the array of number of interrupt handlers.
  *     e.g.:
  *         If you want to use 5 MSI-X, 1 MSI, or INTx, you use "counts" as
- *             int counts[PCI_INTR_TYPE_MAX];
+ *             int counts[PCI_INTR_SIZE_MSIX];
  *             counts[PCI_INTR_TYPE_MSIX] = 5;
  *             counts[PCI_INTR_TYPE_MSI] = 1;
  *             counts[PCI_INTR_TYPE_INTX] = 1;
- *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MAX);
+ *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_SIZE_MSIX);
  *
  *         If you want to use hardware max number MSI-X or 1 MSI,
  *         and not to use INTx, you use "counts" as
- *             int counts[PCI_INTR_TYPE_MAX];
+ *             int counts[PCI_INTR_SIZE_MSIX];
  *             counts[PCI_INTR_TYPE_MSIX] = -1;
  *             counts[PCI_INTR_TYPE_MSI] = 1;
  *             counts[PCI_INTR_TYPE_INTX] = 0;
- *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MAX);
+ *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_SIZE_MSIX);
+ *
+ *         If you want to use 3 MSI or INTx, you can simply use this API like below
+ *             int counts[PCI_INTR_SIZE_MSI];
+ *             counts[PCI_INTR_TYPE_MSI] = 3;
+ *             counts[PCI_INTR_TYPE_INTX] = 0;
+ *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_SIZE_MSI);
  *
  *         If you want to use 1 MSI or INTx, you can simply use this API like below
  *             error = pci_intr_alloc(pa, ihps, NULL, 0);
@@ -455,22 +461,22 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 		intx_count = 1;
 	} else {
 		switch(ncounts) {
-		case 0: /* same as simple pattern */
+		case PCI_INTR_SIZE_NONE: /* same as simple pattern */
 			msix_count = 0;
 			msi_count = 1;
 			intx_count = 1;
 			break;
-		case 1: /* INTx only */
+		case PCI_INTR_SIZE_INTX: /* INTx only */
 			msix_count = 0;
 			msi_count = 0;
 			intx_count = counts[PCI_INTR_TYPE_INTX];
 			break;
-		case 2: /* MSI and INTx */
+		case PCI_INTR_SIZE_MSI: /* MSI and INTx */
 			msix_count = 0;
 			msi_count = counts[PCI_INTR_TYPE_MSI];
 			intx_count = counts[PCI_INTR_TYPE_INTX];
 			break;
-		case 3: /* MSI-X, MSI, and INTx */
+		case PCI_INTR_SIZE_MSIX: /* MSI-X, MSI, and INTx */
 			msix_count = counts[PCI_INTR_TYPE_MSIX];
 			msi_count = counts[PCI_INTR_TYPE_MSI];
 			intx_count = counts[PCI_INTR_TYPE_INTX];
