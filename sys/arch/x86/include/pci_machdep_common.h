@@ -134,6 +134,8 @@ enum {
 	PCI_INTR_SIZE_MAX = PCI_INTR_SIZE_MSIX,
 };
 
+pci_intr_type_t	pci_intr_type(pci_intr_handle_t);
+
 /*
  * If device drivers use MSI/MSI-X, they should use these API for INTx
  * instead of pci_intr_map(), because of conforming the pci_intr_handle
