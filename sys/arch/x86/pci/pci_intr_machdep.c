@@ -350,6 +350,20 @@ pci_intr_distribute(void *cookie, const kcpuset_t *newset, kcpuset_t *oldset)
 }
 
 #if NIOAPIC > 0
+pci_intr_type_t
+pci_intr_type(pci_intr_handle_t ih)
+{
+
+	if (INT_VIA_MSI(ih)) {
+		if (MSI_INT_IS_MSIX(ih))
+			return PCI_INTR_TYPE_MSIX;
+		else
+			return PCI_INTR_TYPE_MSI;
+	} else {
+		return PCI_INTR_TYPE_INTX;
+	}
+}
+
 static void
 x86_pci_intx_release(pci_chipset_tag_t pc, pci_intr_handle_t *pih)
 {
