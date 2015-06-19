@@ -155,7 +155,7 @@ int	wm_debug = WM_DEBUG_TX | WM_DEBUG_RX | WM_DEBUG_LINK | WM_DEBUG_GMII
 #endif
 
 #ifdef __HAVE_PCI_MSI_MSIX
-#if 1 /* off by default */
+#if 0 /* off by default */
 #define WM_MSI_MSIX	1
 #endif
 #endif
