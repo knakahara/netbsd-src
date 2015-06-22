@@ -423,6 +423,7 @@ error:
  * pa : pci_attach_args
  * ihps : interrupt handlers
  * counts : the array of number of interrupt handlers.
+ *          and overwrite alloced the number of handlers.
  *     e.g.:
  *         If you want to use 5 MSI-X, 1 MSI, or INTx, you use "counts" as
  *             int counts[PCI_INTR_SIZE_MSIX];
@@ -496,8 +497,12 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 		msix_count = pci_msix_count(pa);
 	if (msix_count > 0) {
 		error = pci_msix_alloc_exact(pa, ihps, msix_count);
-		if (error == 0)
+		if (error == 0) {
+			counts[PCI_INTR_TYPE_MSIX] = msix_count;
+			counts[PCI_INTR_TYPE_MSI] = 0;
+			counts[PCI_INTR_TYPE_INTX] = 0;
 			goto out;
+		}
 	}
 
 	/* try MSI */
@@ -505,13 +510,33 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 		msi_count = pci_msi_count(pa);
 	if (msi_count > 0) {
 		error = pci_msi_alloc_exact(pa, ihps, msi_count);
-		if (error == 0)
-			goto out;
+		if (error == 0) {
+			if (counts != NULL) {
+				counts[PCI_INTR_TYPE_MSIX] = 0;
+				counts[PCI_INTR_TYPE_MSI] = msi_count;
+				counts[PCI_INTR_TYPE_INTX] = 0;
+				goto out;
+			}
+		}
 	}
 
 	/* try INTx */
-	if (intx_count != 0) /* The number of INTx is always 1. */
+	if (intx_count != 0) { /* The number of INTx is always 1. */
 		error = pci_intx_alloc(pa, ihps);
+		if (error == 0) {
+			if (counts != NULL) {
+				counts[PCI_INTR_TYPE_MSIX] = 0;
+				counts[PCI_INTR_TYPE_MSI] = 0;
+				counts[PCI_INTR_TYPE_INTX] = 1;
+			}
+		} else {
+			if (counts != NULL) {
+				counts[PCI_INTR_TYPE_MSIX] = 0;
+				counts[PCI_INTR_TYPE_MSI] = 0;
+				counts[PCI_INTR_TYPE_INTX] = 0;
+			}
+		}
+	}
 
  out:
 	return error;
