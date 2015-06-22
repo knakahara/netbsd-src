@@ -1,8 +1,10 @@
-/*	$NetBSD: sys_module.c,v 1.18 2015/06/19 14:23:59 martin Exp $	*/
+/*	$NetBSD: netbsd32_module.c,v 1.2 2015/06/21 06:51:05 msaitoh Exp $	*/
 
 /*-
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
+ *
+ * This code is derived from software developed for The NetBSD Foundation.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,100 +28,27 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * System calls relating to loadable modules.
- */
-
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sys_module.c,v 1.18 2015/06/19 14:23:59 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_module.c,v 1.2 2015/06/21 06:51:05 msaitoh Exp $");
 
 #include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/proc.h>
-#include <sys/namei.h>
+#include <sys/dirent.h>
 #include <sys/kauth.h>
-#include <sys/kmem.h>
-#include <sys/kobj.h>
 #include <sys/module.h>
-#include <sys/syscall.h>
-#include <sys/syscallargs.h>
+#include <sys/kobj.h>
 
-#include <opt_modular.h>
-
-/*
- * Arbitrary limit to avoid DoS for excessive memory allocation.
- */
-#define MAXPROPSLEN	4096
+#include <compat/netbsd32/netbsd32.h>
+#include <compat/netbsd32/netbsd32_syscall.h>
+#include <compat/netbsd32/netbsd32_syscallargs.h>
+#include <compat/netbsd32/netbsd32_conv.h>
 
 int
-handle_modctl_load(const char *ml_filename, int ml_flags, const char *ml_props,
-    size_t ml_propslen)
-{
-	char *path;
-	char *props;
-	int error;
-	prop_dictionary_t dict;
-	size_t propslen = 0;
-
-	if ((ml_props != NULL && ml_propslen == 0) ||
-	    (ml_props == NULL && ml_propslen > 0)) {
-		return EINVAL;
-	}
-
-	path = PNBUF_GET();
-	error = copyinstr(ml_filename, path, MAXPATHLEN, NULL);
-	if (error != 0)
-		goto out1;
-
-	if (ml_props != NULL) {
-		if (ml_propslen > MAXPROPSLEN) {
-			error = ENOMEM;
-			goto out1;
-		}
-		propslen = ml_propslen + 1;
-
-		props = kmem_alloc(propslen, KM_SLEEP);
-		if (props == NULL) {
-			error = ENOMEM;
-			goto out1;
-		}
-
-		error = copyinstr(ml_props, props, propslen, NULL);
-		if (error != 0)
-			goto out2;
-
-		dict = prop_dictionary_internalize(props);
-		if (dict == NULL) {
-			error = EINVAL;
-			goto out2;
-		}
-	} else {
-		dict = NULL;
-		props = NULL;
-	}
-
-	error = module_load(path, ml_flags, dict, MODULE_CLASS_ANY);
-
-	if (dict != NULL) {
-		prop_object_release(dict);
-	}
-
-out2:
-	if (props != NULL) {
-		kmem_free(props, propslen);
-	}
-out1:
-	PNBUF_PUT(path);
-	return error;
-}
-
-int
-sys_modctl(struct lwp *l, const struct sys_modctl_args *uap,
-	   register_t *retval)
+netbsd32_modctl(struct lwp *lwp, const struct netbsd32_modctl_args *uap,
+	register_t *result)
 {
 	/* {
-		syscallarg(int)		cmd;
-		syscallarg(void *)	arg;
+		syscallarg(int) cmd;
+		syscallarg(netbsd32_voidp) arg;
 	} */
 	char buf[MAXMODNAME];
 	size_t mslen;
@@ -128,23 +57,23 @@ sys_modctl(struct lwp *l, const struct sys_modctl_args *uap,
 	modstat_t *ms, *mso;
 	vaddr_t addr;
 	size_t size;
-	struct iovec iov;
-	modctl_load_t ml;
+	struct netbsd32_iovec iov;
+	struct netbsd32_modctl_load ml;
 	int error;
 	void *arg;
 #ifdef MODULAR
 	uintptr_t loadtype;
 #endif
 
-	arg = SCARG(uap, arg);
+	arg = SCARG_P32(uap, arg);
 
 	switch (SCARG(uap, cmd)) {
 	case MODCTL_LOAD:
 		error = copyin(arg, &ml, sizeof(ml));
 		if (error != 0)
 			break;
-		error = handle_modctl_load(ml.ml_filename, ml.ml_flags,
-		    ml.ml_props, ml.ml_propslen);
+		error = handle_modctl_load(NETBSD32PTR64(ml.ml_filename),
+		     ml.ml_flags, NETBSD32PTR64(ml.ml_props), ml.ml_propslen);
 		break;
 
 	case MODCTL_UNLOAD:
@@ -203,7 +132,7 @@ sys_modctl(struct lwp *l, const struct sys_modctl_args *uap,
 			ms++;
 		}
 		kernconfig_unlock();
-		error = copyout(mso, iov.iov_base,
+		error = copyout(mso, NETBSD32PTR64(iov.iov_base),
 		    min(mslen - sizeof(modstat_t), iov.iov_len));
 		kmem_free(mso, mslen);
 		if (error == 0) {
@@ -240,3 +169,5 @@ sys_modctl(struct lwp *l, const struct sys_modctl_args *uap,
 
 	return error;
 }
+
+
