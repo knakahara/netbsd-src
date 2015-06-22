@@ -422,74 +422,64 @@ error:
  * Generally interrupt handler allocation wrapper function.
  * pa : pci_attach_args
  * ihps : interrupt handlers
- * counts : the array of number of interrupt handlers.
- *          and overwrite alloced the number of handlers.
+ * counts : The array of number of interrupt handlers.
+ *          And overwrite alloced the number of handlers.
+ *          CAUTION: The size of counts[] must be PCI_INTR_TYPE_SIZE.
+ * max_type : "max" type of using interrupts. See below.
  *     e.g.:
  *         If you want to use 5 MSI-X, 1 MSI, or INTx, you use "counts" as
- *             int counts[PCI_INTR_SIZE_MSIX];
+ *             int counts[PCI_INTR_TYPE_SIZE];
  *             counts[PCI_INTR_TYPE_MSIX] = 5;
  *             counts[PCI_INTR_TYPE_MSI] = 1;
  *             counts[PCI_INTR_TYPE_INTX] = 1;
- *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_SIZE_MSIX);
+ *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MSIX);
  *
  *         If you want to use hardware max number MSI-X or 1 MSI,
  *         and not to use INTx, you use "counts" as
- *             int counts[PCI_INTR_SIZE_MSIX];
+ *             int counts[PCI_INTR_TYPE_SIZE];
  *             counts[PCI_INTR_TYPE_MSIX] = -1;
  *             counts[PCI_INTR_TYPE_MSI] = 1;
  *             counts[PCI_INTR_TYPE_INTX] = 0;
- *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_SIZE_MSIX);
+ *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MSIX);
  *
  *         If you want to use 3 MSI or INTx, you can simply use this API like below
- *             int counts[PCI_INTR_SIZE_MSI];
+ *             int counts[PCI_INTR_TYPE_SIZE];
  *             counts[PCI_INTR_TYPE_MSI] = 3;
  *             counts[PCI_INTR_TYPE_INTX] = 0;
- *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_SIZE_MSI);
+ *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MSI);
  *
  *         If you want to use 1 MSI or INTx, you can simply use this API like below
  *             error = pci_intr_alloc(pa, ihps, NULL, 0);
+ *                                                    ^ ignored
  */
 int
 pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
-    pci_intr_type_t *counts, size_t ncounts)
+    pci_intr_type_t *counts, pci_intr_type_t max_type)
 {
 	int error;
 	int intx_count, msi_count, msix_count;
 
+	intx_count = msi_count = msix_count = 0;
 	if (counts == NULL) { /* simple pattern */
-		msix_count = 0;
 		msi_count = 1;
 		intx_count = 1;
 	} else {
-		switch(ncounts) {
-		case PCI_INTR_SIZE_NONE: /* same as simple pattern */
-			msix_count = 0;
-			msi_count = 1;
-			intx_count = 1;
-			break;
-		case PCI_INTR_SIZE_INTX: /* INTx only */
-			msix_count = 0;
-			msi_count = 0;
-			intx_count = counts[PCI_INTR_TYPE_INTX];
-			break;
-		case PCI_INTR_SIZE_MSI: /* MSI and INTx */
-			msix_count = 0;
-			msi_count = counts[PCI_INTR_TYPE_MSI];
-			intx_count = counts[PCI_INTR_TYPE_INTX];
-			break;
-		case PCI_INTR_SIZE_MSIX: /* MSI-X, MSI, and INTx */
+		switch(max_type) {
+		case PCI_INTR_TYPE_MSIX:
 			msix_count = counts[PCI_INTR_TYPE_MSIX];
+			/* FALLTHROUGH */
+		case PCI_INTR_TYPE_MSI:
 			msi_count = counts[PCI_INTR_TYPE_MSI];
+			/* FALLTHROUGH */
+		case PCI_INTR_TYPE_INTX:
 			intx_count = counts[PCI_INTR_TYPE_INTX];
 			break;
-		default: /* Currently MSI-X, MSI, and INTx */
-			msix_count = counts[PCI_INTR_TYPE_MSIX];
-			msi_count = counts[PCI_INTR_TYPE_MSI];
-			intx_count = counts[PCI_INTR_TYPE_INTX];
-			break;
+		default:
+			return EINVAL;
 		}
 	}
 
+	memset(counts, 0, sizeof(counts[0]) * PCI_INTR_TYPE_SIZE);
 	error = EINVAL;
 
 	/* try MSI-X */
@@ -499,13 +489,6 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 		error = pci_msix_alloc_exact(pa, ihps, msix_count);
 		if (error == 0) {
 			counts[PCI_INTR_TYPE_MSIX] = msix_count;
-			counts[PCI_INTR_TYPE_MSI] = 0;
-			counts[PCI_INTR_TYPE_INTX] = 0;
-			if (ncounts > PCI_INTR_SIZE_MSIX) {
-				int i;
-				for (i = PCI_INTR_TYPE_MSIX + 1; i < ncounts; i++)
-					counts[i] = 0;
-			}
 			goto out;
 		}
 	}
@@ -517,9 +500,7 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 		error = pci_msi_alloc_exact(pa, ihps, msi_count);
 		if (error == 0) {
 			if (counts != NULL) {
-				counts[PCI_INTR_TYPE_MSIX] = 0;
 				counts[PCI_INTR_TYPE_MSI] = msi_count;
-				counts[PCI_INTR_TYPE_INTX] = 0;
 				goto out;
 			}
 		}
@@ -529,17 +510,8 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 	if (intx_count != 0) { /* The number of INTx is always 1. */
 		error = pci_intx_alloc(pa, ihps);
 		if (error == 0) {
-			if (counts != NULL) {
-				counts[PCI_INTR_TYPE_MSIX] = 0;
-				counts[PCI_INTR_TYPE_MSI] = 0;
+			if (counts != NULL)
 				counts[PCI_INTR_TYPE_INTX] = 1;
-			}
-		} else {
-			if (counts != NULL) {
-				counts[PCI_INTR_TYPE_MSIX] = 0;
-				counts[PCI_INTR_TYPE_MSI] = 0;
-				counts[PCI_INTR_TYPE_INTX] = 0;
-			}
 		}
 	}
 
