@@ -501,6 +501,11 @@ pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
 			counts[PCI_INTR_TYPE_MSIX] = msix_count;
 			counts[PCI_INTR_TYPE_MSI] = 0;
 			counts[PCI_INTR_TYPE_INTX] = 0;
+			if (ncounts > PCI_INTR_SIZE_MSIX) {
+				int i;
+				for (i = PCI_INTR_TYPE_MSIX + 1; i < ncounts; i++)
+					counts[i] = 0;
+			}
 			goto out;
 		}
 	}
