@@ -124,15 +124,8 @@ typedef enum {
 	PCI_INTR_TYPE_INTX = 0,
 	PCI_INTR_TYPE_MSI,
 	PCI_INTR_TYPE_MSIX,
+	PCI_INTR_TYPE_SIZE,
 } pci_intr_type_t;
-
-enum {
-	PCI_INTR_SIZE_NONE = 0,
-	PCI_INTR_SIZE_INTX,
-	PCI_INTR_SIZE_MSI,
-	PCI_INTR_SIZE_MSIX,
-	PCI_INTR_SIZE_MAX = PCI_INTR_SIZE_MSIX,
-};
 
 pci_intr_type_t	pci_intr_type(pci_intr_handle_t);
 
@@ -149,7 +142,7 @@ int		pci_intx_alloc(const struct pci_attach_args *,
  * automatically.
  */
 int		pci_intr_alloc(const struct pci_attach_args *pa,
-		    pci_intr_handle_t **, pci_intr_type_t *, size_t);
+		    pci_intr_handle_t **, pci_intr_type_t *, pci_intr_type_t);
 
 /* experimental MSI support */
 int		pci_msi_count(const struct pci_attach_args *);
