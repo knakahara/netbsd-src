@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1966 2015/06/22 06:02:02 matt Exp $
+#	$NetBSD: mi,v 1.1969 2015/06/27 15:47:29 matt Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -76,7 +76,7 @@
 ./usr/bin/nm					comp-util-bin		binutils
 ./usr/bin/objcopy				comp-util-bin		binutils
 ./usr/bin/objdump				comp-util-bin		binutils
-./usr/bin/p++					comp-cxx-bin		pcc
+./usr/bin/p++					comp-cxx-bin		pcc,cxx
 ./usr/bin/pcc					comp-c-bin		pcc
 ./usr/bin/protoize				comp-c-bin		gcc=4,gcccmds
 ./usr/bin/protoize				comp-obsolete		gcc=45,obsolete
@@ -3146,6 +3146,7 @@
 ./usr/include/sys/common_int_mwgwtypes.h	comp-c-include
 ./usr/include/sys/common_int_types.h		comp-c-include
 ./usr/include/sys/common_limits.h		comp-c-include
+./usr/include/sys/common_lock.h			comp-c-include
 ./usr/include/sys/common_wchar_limits.h		comp-c-include
 ./usr/include/sys/condvar.h			comp-c-include
 ./usr/include/sys/conf.h			comp-c-include
@@ -3475,6 +3476,7 @@
 ./usr/include/wordexp.h				comp-c-include
 ./usr/include/zconf.h				comp-c-include
 ./usr/include/zlib.h				comp-c-include
+./usr/lib					base-sys-usr		compatdir
 ./usr/lib/crt0.o				comp-c-lib		compatfile
 ./usr/lib/gcrt0.o				comp-c-lib		compatfile
 ./usr/lib/i18n/libBIG5.a			comp-i18n-lib		compatfile
