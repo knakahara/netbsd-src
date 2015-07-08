@@ -1,7 +1,8 @@
-# $NetBSD: ad.arm,v 1.68 2015/07/03 15:11:04 matt Exp $
-./usr/lib/libarm_g.a				comp-c-debuglib		debuglib
+# $NetBSD: ad.arm,v 1.72 2015/07/06 09:17:24 matt Exp $
+./usr/lib/libarm_g.a				comp-c-debuglib		debuglib,compatfile
 ./usr/lib/libc_vfp_g.a				comp-c-debuglib		debuglib,softfloat
-./usr/lib/libpmc_g.a				comp-c-debuglib		debuglib
+./usr/lib/libpmc_g.a				comp-c-debuglib		debuglib,compatfile
+./usr/lib/oabi/libc_vfp_g.a			comp-c-debuglib		debuglib,compat
 ./usr/lib/oabi/libgmp_g.a			comp-c-debuglib		obsolete
 ./usr/lib/oabi/libmpc_g.a			comp-c-debuglib		obsolete
 ./usr/lib/oabi/libmpfr_g.a			comp-c-debuglib		obsolete
