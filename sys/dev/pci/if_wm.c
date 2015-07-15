@@ -1420,7 +1420,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 #ifndef WM_MSI_MSIX
 	pci_intr_handle_t ih;
 #else
-	pci_intr_type_t counts[PCI_INTR_SIZE_MSIX];
+	pci_intr_type_t counts[PCI_INTR_TYPE_SIZE];
 #endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
@@ -1617,7 +1617,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	counts[PCI_INTR_TYPE_INTX] = 1;
 
 alloc_retry:	
-	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, WM_MAX_NINTR) != 0) {
+	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, PCI_INTR_TYPE_MSIX) != 0) {
 int_failed:
 		aprint_error_dev(sc->sc_dev, "failed to allocate interrput\n");
 		return;
