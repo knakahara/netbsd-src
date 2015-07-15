@@ -423,7 +423,7 @@ error:
  * pa : pci_attach_args
  * ihps : interrupt handlers
  * counts : The array of number of interrupt handlers.
- *          And overwrite alloced the number of handlers.
+ *          And overwritten allocated the number of handlers.
  *          CAUTION: The size of counts[] must be PCI_INTR_TYPE_SIZE.
  * max_type : "max" type of using interrupts. See below.
  *     e.g.:
@@ -445,7 +445,7 @@ error:
  *         If you want to use 3 MSI or INTx, you can simply use this API like below
  *             int counts[PCI_INTR_TYPE_SIZE];
  *             counts[PCI_INTR_TYPE_MSI] = 3;
- *             counts[PCI_INTR_TYPE_INTX] = 0;
+ *             counts[PCI_INTR_TYPE_INTX] = 1;
  *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MSI);
  *
  *         If you want to use 1 MSI or INTx, you can simply use this API like below
