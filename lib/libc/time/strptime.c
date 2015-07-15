@@ -1,4 +1,4 @@
-/*	$NetBSD: strptime.c,v 1.42 2015/07/08 19:48:20 ginsbach Exp $	*/
+/*	$NetBSD: strptime.c,v 1.44 2015/07/14 18:07:17 ginsbach Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 2005, 2008 The NetBSD Foundation, Inc.
@@ -31,13 +31,12 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: strptime.c,v 1.42 2015/07/08 19:48:20 ginsbach Exp $");
+__RCSID("$NetBSD: strptime.c,v 1.44 2015/07/14 18:07:17 ginsbach Exp $");
 #endif
 
 #include "namespace.h"
 #include <sys/localedef.h>
 #include <sys/types.h>
-#include <sys/clock.h>
 #include <ctype.h>
 #include <locale.h>
 #include <string.h>
@@ -104,7 +103,7 @@ static int
 first_wday_of(int yr)
 {
 	return ((2 * (3 - (yr / 100) % 4)) + (yr % 100) + ((yr % 100) /  4) +
-	    (is_leap_year(yr) ? 6 : 0) + 1) % 7;
+	    (isleap(yr) ? 6 : 0) + 1) % 7;
 }
 
 char *
@@ -364,6 +363,7 @@ literal:
 			bp = conv_num(bp, &i, 1, 7);
 			tm->tm_wday = i % 7;
 			LEGAL_ALT(ALT_O);
+			state |= S_WDAY;
 			continue;
 
 		case 'g':	/* The year corresponding to the ISO week
@@ -587,7 +587,7 @@ literal:
 
 	if (!HAVE_YDAY(state) && HAVE_YEAR(state)) {
 		if (HAVE_MON(state) && HAVE_MDAY(state)) {
-			tm->tm_yday =  start_of_month[is_leap_year(tm->tm_year +
+			tm->tm_yday =  start_of_month[isleap_sum(tm->tm_year,
 			    TM_YEAR_BASE)][tm->tm_mon] + (tm->tm_mday - 1);
 			state |= S_YDAY;
 		} else if (day_offset != -1) {
@@ -610,7 +610,7 @@ literal:
 		int isleap;
 		if (!HAVE_MON(state)) {
 			i = 0;
-			isleap = is_leap_year(tm->tm_year + TM_YEAR_BASE);
+			isleap = isleap_sum(tm->tm_year, TM_YEAR_BASE);
 			while (tm->tm_yday >= start_of_month[isleap][i])
 				i++;
 			if (i > 12) {
@@ -622,7 +622,7 @@ literal:
 			state |= S_MON;
 		}
 		if (!HAVE_MDAY(state)) {
-			isleap = is_leap_year(tm->tm_year + TM_YEAR_BASE);
+			isleap = isleap_sum(tm->tm_year, TM_YEAR_BASE);
 			tm->tm_mday = tm->tm_yday -
 			    start_of_month[isleap][tm->tm_mon] + 1;
 			state |= S_MDAY;
