@@ -785,10 +785,10 @@ struct _msix_matrix {
 	int intridx;
 	int cpuid;
 } msix_matrix[WM_MSIX_NINTR] = {
-	{ "TX", wm_txintr_msix, WM_MSIX_TXINTR_IDX, WM_MSIX_TXINTR_CPUID }, 
-	{ "RX", wm_rxintr_msix, WM_MSIX_RXINTR_IDX, WM_MSIX_TXINTR_CPUID }, 
+	{ "TX", wm_txintr_msix, WM_MSIX_TXINTR_IDX, WM_MSIX_TXINTR_CPUID },
+	{ "RX", wm_rxintr_msix, WM_MSIX_RXINTR_IDX, WM_MSIX_TXINTR_CPUID },
 	{ "LINK", wm_linkintr_msix, WM_MSIX_LINKINTR_IDX,
-	  WM_MSIX_LINKINTR_CPUID }, 
+	  WM_MSIX_LINKINTR_CPUID },
 };
 #endif
 
@@ -1616,7 +1616,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	counts[PCI_INTR_TYPE_MSI] = 1;
 	counts[PCI_INTR_TYPE_INTX] = 1;
 
-alloc_retry:	
+alloc_retry:
 	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, PCI_INTR_TYPE_MSIX) != 0) {
 int_failed:
 		aprint_error_dev(sc->sc_dev, "failed to allocate interrput\n");
