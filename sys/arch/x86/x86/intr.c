@@ -1191,7 +1191,6 @@ intr_disestablish(struct intrhand *ih)
 		intr_free_io_intrsource_direct(isp);
 	}
 	mutex_exit(&cpu_lock);
-
 	kmem_free(ih, sizeof(*ih));
 }
 

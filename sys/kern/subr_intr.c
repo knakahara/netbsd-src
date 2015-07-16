@@ -451,7 +451,7 @@ SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 
 	sysctl_createv(clog, 0, &node, NULL,
 		       CTLFLAG_PERMANENT, CTLTYPE_STRUCT,
- 		       "list", SYSCTL_DESCR("intrctl list"),
+		       "list", SYSCTL_DESCR("intrctl list"),
 		       intr_list_sysctl, 0, NULL, 0,
 		       CTL_CREATE, CTL_EOL);
 
@@ -462,8 +462,8 @@ SYSCTL_SETUP(sysctl_intr_setup, "sysctl intr setup")
 		       CTL_CREATE, CTL_EOL);
 
 	sysctl_createv(clog, 0, &node, NULL,
- 		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
- 		       "intr", SYSCTL_DESCR("set intr"),
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_STRUCT,
+		       "intr", SYSCTL_DESCR("set intr"),
 		       intr_intr_sysctl, 0, &kintr_set, sizeof(kintr_set),
 		       CTL_CREATE, CTL_EOL);
 

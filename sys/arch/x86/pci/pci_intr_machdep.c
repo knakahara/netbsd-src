@@ -328,6 +328,7 @@ void *
 pci_intr_establish(pci_chipset_tag_t pc, pci_intr_handle_t ih,
     int level, int (*func)(void *), void *arg)
 {
+
 	return pci_intr_establish_xname(pc, ih, level, func, arg, "unknown");
 }
 
