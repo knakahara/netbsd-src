@@ -39,7 +39,8 @@
 .Nm pci_msix_alloc_map ,
 .Nm pci_intx_alloc ,
 .Nm pci_intr_alloc ,
-.Nm pci_intr_release
+.Nm pci_intr_release,
+.Nm pci_intr_type
 .Nd PCI MSI{,-X} manipulation functions
 .Sh SYNOPSIS
 .Ft int
@@ -66,7 +67,7 @@
 "pci_intr_handle_t **ihp"
 .Ft int
 .Fn pci_intr_alloc  "struct pci_attach_args *pa" \
-"pci_intr_handle_t **ihp" "pci_intr_type_t *counts" \
+"pci_intr_handle_t **ihp" "int *counts" \
 "pci_intr_type_t max_type"
 .Ft void
 .Fn pci_intr_release "pci_chipset_tag_t pc" \
@@ -207,8 +208,9 @@ must be
 .Fa max_type
 does not mean array index counts of
 .Fa counts
-, it means "max" interrupt type such as INTx, MSI, and MSI-X.
-I.e., if the driver wants to allocate int the following way:
+, it means required "max" interrupt type such as INTx, MSI,
+and MSI-X.
+I.e., if the driver wants to allocate interrupt the following way:
 .Bd -literal
 	5 MSI-X
 	1 MSI (if MSI-X allocation failed)
@@ -284,6 +286,7 @@ is
 	counts[PCI_INTR_TYPE_INTX] == 0
 .Ed
 on return.
+.Pp
 .Ft pci_intr_type_t
 return the interrupt type of
 .Fa ih .
