@@ -1,4 +1,4 @@
-/*	$NetBSD: rpi_machdep.c,v 1.62 2015/05/01 09:59:11 skrll Exp $	*/
+/*	$NetBSD: rpi_machdep.c,v 1.66 2015/05/31 08:13:18 skrll Exp $	*/
 
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rpi_machdep.c,v 1.62 2015/05/01 09:59:11 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rpi_machdep.c,v 1.66 2015/05/31 08:13:18 skrll Exp $");
 
 #include "opt_arm_debug.h"
 #include "opt_bcm283x.h"

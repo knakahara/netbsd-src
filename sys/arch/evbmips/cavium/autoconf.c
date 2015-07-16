@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.1 2015/04/29 08:32:01 hikaru Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.3 2015/06/06 22:23:31 matt Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.1 2015/04/29 08:32:01 hikaru Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.3 2015/06/06 22:23:31 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -46,7 +46,8 @@ __KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.1 2015/04/29 08:32:01 hikaru Exp $");
 
 #include <net/if_ether.h>
 
-#include <machine/cpu.h>
+#include <mips/cpu.h>
+#include <mips/locore.h>
 
 #include <evbmips/cavium/octeon_uboot.h>
 
@@ -65,6 +66,7 @@ cpu_configure(void)
 
 	/* XXX need this? */
 	(void)spl0();
+	KDASSERT(mips_cp0_status_read() & MIPS_SR_INT_IE);
 }
 
 void
@@ -94,7 +96,7 @@ findroot(void)
 		for (dv = deviter_first(&di, DEVITER_F_ROOT_FIRST); dv != NULL;
 		     dv = deviter_next(&di)) {
 			if (device_class(dv) == DV_DISK &&
-			    device_is_a(dv, "wd"))
+			    device_is_a(dv, "sd"))
 				    booted_device = dv;
 		}
 		deviter_release(&di);

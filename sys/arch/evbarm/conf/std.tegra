@@ -1,4 +1,4 @@
-#	$NetBSD: std.tegra,v 1.5 2015/05/04 00:59:29 jmcneill Exp $
+#	$NetBSD: std.tegra,v 1.7 2015/05/31 20:04:44 jmcneill Exp $
 #
 
 machine	evbarm arm

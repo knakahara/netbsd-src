@@ -1,4 +1,4 @@
-# $NetBSD: mkvars.mk,v 1.17 2015/04/26 21:37:22 mrg Exp $
+# $NetBSD: mkvars.mk,v 1.23 2015/07/08 01:06:01 matt Exp $
 
 MKEXTRAVARS= \
 	MACHINE \
@@ -14,6 +14,7 @@ MKEXTRAVARS= \
 	MKMANZ \
 	MKBFD \
 	MKCOMPAT \
+	MKCOMPATTESTS \
 	MKCOMPATMODULES \
 	MKDYNAMICROOT \
 	MKMANPAGES \
@@ -21,7 +22,6 @@ MKEXTRAVARS= \
 	MKSOFTFLOAT \
 	MKXORG \
 	MKXORG_SERVER \
-	MKX11RADEONKMS \
 	MKRADEONFIRMWARE \
 	X11FLAVOR \
 	USE_INET6 \
@@ -43,6 +43,18 @@ MKEXTRAVARS= \
 MKMANPAGES=no
 .else
 MKMANPAGES=yes
+.endif
+
+.if ${MKCOMPAT} != "no"
+ARCHDIR_SUBDIR:=
+.include "${NETBSDSRCDIR}/compat/archdirs.mk"
+COMPATARCHDIRS:=${ARCHDIR_SUBDIR:T}
+.endif
+
+.if ${MKKMOD} != "no" && ${MKCOMPATMODULES} != "no"
+ARCHDIR_SUBDIR:=
+.include "${NETBSDSRCDIR}/sys/modules/arch/archdirs.mk"
+KMODARCHDIRS:=${ARCHDIR_SUBDIR:T}
 .endif
 
 .if ${MKX11} != "no"
@@ -82,6 +94,16 @@ mkextravars: .PHONY
 .for i in ${MKEXTRAVARS}
 	@echo $i="${$i}"
 .endfor
+.if ${MKCOMPAT} != "no"
+	@echo COMPATARCHDIRS=${COMPATARCHDIRS} | ${TOOL_SED} -e's/ /,/g'
+.else
+	@echo COMPATARCHDIRS=
+.endif
+.if ${MKKMOD} != "no" && ${MKCOMPATMODULES} != "no"
+	@echo KMODARCHDIRS=${KMODARCHDIRS} | ${TOOL_SED} -e's/ /,/g'
+.else
+	@echo KMODARCHDIRS=
+.endif
 
 mksolaris: .PHONY
 .if (${MKDTRACE} != "no" || ${MKZFS} != "no")

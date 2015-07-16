@@ -1,4 +1,4 @@
-/*	$NetBSD: init_sysctl.c,v 1.206 2015/05/13 01:00:16 pgoyette Exp $ */
+/*	$NetBSD: init_sysctl.c,v 1.208 2015/07/07 12:38:02 justin Exp $ */
 
 /*-
  * Copyright (c) 2003, 2007, 2008, 2009 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_sysctl.c,v 1.206 2015/05/13 01:00:16 pgoyette Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_sysctl.c,v 1.208 2015/07/07 12:38:02 justin Exp $");
 
 #include "opt_sysv.h"
 #include "opt_compat_netbsd.h"
@@ -50,7 +50,6 @@ __KERNEL_RCSID(0, "$NetBSD: init_sysctl.c,v 1.206 2015/05/13 01:00:16 pgoyette E
 #include <sys/vnode.h>
 #include <sys/mount.h>
 #include <sys/namei.h>
-#include <sys/msgbuf.h>
 #include <dev/cons.h>
 #include <sys/socketvar.h>
 #include <sys/file.h>
@@ -115,7 +114,6 @@ static int sysctl_kern_maxvnodes(SYSCTLFN_PROTO);
 static int sysctl_kern_rtc_offset(SYSCTLFN_PROTO);
 static int sysctl_kern_maxproc(SYSCTLFN_PROTO);
 static int sysctl_kern_hostid(SYSCTLFN_PROTO);
-static int sysctl_msgbuf(SYSCTLFN_PROTO);
 static int sysctl_kern_defcorename(SYSCTLFN_PROTO);
 static int sysctl_kern_cptime(SYSCTLFN_PROTO);
 #if NPTY > 0
@@ -266,12 +264,6 @@ SYSCTL_SETUP(sysctl_kern_setup, "sysctl kern subtree setup")
 		       sysctl_root_device, 0, NULL, 0,
 		       CTL_KERN, KERN_ROOT_DEVICE, CTL_EOL);
 	sysctl_createv(clog, 0, NULL, NULL,
-		       CTLFLAG_PERMANENT,
-		       CTLTYPE_INT, "msgbufsize",
-		       SYSCTL_DESCR("Size of the kernel message buffer"),
-		       sysctl_msgbuf, 0, NULL, 0,
-		       CTL_KERN, KERN_MSGBUFSIZE, CTL_EOL);
-	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT|CTLFLAG_IMMEDIATE,
 		       CTLTYPE_INT, "fsync",
 		       SYSCTL_DESCR("Whether the POSIX 1003.1b File "
@@ -386,12 +378,6 @@ SYSCTL_SETUP(sysctl_kern_setup, "sysctl kern subtree setup")
 		       SYSCTL_DESCR("Clock ticks spent in different CPU states"),
 		       sysctl_kern_cptime, 0, NULL, 0,
 		       CTL_KERN, KERN_CP_TIME, CTL_EOL);
-	sysctl_createv(clog, 0, NULL, NULL,
-		       CTLFLAG_PERMANENT,
-		       CTLTYPE_INT, "msgbuf",
-		       SYSCTL_DESCR("Kernel message buffer"),
-		       sysctl_msgbuf, 0, NULL, 0,
-		       CTL_KERN, KERN_MSGBUF, CTL_EOL);
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_STRUCT, "consdev",
@@ -629,12 +615,6 @@ SYSCTL_SETUP(sysctl_hw_setup, "sysctl hw subtree setup")
 
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
-		       CTLTYPE_STRING, "machine",
-		       SYSCTL_DESCR("Machine class"),
-		       NULL, 0, machine, 0,
-		       CTL_HW, HW_MACHINE, CTL_EOL);
-	sysctl_createv(clog, 0, NULL, NULL,
-		       CTLFLAG_PERMANENT,
 		       CTLTYPE_STRING, "model",
 		       SYSCTL_DESCR("Machine model"),
 		       NULL, 0, __UNCONST(model), 0,
@@ -671,12 +651,6 @@ SYSCTL_SETUP(sysctl_hw_setup, "sysctl hw subtree setup")
 		       SYSCTL_DESCR("Software page size"),
 		       NULL, PAGE_SIZE, NULL, 0,
 		       CTL_HW, HW_PAGESIZE, CTL_EOL);
-	sysctl_createv(clog, 0, NULL, NULL,
-		       CTLFLAG_PERMANENT,
-		       CTLTYPE_STRING, "machine_arch",
-		       SYSCTL_DESCR("Machine CPU class"),
-		       NULL, 0, machine_arch, 0,
-		       CTL_HW, HW_MACHINE_ARCH, CTL_EOL);
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT|CTLFLAG_IMMEDIATE,
 		       CTLTYPE_INT, "alignbytes",
@@ -936,83 +910,6 @@ sysctl_kern_hostid(SYSCTLFN_ARGS)
 	hostid = (unsigned)inthostid;
 
 	return (0);
-}
-
-/*
- * sysctl helper routine for kern.msgbufsize and kern.msgbuf. For the
- * former it merely checks the message buffer is set up. For the latter,
- * it also copies out the data if necessary.
- */
-static int
-sysctl_msgbuf(SYSCTLFN_ARGS)
-{
-	char *where = oldp;
-	size_t len, maxlen;
-	long beg, end;
-	extern kmutex_t log_lock;
-	int error;
-
-	if (!msgbufenabled || msgbufp->msg_magic != MSG_MAGIC) {
-		msgbufenabled = 0;
-		return (ENXIO);
-	}
-
-	switch (rnode->sysctl_num) {
-	case KERN_MSGBUFSIZE: {
-		struct sysctlnode node = *rnode;
-		int msg_bufs = (int)msgbufp->msg_bufs;
-		node.sysctl_data = &msg_bufs;
-		return (sysctl_lookup(SYSCTLFN_CALL(&node)));
-	}
-	case KERN_MSGBUF:
-		break;
-	default:
-		return (EOPNOTSUPP);
-	}
-
-	if (newp != NULL)
-		return (EPERM);
-
-	if (oldp == NULL) {
-		/* always return full buffer size */
-		*oldlenp = msgbufp->msg_bufs;
-		return (0);
-	}
-
-	sysctl_unlock();
-
-	/*
-	 * First, copy from the write pointer to the end of
-	 * message buffer.
-	 */
-	error = 0;
-	mutex_spin_enter(&log_lock);
-	maxlen = MIN(msgbufp->msg_bufs, *oldlenp);
-	beg = msgbufp->msg_bufx;
-	end = msgbufp->msg_bufs;
-	mutex_spin_exit(&log_lock);
-
-	while (maxlen > 0) {
-		len = MIN(end - beg, maxlen);
-		if (len == 0)
-			break;
-		/* XXX unlocked, but hardly matters. */
-		error = dcopyout(l, &msgbufp->msg_bufc[beg], where, len);
-		if (error)
-			break;
-		where += len;
-		maxlen -= len;
-
-		/*
-		 * ... then, copy from the beginning of message buffer to
-		 * the write pointer.
-		 */
-		beg = 0;
-		end = msgbufp->msg_bufx;
-	}
-
-	sysctl_relock();
-	return (error);
 }
 
 /*

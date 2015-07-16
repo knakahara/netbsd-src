@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_reg.h,v 1.10 2015/05/17 01:28:17 jmcneill Exp $ */
+/* $NetBSD: tegra_reg.h,v 1.12 2015/05/30 13:25:55 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -52,7 +52,7 @@
 #define TEGRA_PCIE_PMEM_SIZE	0x20000000
 
 #define TEGRA_HOST1X_BASE	0x50000000
-#define TEGRA_HOST1X_SIZE	0x00100000
+#define TEGRA_HOST1X_SIZE	0x00034000
 #define TEGRA_GHOST_BASE	0x54000000
 #define TEGRA_GHOST_SIZE	0x01000000
 #define TEGRA_PPSB_BASE		0x60000000
@@ -120,6 +120,8 @@
 #define TEGRA_XUSB_DEV_SIZE	0xa000
 
 /* PPSB */
+#define TEGRA_TIMER_OFFSET	0x00005000
+#define TEGRA_TIMER_SIZE	0x400
 #define TEGRA_CAR_OFFSET	0x00006000
 #define TEGRA_CAR_SIZE		0x1000
 #define TEGRA_GPIO_OFFSET	0x0000d000

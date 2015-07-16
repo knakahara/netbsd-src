@@ -1,4 +1,4 @@
-/*	$NetBSD: if_arp.c,v 1.165 2015/05/16 12:12:46 roy Exp $	*/
+/*	$NetBSD: if_arp.c,v 1.170 2015/07/15 08:49:15 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000, 2008 The NetBSD Foundation, Inc.
@@ -68,7 +68,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_arp.c,v 1.165 2015/05/16 12:12:46 roy Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_arp.c,v 1.170 2015/07/15 08:49:15 ozaki-r Exp $");
 
 #include "opt_ddb.h"
 #include "opt_inet.h"
@@ -137,10 +137,10 @@ __KERNEL_RCSID(0, "$NetBSD: if_arp.c,v 1.165 2015/05/16 12:12:46 roy Exp $");
 #define ETHERTYPE_IPTRAILERS ETHERTYPE_TRAIL
 
 /* timer values */
-int	arpt_prune = (5*60*1);	/* walk list every 5 minutes */
-int	arpt_keep = (20*60);	/* once resolved, good for 20 more minutes */
-int	arpt_down = 20;		/* once declared down, don't send for 20 secs */
-int	arpt_refresh = (5*60);	/* time left before refreshing */
+static int	arpt_prune = (5*60*1);	/* walk list every 5 minutes */
+static int	arpt_keep = (20*60);	/* once resolved, good for 20 more minutes */
+static int	arpt_down = 20;		/* once declared down, don't send for 20 secs */
+static int	arpt_refresh = (5*60);	/* time left before refreshing */
 #define	rt_expire rt_rmx.rmx_expire
 #define	rt_pksent rt_rmx.rmx_pksent
 
@@ -152,6 +152,8 @@ static int	arp_debug = 0;
 #endif
 #define arplog(x)	do { if (arp_debug) log x; } while (/*CONSTCOND*/ 0)
 
+static	void arp_init(void);
+
 static	struct sockaddr *arp_setgate(struct rtentry *, struct sockaddr *,
 	    const struct sockaddr *);
 static	void arptfree(struct llinfo_arp *);
@@ -161,6 +163,9 @@ static	struct llinfo_arp *arplookup1(struct mbuf *, const struct in_addr *,
 static	struct llinfo_arp *arplookup(struct mbuf *, const struct in_addr *,
 					  int, int);
 static	void in_arpinput(struct mbuf *);
+static	void in_revarpinput(struct mbuf *);
+static	void revarprequest(struct ifnet *);
+
 static	void arp_drainstub(void);
 
 static void arp_dad_timer(struct ifaddr *);
@@ -176,10 +181,10 @@ struct	ifqueue arpintrq = {
 	.ifq_maxlen = 50,
 	.ifq_drops = 0,
 };
-int	arp_inuse, arp_allocated;
-int	arp_maxtries = 5;
-int	useloopback = 1;	/* use loopback interface for local traffic */
-int	arpinit_done = 0;
+static int	arp_inuse, arp_allocated;
+static int	arp_maxtries = 5;
+static int	useloopback = 1;	/* use loopback interface for local traffic */
+static int	arpinit_done = 0;
 
 static percpu_t *arpstat_percpu;
 
@@ -192,10 +197,10 @@ static percpu_t *arpstat_percpu;
 struct	callout arptimer_ch;
 
 /* revarp state */
-struct	in_addr myip, srv_ip;
-int	myip_initialized = 0;
-int	revarp_in_progress = 0;
-struct	ifnet *myip_ifp = NULL;
+static struct	in_addr myip, srv_ip;
+static int	myip_initialized = 0;
+static int	revarp_in_progress = 0;
+static struct	ifnet *myip_ifp = NULL;
 
 #ifdef DDB
 static void db_print_sa(const struct sockaddr *);
@@ -373,7 +378,7 @@ arp_drainstub(void)
 void
 arp_drain(void)
 {
-	struct llinfo_arp *la, *nla;
+	struct llinfo_arp *la;
 	int count = 0;
 	struct mbuf *mold;
 
@@ -384,11 +389,9 @@ arp_drain(void)
 		return;
 	}
 
-	for (la = LIST_FIRST(&llinfo_arp); la != NULL; la = nla) {
-		nla = LIST_NEXT(la, la_list);
-
+	LIST_FOREACH(la, &llinfo_arp, la_list) {
 		mold = la->la_hold;
-		la->la_hold = 0;
+		la->la_hold = NULL;
 
 		if (mold) {
 			m_freem(mold);
@@ -421,10 +424,9 @@ arptimer(void *arg)
 	}
 
 	callout_reset(&arptimer_ch, arpt_prune * hz, arptimer, NULL);
-	for (la = LIST_FIRST(&llinfo_arp); la != NULL; la = nla) {
+	LIST_FOREACH_SAFE(la, &llinfo_arp, la_list, nla) {
 		struct rtentry *rt = la->la_rt;
 
-		nla = LIST_NEXT(la, la_list);
 		if (rt->rt_expire == 0)
 			continue;
 		if ((rt->rt_expire - time_second) < arpt_refresh &&
@@ -553,7 +555,7 @@ arp_rtrequest(int req, struct rtentry *rt, const struct rt_addrinfo *info)
 				rt->rt_rmx.rmx_mtu = FDDIIPMTU;
 			break;
 #endif
-#if NARC > 0
+#if NARCNET > 0
 		case IFT_ARCNET:
 		    {
 			int arcipifmtu;
@@ -601,7 +603,7 @@ arp_rtrequest(int req, struct rtentry *rt, const struct rt_addrinfo *info)
 					rt->rt_rmx.rmx_mtu = FDDIIPMTU;
 				break;
 #endif
-#if NARC > 0
+#if NARCNET > 0
 			case IFT_ARCNET:
 			    {
 				int arcipifmtu;
@@ -737,7 +739,7 @@ arp_rtrequest(int req, struct rtentry *rt, const struct rt_addrinfo *info)
 
 		s = splnet();
 		mold = la->la_hold;
-		la->la_hold = 0;
+		la->la_hold = NULL;
 		splx(s);
 
 		if (mold)
@@ -918,7 +920,7 @@ arpintr(void)
 		s = splnet();
 		IF_DEQUEUE(&arpintrq, m);
 		splx(s);
-		if (m == 0 || (m->m_flags & M_PKTHDR) == 0)
+		if (m == NULL || (m->m_flags & M_PKTHDR) == 0)
 			panic("arpintr");
 
 		MCLAIM(m, &arpdomain.dom_mowner);
@@ -1238,7 +1240,7 @@ in_arpinput(struct mbuf *m)
 
 		s = splnet();
 		mold = la->la_hold;
-		la->la_hold = 0;
+		la->la_hold = NULL;
 		splx(s);
 
 		if (mold) {

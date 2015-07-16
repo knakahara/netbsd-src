@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.314 2015/04/22 20:49:44 roy Exp $	*/
+/*	$NetBSD: if.c,v 1.316 2015/06/29 09:40:36 ozaki-r Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2008 The NetBSD Foundation, Inc.
@@ -90,7 +90,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.314 2015/04/22 20:49:44 roy Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.316 2015/06/29 09:40:36 ozaki-r Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_inet.h"
@@ -169,15 +169,12 @@ static uint64_t			index_gen;
 static kmutex_t			index_gen_mtx;
 static kmutex_t			if_clone_mtx;
 
-static struct ifaddr **		ifnet_addrs = NULL;
-
 struct ifnet *lo0ifp;
 int	ifqmaxlen = IFQ_MAXLEN;
 
 static int	if_rt_walktree(struct rtentry *, void *);
 
 static struct if_clone *if_clone_lookup(const char *, int *);
-static int	if_clone_list(struct if_clonereq *);
 
 static LIST_HEAD(, if_clone) if_cloners = LIST_HEAD_INITIALIZER(if_cloners);
 static int if_cloners_count;
@@ -408,8 +405,7 @@ static void
 if_sadl_setrefs(struct ifnet *ifp, struct ifaddr *ifa)
 {
 	const struct sockaddr_dl *sdl;
-	ifnet_addrs[ifp->if_index] = ifa;
-	ifaref(ifa);
+
 	ifp->if_dl = ifa;
 	ifaref(ifa);
 	sdl = satosdl(ifa->ifa_addr);
@@ -453,8 +449,6 @@ if_deactivate_sadl(struct ifnet *ifp)
 
 	ifp->if_sadl = NULL;
 
-	ifnet_addrs[ifp->if_index] = NULL;
-	ifafree(ifa);
 	ifp->if_dl = NULL;
 	ifafree(ifa);
 }
@@ -485,15 +479,13 @@ if_free_sadl(struct ifnet *ifp)
 	struct ifaddr *ifa;
 	int s;
 
-	ifa = ifnet_addrs[ifp->if_index];
+	ifa = ifp->if_dl;
 	if (ifa == NULL) {
 		KASSERT(ifp->if_sadl == NULL);
-		KASSERT(ifp->if_dl == NULL);
 		return;
 	}
 
 	KASSERT(ifp->if_sadl != NULL);
-	KASSERT(ifp->if_dl != NULL);
 
 	s = splnet();
 	rtinit(ifa, RTM_DELETE, 0);
@@ -548,29 +540,16 @@ if_getindex(ifnet_t *ifp)
 	}
 skip:
 	/*
-	 * We have some arrays that should be indexed by if_index.
-	 * since if_index will grow dynamically, they should grow too.
-	 *	struct ifadd **ifnet_addrs
-	 *	struct ifnet **ifindex2ifnet
+	 * ifindex2ifnet is indexed by if_index. Since if_index will
+	 * grow dynamically, it should grow too.
 	 */
-	if (ifnet_addrs == NULL || ifindex2ifnet == NULL ||
-	    ifp->if_index >= if_indexlim) {
+	if (ifindex2ifnet == NULL || ifp->if_index >= if_indexlim) {
 		size_t m, n, oldlim;
 		void *q;
 
 		oldlim = if_indexlim;
 		while (ifp->if_index >= if_indexlim)
 			if_indexlim <<= 1;
-
-		/* grow ifnet_addrs */
-		m = oldlim * sizeof(struct ifaddr *);
-		n = if_indexlim * sizeof(struct ifaddr *);
-		q = malloc(n, M_IFADDR, M_WAITOK|M_ZERO);
-		if (ifnet_addrs != NULL) {
-			memcpy(q, ifnet_addrs, m);
-			free(ifnet_addrs, M_IFADDR);
-		}
-		ifnet_addrs = (struct ifaddr **)q;
 
 		/* grow ifindex2ifnet */
 		m = oldlim * sizeof(struct ifnet *);
@@ -1117,24 +1096,24 @@ if_clone_detach(struct if_clone *ifc)
 /*
  * Provide list of interface cloners to userspace.
  */
-static int
-if_clone_list(struct if_clonereq *ifcr)
+int
+if_clone_list(int buf_count, char *buffer, int *total)
 {
 	char outbuf[IFNAMSIZ], *dst;
 	struct if_clone *ifc;
 	int count, error = 0;
 
-	ifcr->ifcr_total = if_cloners_count;
-	if ((dst = ifcr->ifcr_buffer) == NULL) {
+	*total = if_cloners_count;
+	if ((dst = buffer) == NULL) {
 		/* Just asking how many there are. */
 		return 0;
 	}
 
-	if (ifcr->ifcr_count < 0)
+	if (buf_count < 0)
 		return EINVAL;
 
-	count = (if_cloners_count < ifcr->ifcr_count) ?
-	    if_cloners_count : ifcr->ifcr_count;
+	count = (if_cloners_count < buf_count) ?
+	    if_cloners_count : buf_count;
 
 	for (ifc = LIST_FIRST(&if_cloners); ifc != NULL && count != 0;
 	     ifc = LIST_NEXT(ifc, ifc_list), count--, dst += IFNAMSIZ) {
@@ -1261,8 +1240,9 @@ ifa_ifwithnet(const struct sockaddr *addr)
 		sdl = satocsdl(addr);
 		if (sdl->sdl_index && sdl->sdl_index < if_indexlim &&
 		    ifindex2ifnet[sdl->sdl_index] &&
-		    ifindex2ifnet[sdl->sdl_index]->if_output != if_nulloutput)
-			return ifnet_addrs[sdl->sdl_index];
+		    ifindex2ifnet[sdl->sdl_index]->if_output != if_nulloutput) {
+			return ifindex2ifnet[sdl->sdl_index]->if_dl;
+		}
 	}
 #ifdef NETATALK
 	if (af == AF_APPLETALK) {
@@ -2005,7 +1985,11 @@ doifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 		return r;
 
 	case SIOCIFGCLONERS:
-		return if_clone_list((struct if_clonereq *)data);
+		{
+			struct if_clonereq *req = (struct if_clonereq *)data;
+			return if_clone_list(req->ifcr_count, req->ifcr_buffer,
+			    &req->ifcr_total);
+		}
 	}
 
 	if (ifp == NULL)

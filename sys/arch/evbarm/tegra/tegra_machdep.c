@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_machdep.c,v 1.15 2015/05/14 00:02:00 jmcneill Exp $ */
+/* $NetBSD: tegra_machdep.c,v 1.17 2015/05/30 23:17:37 matt Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tegra_machdep.c,v 1.15 2015/05/14 00:02:00 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tegra_machdep.c,v 1.17 2015/05/30 23:17:37 matt Exp $");
 
 #include "opt_tegra.h"
 #include "opt_machdep.h"
@@ -143,7 +143,7 @@ static const struct pmap_devmap devmap[] = {
 #undef	_S
 
 #ifdef PMAP_NEED_ALLOC_POOLPAGE
-static struct boot_physmem bp_highgig = {
+static struct boot_physmem bp_lowgig = {
 	.bp_start = TEGRA_EXTMEM_BASE / NBPG,
 	.bp_pages = (KERNEL_VM_BASE - KERNEL_BASE) / NBPG,
 	.bp_freelist = VM_FREELIST_ISADMA,
@@ -311,11 +311,10 @@ initarm(void *arg)
 	evbarm_device_register = tegra_device_register;
 
 #ifdef PMAP_NEED_ALLOC_POOLPAGE
-	if (atop(ram_size) > bp_highgig.bp_pages) {
-		bp_highgig.bp_start += atop(ram_size) - bp_highgig.bp_pages;
-		arm_poolpage_vmfreelist = bp_highgig.bp_freelist;
+	if (atop(ram_size) > bp_lowgig.bp_pages) {
+		arm_poolpage_vmfreelist = bp_lowgig.bp_freelist;
 		return initarm_common(KERNEL_VM_BASE, KERNEL_VM_SIZE,
-		    &bp_highgig, 1);
+		    &bp_lowgig, 1);
 	}
 #endif
 
@@ -356,6 +355,17 @@ consinit(void)
 #endif
 }
 
+static bool
+tegra_bootconf_match(const char *key, const char *val)
+{
+	char *s;
+
+	if (!get_bootconf_option(boot_args, key, BOOTOPT_TYPE_STRING, &s))
+		return false;
+
+	return strncmp(s, val, strlen(val)) == 0;
+}
+
 void
 tegra_device_register(device_t self, void *aux)
 {
@@ -375,6 +385,14 @@ tegra_device_register(device_t self, void *aux)
 
 	if (device_is_a(self, "cpu") && device_unit(self) == 0) {
 		tegra_cpuinit();
+	}
+
+	if (device_is_a(self, "tegradc")
+	    && tegra_bootconf_match("console", "fb")) {
+		prop_dictionary_set_bool(dict, "is_console", true);
+#if NUKBD > 0
+		ukbd_cnattach();
+#endif
 	}
 
 #ifdef BOARD_JETSONTK1
@@ -405,6 +423,14 @@ tegra_device_register(device_t self, void *aux)
 		} else if (loc->loc_port == 2) {
 			prop_dictionary_set_cstring(dict, "vbus-gpio", "N5");
 		}
+	}
+
+	if (device_is_a(self, "tegrahdmi")) {
+		prop_dictionary_set_cstring(dict, "hpd-gpio", "N7");
+		prop_dictionary_set_cstring(dict, "pll-gpio", "H7");
+		prop_dictionary_set_cstring(dict, "power-gpio", "K6");
+		prop_dictionary_set_cstring(dict, "ddc-device", "ddc0");
+		prop_dictionary_set_cstring(dict, "display-device", "tegradc1");
 	}
 #endif
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.1 2015/04/29 08:32:01 hikaru Exp $	*/
+/*	$NetBSD: machdep.c,v 1.5 2015/06/10 22:31:00 matt Exp $	*/
 
 /*
  * Copyright 2001, 2002 Wasabi Systems, Inc.
@@ -111,13 +111,16 @@
  *	from: Utah Hdr: machdep.c 1.63 91/04/24
  */
 
+#include "opt_multiprocessor.h"
+
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.1 2015/04/29 08:32:01 hikaru Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.5 2015/06/10 22:31:00 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/buf.h>
+#include <sys/cpu.h>
 #include <sys/reboot.h>
 #include <sys/mount.h>
 #include <sys/kcore.h>
@@ -136,7 +139,6 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.1 2015/04/29 08:32:01 hikaru Exp $");
 #include <ddb/db_extern.h>
 #endif
 
-#include <machine/cpu.h>
 #include <machine/psl.h>
 #include <machine/locore.h>
 
@@ -172,8 +174,6 @@ int	netboot;
 phys_ram_seg_t mem_clusters[VM_PHYSSEG_MAX];
 int mem_cluster_cnt;
 
-
-void	configure(void);
 void	mach_init(uint64_t, uint64_t, uint64_t, uint64_t);
 
 struct octeon_config octeon_configuration;
@@ -205,6 +205,17 @@ mach_init(uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3)
 
 	octeon_cal_timer(corefreq);
 
+	switch (MIPS_PRID_IMPL(mips_options.mips_cpu_id)) {
+	case 0: cpu_setmodel("Cavium Octeon CN38XX/CN36XX"); break;
+	case 1: cpu_setmodel("Cavium Octeon CN31XX/CN3020"); break;
+	case 2: cpu_setmodel("Cavium Octeon CN3005/CN3010"); break;
+	case 3: cpu_setmodel("Cavium Octeon CN58XX"); break;
+	case 4: cpu_setmodel("Cavium Octeon CN5[4-7]XX"); break;
+	case 6: cpu_setmodel("Cavium Octeon CN50XX"); break;
+	case 7: cpu_setmodel("Cavium Octeon CN52XX"); break;
+	default: cpu_setmodel("Cavium Octeon"); break;
+	}
+	
 	mach_init_vector();
 
 	/* set the VM page size */
@@ -222,6 +233,7 @@ mach_init(uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3)
 	mips_init_lwp0_uarea();
 
 	boothowto = RB_AUTOBOOT;
+	boothowto |= AB_VERBOSE;
 
 #if defined(DDB)
 	if (boothowto & RB_KDB)
@@ -255,7 +267,7 @@ mach_init_vector(void)
 {
 
 	/* Make sure exception base at 0 (MIPS_COP_0_EBASE) */
-	asm volatile("mtc0 %0, $15, 1" : : "r"(0x80000000) );
+	__asm __volatile("mtc0 %0, $15, 1" : : "r"(0x80000000) );
 
 	/*
 	 * Set up the exception vectors and CPU-specific function
@@ -264,7 +276,7 @@ mach_init_vector(void)
 	 * first printf() after that is called).
 	 * Also clears the I+D caches.
 	 */
-	mips_vector_init(NULL, false);
+	mips_vector_init(NULL, true);
 }
 
 void
@@ -307,6 +319,7 @@ mach_init_console(void)
 void
 mach_init_memory(u_quad_t memsize)
 {
+	extern char kernel_text[];
 	extern char end[];
 
 	physmem = btoc(memsize);
@@ -331,10 +344,16 @@ mach_init_memory(u_quad_t memsize)
 		mem_cluster_cnt = 3;
 	}
 
+	
+#ifdef MULTIPROCESSOR
+	const u_int cores = mipsNN_cp0_ebase_read() & MIPS_EBASE_CPUNUM;
+	mem_clusters[0].start = cores * 4096;
+#endif
+
 	/*
 	 * Load the rest of the available pages into the VM system.
 	 */
-	mips_page_physload(MIPS_KSEG0_START, mips_round_page(end),
+	mips_page_physload(mips_trunc_page(kernel_text), mips_round_page(end),
 	    mem_clusters, mem_cluster_cnt, NULL, 0);
 
 	/*
@@ -358,6 +377,11 @@ int	waittime = -1;
 void
 cpu_startup(void)
 {
+#ifdef MULTIPROCESSOR
+	// Create a kcpuset so we can see on which CPUs the kernel was started.
+	kcpuset_create(&cpus_booted, true);
+#endif
+
 	/*
 	 * Do the common startup items.
 	 */
@@ -421,9 +445,10 @@ haltsys:
 	delay(80000);
 
 	/* initiate chip soft-reset */
-	octeon_write_csr(CIU_SOFT_BIST, 0x0000000000000001ULL);
+	uint64_t fuse = octeon_read_csr(CIU_FUSE);
+	octeon_write_csr(CIU_SOFT_BIST, fuse);
 	octeon_read_csr(CIU_SOFT_RST);
-	octeon_write_csr(CIU_SOFT_RST, 0x0000000000000001ULL);
+	octeon_write_csr(CIU_SOFT_RST, fuse);
 
 	delay(1000000);
 

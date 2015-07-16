@@ -1,4 +1,4 @@
-/* $NetBSD: tegra_io.c,v 1.9 2015/05/15 11:49:10 jmcneill Exp $ */
+/* $NetBSD: tegra_io.c,v 1.12 2015/05/30 13:25:55 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2015 Jared D. McNeill <jmcneill@invisible.ca>
@@ -29,7 +29,7 @@
 #include "opt_tegra.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tegra_io.c,v 1.9 2015/05/15 11:49:10 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tegra_io.c,v 1.12 2015/05/30 13:25:55 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -66,6 +66,8 @@ static const struct tegra_locators tegra_ppsb_locators[] = {
     TEGRA_CAR_OFFSET, TEGRA_CAR_SIZE, NOPORT, NOINTR },
   { "tegragpio",
     TEGRA_GPIO_OFFSET, TEGRA_GPIO_SIZE, NOPORT, NOINTR },
+  { "tegratimer",
+    TEGRA_TIMER_OFFSET, TEGRA_TIMER_SIZE, NOPORT, NOINTR },
 };
 
 static const struct tegra_locators tegra_apb_locators[] = {
@@ -127,6 +129,19 @@ static const struct tegra_locators tegra_pcie_locators[] = {
     TEGRA_PCIE_OFFSET, TEGRA_PCIE_SIZE, NOPORT, TEGRA_INTR_PCIE_INT },
 };
 
+static const struct tegra_locators tegra_host1x_locators[] = {
+  { "tegrahost1x", 0, TEGRA_HOST1X_SIZE, NOPORT, NOINTR }
+};
+
+static const struct tegra_locators tegra_ghost_locators[] = {
+  { "tegradc",
+    TEGRA_DISPLAYA_OFFSET, TEGRA_DISPLAYA_SIZE, 0, TEGRA_INTR_DISPLAYA },
+  { "tegradc",
+    TEGRA_DISPLAYB_OFFSET, TEGRA_DISPLAYB_SIZE, 1, TEGRA_INTR_DISPLAYB },
+  { "tegrahdmi",
+    TEGRA_HDMI_OFFSET, TEGRA_HDMI_SIZE, NOPORT, TEGRA_INTR_HDMI },
+};
+
 int
 tegraio_match(device_t parent, cfdata_t cf, void *aux)
 {
@@ -149,6 +164,10 @@ tegraio_attach(device_t parent, device_t self, void *aux)
 	    tegra_apb_locators, __arraycount(tegra_apb_locators));
 	tegraio_scan(self, tegra_ahb_a2_bsh,
 	    tegra_ahb_a2_locators, __arraycount(tegra_ahb_a2_locators));
+	tegraio_scan(self, (bus_space_handle_t)NULL,
+	    tegra_host1x_locators, __arraycount(tegra_host1x_locators));
+	tegraio_scan(self, (bus_space_handle_t)NULL,
+	    tegra_ghost_locators, __arraycount(tegra_ghost_locators));
 	tegraio_scan(self, (bus_space_handle_t)NULL,
 	    tegra_pcie_locators, __arraycount(tegra_pcie_locators));
 }

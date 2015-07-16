@@ -1,4 +1,4 @@
-/*	$NetBSD: a9_mpsubr.S,v 1.38 2015/05/17 06:12:40 matt Exp $	*/
+/*	$NetBSD: a9_mpsubr.S,v 1.42 2015/06/09 08:08:14 skrll Exp $	*/
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -38,6 +38,18 @@
 #include "assym.h"
 
 //#define MPDEBUG
+
+// Marco to call routines in .text
+#if defined(KERNEL_BASES_EQUAL)
+#define CALL(f)		bl	_C_LABEL(f)
+#else
+#define	CALL(f)	\
+	movw	ip, #:lower16:_C_LABEL(f); \
+	movt	ip, #:upper16:_C_LABEL(f); \
+	sub	ip, ip, #KERNEL_BASE_VOFFSET; \
+	blx	ip
+#endif
+
 
 // We'll modify va and pa at run time so we can use relocatable addresses.
 #define MMU_INIT(va,pa,n_sec,attr) \
@@ -186,8 +198,8 @@ arm_cpuinit:
 	XPUTC(#'G')
 	mrc	p15, 0, r1, c0, c0, 5	// MPIDR read
 	cmp	r1, #0
-	orrlt	r10, r10, #0x5b		// MP, cachable (Normal WB)
-	orrge	r10, r10, #0x1b		// Non-MP, cacheable, normal WB
+	orrlt	r10, r10, #TTBR_MPATTR	// MP, cachable (Normal WB)
+	orrge	r10, r10, #TTBR_UPATTR	// Non-MP, cacheable, normal WB
 	XPUTC(#'0')
 	mcr	p15, 0, r10, c2, c0, 0	// TTBR0 write
 #if defined(ARM_MMU_EXTENDED)
@@ -339,14 +351,30 @@ cortex_init:
         mov	r0, #0
         msr	spsr_sxc, r0			// set SPSR[23:8] to known value
 
+#if 0
+	mrc	p14, 0, r0, c0, c0, 0		// MIDR read
+	ufbx	r0, r0, #4, #4			// extract cortex part.
+	mov	r5, #1
+	lsl	r5, r5, r0
+#endif
+
 	XPUTC(#'@')
 #if defined(CPU_CORTEXA7) || defined(CPU_CORTEXA15) || defined(CPU_CORTEXA17)
 	//
-	// If SMP is already enabled, don't do anything.
+	// If SMP is already enabled, don't do anything (maybe).
 	//
 	mrc	p15, 0, r0, c1, c0, 1		// ACTLR read
-	tst	r0, #CORTEXA9_AUXCTL_SMP	// test SMP
-	bxne	r10				// return if set
+	orr	r1, r0, #CORTEXA9_AUXCTL_SMP	// test SMP
+#if defined(CPU_CORTEXA15)
+	// The A15 requires snoop-delayed exclusive handling to be set
+	// if there are 3 or more CPUs.
+	mrc	p15, 1, r2, c9, c0, 2		// L2CTRL read
+	ubfx	r2, r2, #25, #1			// bit 25 is set when 3+ CPUs
+	bfi	r1, r2, #31, #1			// copy it to bit 31 in ACTRL
+#endif
+
+	cmp	r0, r1				// ACTLR have SMP+<31> set?
+	bxeq	r10				// return if set
 #endif
 
 	mrc	p15, 0, r4, c1, c0, 0		// SCTLR read
@@ -397,14 +425,7 @@ cortex_init:
 	// Step 1b, invalidate the data cache
 	//
 	XPUTC(#'B')
-#if defined(KERNEL_BASES_EQUAL)
-	bl	_C_LABEL(armv7_dcache_wbinv_all)
-#else
-	movw	ip, #:lower16:_C_LABEL(armv7_dcache_wbinv_all)
-	movt	ip, #:upper16:_C_LABEL(armv7_dcache_wbinv_all)
-	sub	ip, ip, #KERNEL_BASE_VOFFSET
-	blx	ip				// writeback & toss d-cache
-#endif
+	CALL(armv7_dcache_wbinv_all)
 	XPUTC(#'C')
 
 	//
@@ -468,6 +489,14 @@ cortex_init:
 	//
 	mrc	p15, 0, r0, c1, c0, 1		// ACTLR read
 	orr	r0, r0, #CORTEXA9_AUXCTL_SMP	// enable SMP
+
+#if defined(CPU_CORTEXA15)
+	// The A15 requires snoop-delayed exclusive handling to be set
+	// if there are 3 or more CPUs.
+	mrc	p15, 1, r2, c9, c0, 2		// L2CTRL read
+	ubfx	r2, r2, #25, #1			// bit 25 is set when 3+ CPUs
+	bfi	r0, r2, #31, #1			// copy it to bit 31 in ACTRL
+#endif
 
 #if defined(CPU_CORTEXA5) || defined(CPU_CORTEXA9)
 	//
@@ -539,18 +568,11 @@ cortex_mpstart:
 #endif
 
 	// We haven't used anything from memory yet so we can invalidate the
-	// cache without fear of losing valuable data.  Note that the A5/A9
-	// L2 cache are not flushed via this call so this affects only this
-	// core's L1 cache.  The A7/A15/A17 L2 cache is write-through so
-	// invalidating it doesn't cause any data loss either.
-#if defined(KERNEL_BASES_EQUAL)
-	bl	_C_LABEL(armv7_dcache_inv_all)
-#else
-	movw	ip, #:lower16:_C_LABEL(armv7_dcache_inv_all)
-	movt	ip, #:upper16:_C_LABEL(armv7_dcache_inv_all)
-	sub	ip, ip, #KERNEL_BASE_VOFFSET
-	blx	ip				// toss d-cache
-#endif
+	// L1 cache without fear of losing valuable data.  Afterwards, we can
+	// flush icache without worrying about anything getting written back
+	// to memory.
+	CALL(armv7_dcache_l1inv_all)		// toss-dcache
+	CALL(armv7_icache_inv_all)		// toss i-cache after d-cache
 
 #if 0
 	mrc	p15, 0, r0, c1, c1, 2		// NSACR read
