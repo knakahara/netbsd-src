@@ -419,14 +419,17 @@ error:
 }
 
 /*
- * Generally interrupt handler allocation wrapper function.
- * pa : pci_attach_args
- * ihps : interrupt handlers
- * counts : The array of number of interrupt handlers.
- *          And overwritten allocated the number of handlers.
- *          CAUTION: The size of counts[] must be PCI_INTR_TYPE_SIZE.
+ * Interrupt handler allocation utility. This function calls each allocation
+ * function as specified by arguments.
+ * Currently callee functions are pci_intx_alloc(), pci_msi_alloc_exact(),
+ * and pci_msix_alloc_exact().
+ * pa       : pci_attach_args
+ * ihps     : interrupt handlers
+ * counts   : The array of number of required interrupt handlers.
+ *            It is overwritten by allocated the number of handlers.
+ *            CAUTION: The size of counts[] must be PCI_INTR_TYPE_SIZE.
  * max_type : "max" type of using interrupts. See below.
- *     e.g.:
+ *     e.g.
  *         If you want to use 5 MSI-X, 1 MSI, or INTx, you use "counts" as
  *             int counts[PCI_INTR_TYPE_SIZE];
  *             counts[PCI_INTR_TYPE_MSIX] = 5;
@@ -442,19 +445,21 @@ error:
  *             counts[PCI_INTR_TYPE_INTX] = 0;
  *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MSIX);
  *
- *         If you want to use 3 MSI or INTx, you can simply use this API like below
+ *         If you want to use 3 MSI or INTx, you can use "counts" as
  *             int counts[PCI_INTR_TYPE_SIZE];
  *             counts[PCI_INTR_TYPE_MSI] = 3;
  *             counts[PCI_INTR_TYPE_INTX] = 1;
  *             error = pci_intr_alloc(pa, ihps, counts, PCI_INTR_TYPE_MSI);
  *
- *         If you want to use 1 MSI or INTx, you can simply use this API like below
+ *         If you want to use 1 MSI or INTx (probably most general usage),
+ *         you can simply use this API like
+ *         below
  *             error = pci_intr_alloc(pa, ihps, NULL, 0);
  *                                                    ^ ignored
  */
 int
 pci_intr_alloc(const struct pci_attach_args *pa, pci_intr_handle_t **ihps,
-    pci_intr_type_t *counts, pci_intr_type_t max_type)
+    int *counts, pci_intr_type_t max_type)
 {
 	int error;
 	int intx_count, msi_count, msix_count;

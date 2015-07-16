@@ -142,7 +142,7 @@ int		pci_intx_alloc(const struct pci_attach_args *,
  * automatically.
  */
 int		pci_intr_alloc(const struct pci_attach_args *pa,
-		    pci_intr_handle_t **, pci_intr_type_t *, pci_intr_type_t);
+		    pci_intr_handle_t **, int *, pci_intr_type_t);
 
 /* experimental MSI support */
 int		pci_msi_count(const struct pci_attach_args *);
