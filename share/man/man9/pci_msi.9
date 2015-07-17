@@ -206,10 +206,12 @@ The index count of
 must be
 .Dv PCI_INTR_TYPE_SIZE .
 .Fa max_type
-does not mean array index counts of
-.Fa counts
-, it means required "max" interrupt type such as INTx, MSI,
-and MSI-X.
+must be PCI_INTR_TYPE_MSIX, PCI_INTR_TYPE_MSI, or PCI_INTR_TYPE_INTX.
+The parameter does not mean array index counts of
+.Fa counts .
+The parameter means the interrupt type which
+.Fn pci_intr_alloc
+tries to allocate first.
 I.e., if the driver wants to allocate interrupt the following way:
 .Bd -literal
 	5 MSI-X
