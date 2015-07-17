@@ -3727,7 +3727,6 @@ bge_attach(device_t parent, device_t self, void *aux)
 	}
 
 #ifdef __HAVE_PCI_MSI_MSIX
-	DPRINTFN(5, ("pci_get_capability\n"));
 	counts[PCI_INTR_TYPE_MSI] = 1;
 	counts[PCI_INTR_TYPE_INTX] = 1;
 	/* Check MSI capability */
