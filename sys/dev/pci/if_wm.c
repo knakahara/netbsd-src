@@ -1,4 +1,4 @@
-/*	$NetBSD: if_wm.c,v 1.335 2015/06/13 15:47:58 msaitoh Exp $	*/
+/*	$NetBSD: if_wm.c,v 1.339 2015/07/15 07:40:54 msaitoh Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002, 2003, 2004 Wasabi Systems, Inc.
@@ -81,7 +81,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.335 2015/06/13 15:47:58 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.339 2015/07/15 07:40:54 msaitoh Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_net_mpsafe.h"
@@ -155,9 +155,7 @@ int	wm_debug = WM_DEBUG_TX | WM_DEBUG_RX | WM_DEBUG_LINK | WM_DEBUG_GMII
 #endif
 
 #ifdef __HAVE_PCI_MSI_MSIX
-#if 0 /* off by default */
-#define WM_MSI_MSIX	1
-#endif
+#define WM_MSI_MSIX	1 /* Enable by default */
 #endif
 
 /*
@@ -295,6 +293,7 @@ struct wm_softc {
 	bus_size_t sc_ios;		/* I/O space size */
 	bus_space_tag_t sc_flasht;	/* flash registers space tag */
 	bus_space_handle_t sc_flashh;	/* flash registers space handle */
+	bus_size_t sc_flashs;		/* flash registers space size */
 	bus_dma_tag_t sc_dmat;		/* bus DMA tag */
 
 	struct ethercom sc_ethercom;	/* ethernet common data */
@@ -786,10 +785,10 @@ struct _msix_matrix {
 	int intridx;
 	int cpuid;
 } msix_matrix[WM_MSIX_NINTR] = {
-	{ "TX", wm_txintr_msix, WM_MSIX_TXINTR_IDX, WM_MSIX_TXINTR_CPUID }, 
-	{ "RX", wm_rxintr_msix, WM_MSIX_RXINTR_IDX, WM_MSIX_TXINTR_CPUID }, 
+	{ "TX", wm_txintr_msix, WM_MSIX_TXINTR_IDX, WM_MSIX_TXINTR_CPUID },
+	{ "RX", wm_rxintr_msix, WM_MSIX_RXINTR_IDX, WM_MSIX_TXINTR_CPUID },
 	{ "LINK", wm_linkintr_msix, WM_MSIX_LINKINTR_IDX,
-	  WM_MSIX_LINKINTR_CPUID }, 
+	  WM_MSIX_LINKINTR_CPUID },
 };
 #endif
 
@@ -1421,7 +1420,8 @@ wm_attach(device_t parent, device_t self, void *aux)
 #ifndef WM_MSI_MSIX
 	pci_intr_handle_t ih;
 #else
-	pci_intr_type_t counts[PCI_INTR_SIZE_MSIX];
+	int counts[PCI_INTR_TYPE_SIZE];
+	pci_intr_type_t intr_type, max_type;
 #endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
@@ -1487,8 +1487,13 @@ wm_attach(device_t parent, device_t self, void *aux)
 	 *  82545: Errata  4 (easy to reproduce device timeout)
 	 *  82546: Errata 26 (easy to reproduce device timeout)
 	 *  82541: Errata  7 (easy to reproduce device timeout)
+	 *
+	 * "Byte Enables 2 and 3 are not set on MSI writes"
+	 *
+	 *  82571 & 82572: Errata 63
 	 */
-	if (sc->sc_type <= WM_T_82541_2)
+	if ((sc->sc_type <= WM_T_82541_2) || (sc->sc_type == WM_T_82571)
+	    || (sc->sc_type == WM_T_82572))
 		pa->pa_flags &= ~PCI_FLAGS_MSI_OKAY;
 
 	if ((sc->sc_type == WM_T_82575) || (sc->sc_type == WM_T_82576)
@@ -1608,18 +1613,20 @@ wm_attach(device_t parent, device_t self, void *aux)
 	sc->sc_nintrs = 1;
 #else /* WM_MSI_MSIX */
 	/* Allocation settings */
+	max_type = PCI_INTR_TYPE_MSIX;
 	counts[PCI_INTR_TYPE_MSIX] = WM_MAX_NINTR;
 	counts[PCI_INTR_TYPE_MSI] = 1;
 	counts[PCI_INTR_TYPE_INTX] = 1;
 
-alloc_retry:	
-	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, WM_MAX_NINTR) != 0) {
+alloc_retry:
+	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, max_type) != 0) {
 int_failed:
-		aprint_error_dev(sc->sc_dev, "failed to allocate interrput\n");
+		aprint_error_dev(sc->sc_dev, "failed to allocate interrupt\n");
 		return;
 	}
 
-	if (pci_intr_type(sc->sc_intrs[0]) == PCI_INTR_TYPE_MSIX) {
+	intr_type = pci_intr_type(sc->sc_intrs[0]);
+	if (intr_type == PCI_INTR_TYPE_MSIX) {
 		void *vih;
 		kcpuset_t *affinity;
 
@@ -1648,7 +1655,9 @@ int_failed:
 				kcpuset_destroy(affinity);
 
 				/* Setup for MSI: Disable MSI-X */
-				counts[PCI_INTR_TYPE_MSIX] = 0;
+				max_type = PCI_INTR_TYPE_MSI;
+				counts[PCI_INTR_TYPE_MSI] = 1;
+				counts[PCI_INTR_TYPE_INTX] = 1;
 				goto alloc_retry;
 			}
 			kcpuset_zero(affinity);
@@ -1685,7 +1694,8 @@ int_failed:
 			switch (pci_intr_type(sc->sc_intrs[0])) {
 			case PCI_INTR_TYPE_MSI:
 				/* The next try is for INTx: Disable MSI */
-				counts[PCI_INTR_TYPE_MSI] = 0;
+				max_type = PCI_INTR_TYPE_INTX;
+				counts[PCI_INTR_TYPE_INTX] = 1;
 				goto alloc_retry;
 			case PCI_INTR_TYPE_INTX:
 			default:
@@ -2004,7 +2014,7 @@ int_failed:
 		sc->sc_nvm_wordsize = 2048;
 		memtype = pci_mapreg_type(pa->pa_pc, pa->pa_tag, WM_ICH8_FLASH);
 		if (pci_mapreg_map(pa, WM_ICH8_FLASH, memtype, 0,
-		    &sc->sc_flasht, &sc->sc_flashh, NULL, NULL)) {
+		    &sc->sc_flasht, &sc->sc_flashh, NULL, &sc->sc_flashs)) {
 			aprint_error_dev(sc->sc_dev,
 			    "can't map FLASH registers\n");
 			goto fail_5;
@@ -2750,10 +2760,13 @@ wm_detach(device_t self, int flags __unused)
 		bus_space_unmap(sc->sc_st, sc->sc_sh, sc->sc_ss);
 		sc->sc_ss = 0;
 	}
-
 	if (sc->sc_ios) {
 		bus_space_unmap(sc->sc_iot, sc->sc_ioh, sc->sc_ios);
 		sc->sc_ios = 0;
+	}
+	if (sc->sc_flashs) {
+		bus_space_unmap(sc->sc_flasht, sc->sc_flashh, sc->sc_flashs);
+		sc->sc_flashs = 0;
 	}
 
 	if (sc->sc_tx_lock)

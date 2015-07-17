@@ -1,4 +1,4 @@
-/*	$NetBSD: metachar.c,v 1.1 2015/06/17 15:34:55 christos Exp $	*/
+/*	$NetBSD: metachar.c,v 1.5 2015/06/19 08:03:35 mlelstv Exp $	*/
 
 /*-
  * Copyright (c) 2015 The NetBSD Foundation, Inc.
@@ -28,8 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
+#if defined(MAKE_NATIVE) || defined(HAVE_NBTOOL_CONFIG_H)
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: metachar.c,v 1.1 2015/06/17 15:34:55 christos Exp $");
+#endif
+
+#if defined(__RCSID) && !defined(lint)
+__RCSID("$NetBSD: metachar.c,v 1.5 2015/06/19 08:03:35 mlelstv Exp $");
+#endif
 
 #include "metachar.h"
 /*
@@ -45,13 +55,13 @@ unsigned char _metachar[128] = {
 //    nul   soh   stx   etx   eot   enq   ack   bel
 	1,    0,    0,    0,    0,    0,    0,    0,
 //     bs    ht    nl    vt    np    cr    so    si
-	0,    1,    1,    0,	0,    0,    0,    0,
+	0,    0,    1,    0,	0,    0,    0,    0,
 //    dle   dc1   dc2   dc3   dc4   nak   syn   etb
 	0,    0,    0,    0,    0,    0,    0,    0,
 //    can    em   sub   esc    fs    gs    rs    us
 	0,    0,    0,    0,    0,    0,    0,    0,
 //     sp     !     "     #     $     %     &     '
-	1,    1,    1,    1,    1,    0,    1,    1,
+	0,    1,    1,    1,    1,    0,    1,    1,
 //      (     )     *     +     ,     -     .     /
 	1,    1,    1,    0,    0,    0,    0,    0,
 //      0     1     2     3     4     5     6     7
@@ -75,3 +85,4 @@ unsigned char _metachar[128] = {
 //      x     y     z     {     |     }     ~   del
 	0,    0,    0,    1,    1,    1,    1,    0,
 };
+
