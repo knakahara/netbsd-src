@@ -141,7 +141,7 @@ int		pci_intx_alloc(const struct pci_attach_args *,
  * Wrapper function for generally unitied allocation to fallback MSI-X/MSI/INTx
  * automatically.
  */
-int		pci_intr_alloc(const struct pci_attach_args *pa,
+int		pci_intr_alloc(const struct pci_attach_args *,
 		    pci_intr_handle_t **, int *, pci_intr_type_t);
 
 /* experimental MSI support */
