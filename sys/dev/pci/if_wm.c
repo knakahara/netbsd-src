@@ -1421,7 +1421,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	pci_intr_handle_t ih;
 #else
 	int counts[PCI_INTR_TYPE_SIZE];
-	pci_intr_type_t intr_type, max_type;
+	pci_intr_type_t max_type;
 #endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
@@ -1620,13 +1620,11 @@ wm_attach(device_t parent, device_t self, void *aux)
 
 alloc_retry:
 	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, max_type) != 0) {
-int_failed:
 		aprint_error_dev(sc->sc_dev, "failed to allocate interrupt\n");
 		return;
 	}
 
-	intr_type = pci_intr_type(sc->sc_intrs[0]);
-	if (intr_type == PCI_INTR_TYPE_MSIX) {
+	if (pci_intr_type(sc->sc_intrs[0]) == PCI_INTR_TYPE_MSIX) {
 		void *vih;
 		kcpuset_t *affinity;
 
@@ -1699,7 +1697,7 @@ int_failed:
 				goto alloc_retry;
 			case PCI_INTR_TYPE_INTX:
 			default:
-				goto int_failed;
+				return;
 			}
 		}
 		aprint_normal_dev(sc->sc_dev, "%s at %s\n",
