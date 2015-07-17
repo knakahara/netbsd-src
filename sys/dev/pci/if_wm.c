@@ -1421,6 +1421,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 	pci_intr_handle_t ih;
 #else
 	int counts[PCI_INTR_TYPE_SIZE];
+	pci_intr_type_t intr_type, max_type;
 #endif
 	const char *intrstr = NULL;
 	const char *eetype, *xname;
@@ -1612,18 +1613,20 @@ wm_attach(device_t parent, device_t self, void *aux)
 	sc->sc_nintrs = 1;
 #else /* WM_MSI_MSIX */
 	/* Allocation settings */
+	max_type = PCI_INTR_TYPE_MSIX;
 	counts[PCI_INTR_TYPE_MSIX] = WM_MAX_NINTR;
 	counts[PCI_INTR_TYPE_MSI] = 1;
 	counts[PCI_INTR_TYPE_INTX] = 1;
 
 alloc_retry:
-	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, PCI_INTR_TYPE_MSIX) != 0) {
+	if (pci_intr_alloc(pa, &sc->sc_intrs, counts, max_type) != 0) {
 int_failed:
 		aprint_error_dev(sc->sc_dev, "failed to allocate interrupt\n");
 		return;
 	}
 
-	if (pci_intr_type(sc->sc_intrs[0]) == PCI_INTR_TYPE_MSIX) {
+	intr_type = pci_intr_type(sc->sc_intrs[0]);
+	if (intr_type == PCI_INTR_TYPE_MSIX) {
 		void *vih;
 		kcpuset_t *affinity;
 
@@ -1652,7 +1655,9 @@ int_failed:
 				kcpuset_destroy(affinity);
 
 				/* Setup for MSI: Disable MSI-X */
-				counts[PCI_INTR_TYPE_MSIX] = 0;
+				max_type = PCI_INTR_TYPE_MSI;
+				counts[PCI_INTR_TYPE_MSI] = 1;
+				counts[PCI_INTR_TYPE_INTX] = 1;
 				goto alloc_retry;
 			}
 			kcpuset_zero(affinity);
@@ -1689,7 +1694,8 @@ int_failed:
 			switch (pci_intr_type(sc->sc_intrs[0])) {
 			case PCI_INTR_TYPE_MSI:
 				/* The next try is for INTx: Disable MSI */
-				counts[PCI_INTR_TYPE_MSI] = 0;
+				max_type = PCI_INTR_TYPE_INTX;
+				counts[PCI_INTR_TYPE_INTX] = 1;
 				goto alloc_retry;
 			case PCI_INTR_TYPE_INTX:
 			default:
