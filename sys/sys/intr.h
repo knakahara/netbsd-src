@@ -39,6 +39,15 @@
 
 #include <sys/types.h>
 
+struct intrids_handler {
+	int iih_nids;
+	char iih_intrids[1][INTRIDBUF];
+	/*
+	 * The number of the array of char[INTRIDBUF] will be overwritten by
+	 * iih_nids after intr_construct_intrids().
+	 */
+};
+
 struct cpu_info;
 struct kcpuset;
 typedef struct kcpuset	kcpuset_t;
@@ -66,8 +75,8 @@ uint64_t	intr_get_count(const char *, u_int);
 void		intr_get_assigned(const char *, kcpuset_t *);
 void		intr_get_available(kcpuset_t *);
 void		intr_get_devname(const char *, char *, size_t);
-int		intr_construct_intrids(const kcpuset_t *, char ***, int *);
-void		intr_destruct_intrids(char **, int);
+struct intrids_handler	*intr_construct_intrids(const kcpuset_t *);
+void		intr_destruct_intrids(struct intrids_handler *);
 
 /* Flags for softint_establish(). */
 #define	SOFTINT_BIO	0x0000

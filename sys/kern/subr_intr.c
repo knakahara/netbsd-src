@@ -125,17 +125,21 @@ static int
 intr_avert_intr(u_int cpu_idx)
 {
 	kcpuset_t *cpuset;
-	char **ids;
+	struct intrids_handler *ii_handler;
+	char (*ids)[INTRIDBUF];
 	int error, i, nids;
 
 	kcpuset_create(&cpuset, true);
 	kcpuset_set(cpuset, cpu_idx);
 
-	error = intr_construct_intrids(cpuset, &ids, &nids);
-	if (error)
-		return error;
-	if (nids == 0)
+	ii_handler = intr_construct_intrids(cpuset);
+	if (ii_handler == NULL)
+		return ENOMEM;
+	nids = ii_handler->iih_nids;
+	if (nids == 0) {
+		intr_destruct_intrids(ii_handler);
 		return 0; /* nothing to do */
+	}
 
 	intr_get_available(cpuset);
 	kcpuset_clear(cpuset, cpu_idx);
@@ -144,13 +148,14 @@ intr_avert_intr(u_int cpu_idx)
 		return ENOENT;
 	}
 
+	ids = ii_handler->iih_intrids;
 	for (i = 0; i < nids; i++) {
 		error = pci_intr_distribute_handler(ids[i], cpuset, NULL);
 		if (error)
 			break;
 	}
 
-	intr_destruct_intrids(ids, nids);
+	intr_destruct_intrids(ii_handler);
 	kcpuset_destroy(cpuset);
 	return error;
 }
@@ -169,9 +174,8 @@ intr_list_line_size(void)
 static size_t
 intr_list_size(void)
 {
+	struct intrids_handler *ii_handler;
 	size_t ilsize;
-	int error, nids;
-	char **ids;
 
 	ilsize = 0;
 
@@ -179,12 +183,12 @@ intr_list_size(void)
 	ilsize += sizeof(struct intr_list);
 
 	/* il_line body */
-	error = intr_construct_intrids(kcpuset_running, &ids, &nids);
-	if (error)
+	ii_handler = intr_construct_intrids(kcpuset_running);
+	if (ii_handler == NULL)
 		return 0;
-	ilsize += intr_list_line_size() * nids;
+	ilsize += intr_list_line_size() * (ii_handler->iih_nids);
 
-	intr_destruct_intrids(ids, nids);
+	intr_destruct_intrids(ii_handler);
 	return ilsize;
 }
 
@@ -199,10 +203,11 @@ intr_list(void *data, int length)
 	struct intr_list *il;
 	struct intr_list_line *illine;
 	kcpuset_t *assigned, *avail;
+	struct intrids_handler *ii_handler;
 	size_t ilsize;
 	u_int cpu_idx;
 	int nids, intr_idx, ret, line_size;
-	char **ids;
+	char (*ids)[INTRIDBUF];
 
 	ilsize = intr_list_size();
 	if (ilsize == 0)
@@ -224,18 +229,20 @@ intr_list(void *data, int length)
 	intr_get_available(avail);
 	kcpuset_create(&assigned, true);
 
-	ret = intr_construct_intrids(kcpuset_running, &ids, &nids);
-	if (ret != 0) {
+	ii_handler = intr_construct_intrids(kcpuset_running);
+	if (ii_handler == NULL) {
 		DPRINTF(("%s: intr_construct_intrids() failed\n",
 			__func__));
-		ret = -ret;
+		ret = -ENOMEM;
 		goto out;
 	}
 
 	line_size = intr_list_line_size();
 	/* ensure interrupts are not added after above intr_list_size(). */
+	nids = ii_handler->iih_nids;
+	ids = ii_handler->iih_intrids;
 	if (ilsize < sizeof(struct intr_list) + line_size * nids) {
-		intr_destruct_intrids(ids, nids);
+		intr_destruct_intrids(ii_handler);
 		DPRINTF(("%s: interrupts are added during execution.\n",
 			__func__));
 		ret = -ENOMEM;
@@ -270,7 +277,7 @@ intr_list(void *data, int length)
 	il->il_linesize = line_size;
 	il->il_bufsize = ilsize;
 
-	intr_destruct_intrids(ids, nids);
+	intr_destruct_intrids(ii_handler);
  out:
 	kcpuset_destroy(assigned);
 	kcpuset_destroy(avail);

@@ -2123,49 +2123,42 @@ intr_distribute_handler(const char *intrid, const kcpuset_t *newset,
 	return error;
 }
 
-int
-intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
+struct intrids_handler *
+intr_construct_intrids(const kcpuset_t *cpuset)
 {
 	struct intrsource *isp;
-	char **ids;
-	int i;
-
-	if (count == NULL)
-		return EINVAL;
+	struct intrids_handler *ii_handler;
+	char (*ids)[INTRIDBUF];
+	int i, count;
 
 	if (kcpuset_iszero(cpuset))
 		return 0;
 
-	*count = 0;
+	/*
+	 * Count the number of interrupts which affinity to any cpu of "cpuset".
+	 */
+	count = 0;
 	mutex_enter(&cpu_lock);
 	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
 		if (intr_is_affinity_intrsource(isp, cpuset))
-			(*count)++;
+			count++;
 	}
 	mutex_exit(&cpu_lock);
-	if (*count == 0)
-		return 0;
 
-	ids = kmem_zalloc(sizeof(char*) * (*count), KM_SLEEP);
-	if (ids == NULL)
-		return ENOMEM;
-	for (i = 0; i < *count; i++) {
-		ids[i] = kmem_zalloc(INTRIDBUF, KM_SLEEP);
-		if (ids[i] == NULL) {
-			int j;
-			for (j = i - 1; j >= 0; j--) {
-				kmem_free(ids[j], INTRIDBUF);
-			}
-			kmem_free(ids, sizeof(char*) * (*count));
-			return ENOMEM;
-		}
-	}
+	ii_handler = kmem_zalloc(sizeof(int)
+	    + sizeof(char) * INTRIDBUF * count, KM_SLEEP);
+	if (ii_handler == NULL)
+		return NULL;
+	ii_handler->iih_nids = count;
+	if (count == 0)
+		return ii_handler;
 
+	ids = ii_handler->iih_intrids;
 	i = 0;
 	mutex_enter(&cpu_lock);
 	SIMPLEQ_FOREACH(isp, &io_interrupt_sources, is_list) {
-		/* Ignore devices attached after counting "*count". */
-		if (i >= *count) {
+		/* Ignore devices attached after counting "count". */
+		if (i >= count) {
 			DPRINTF(("New devices are attached after counting.\n"));
 			break;
 		}
@@ -2178,17 +2171,18 @@ intr_construct_intrids(const kcpuset_t *cpuset, char ***intrids, int *count)
 	}
 	mutex_exit(&cpu_lock);
 
-	*intrids = ids;
-	return 0;
+	return ii_handler;
 }
 
 void
-intr_destruct_intrids(char **intrids, int count)
+intr_destruct_intrids(struct intrids_handler *ii_handler)
 {
-	int i;
+	size_t iih_size;
 
-	for (i = 0; i < count; i++)
-		kmem_free(intrids[i], INTRIDBUF);
+	if (ii_handler == NULL)
+		return;
 
-	kmem_free(intrids, sizeof(char*) * count);
+	iih_size = sizeof(int)
+		+ sizeof(char) * INTRIDBUF * ii_handler->iih_nids;
+	kmem_free(ii_handler, iih_size);
 }
