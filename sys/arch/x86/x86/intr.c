@@ -1978,18 +1978,18 @@ intr_get_count(const char *intrid, u_int cpu_idx)
 	struct percpu_evcnt pep;
 	cpuid_t cpuid;
 	int i, slot;
-
-
-	mutex_enter(&cpu_lock);
-	ih = intr_get_handler(intrid);
-	mutex_exit(&cpu_lock);
-
-	if (ih == NULL)
-		return 0;
+	uint64_t count = 0;
 
 	ci = cpu_lookup(cpu_idx);
 	cpuid = ci->ci_cpuid;
 
+	mutex_enter(&cpu_lock);
+
+	ih = intr_get_handler(intrid);
+	if (ih == NULL) {
+		count = 0;
+		goto out;
+	}
 	slot = ih->ih_slot;
 	isp = ih->ih_cpu->ci_isources[slot];
 
@@ -1997,13 +1997,18 @@ intr_get_count(const char *intrid, u_int cpu_idx)
 		pep = isp->is_saved_evcnt[i];
 		if (cpuid == pep.cpuid) {
 			if (isp->is_active_cpu == pep.cpuid) {
-				return isp->is_evcnt.ev_count;
+				count = isp->is_evcnt.ev_count;
+				goto out;
 			} else {
-				return pep.count;
+				count = pep.count;
+				goto out;
 			}
 		}
 	}
-	return 0;
+
+ out:
+	mutex_exit(&cpu_lock);
+	return count;
 }
 
 void
@@ -2012,17 +2017,19 @@ intr_get_assigned(const char *intrid, kcpuset_t *cpuset)
 	struct cpu_info *ci;
 	struct intrhand *ih;
 
-	mutex_enter(&cpu_lock);
-	ih = intr_get_handler(intrid);
-	mutex_exit(&cpu_lock);
-
 	kcpuset_zero(cpuset);
 
+	mutex_enter(&cpu_lock);
+
+	ih = intr_get_handler(intrid);
 	if (ih == NULL)
-		return;
+		goto out;
 
 	ci = ih->ih_cpu;
 	kcpuset_set(cpuset, cpu_index(ci));
+
+ out:
+	mutex_exit(&cpu_lock);
 }
 
 void
@@ -2039,24 +2046,26 @@ intr_get_available(kcpuset_t *cpuset)
 	}
 }
 
-const char *
-intr_get_devname(const char *intrid)
+void
+intr_get_devname(const char *intrid, char *buf, size_t len)
 {
 	struct intrsource *isp;
 	struct intrhand *ih;
 	int slot;
 
 	mutex_enter(&cpu_lock);
+
 	ih = intr_get_handler(intrid);
-	mutex_exit(&cpu_lock);
-
-	if (ih == NULL)
-		return "";
-
+	if (ih == NULL) {
+		buf[0] = '\0';
+		goto out;
+	}
 	slot = ih->ih_slot;
 	isp = ih->ih_cpu->ci_isources[slot];
+	strncpy(buf, isp->is_xname, INTRDEVNAMEBUF);
 
-	return isp->is_xname;
+ out:
+	mutex_exit(&cpu_lock);
 }
 
 static int
@@ -2064,7 +2073,7 @@ intr_distribute_nolock(struct intrhand *ih, const kcpuset_t *newset,
     kcpuset_t *oldset)
 {
 	struct intrsource *isp;
-	int ret, slot;
+	int error, slot;
 
 	if (ih == NULL)
 		return EINVAL;
@@ -2076,42 +2085,42 @@ intr_distribute_nolock(struct intrhand *ih, const kcpuset_t *newset,
 	if (oldset != NULL)
 		intr_get_affinity(isp, oldset);
 
-	ret = intr_set_affinity(isp, newset);
+	error = intr_set_affinity(isp, newset);
 
-	return ret;
+	return error;
 }
 
 int
 intr_distribute(struct intrhand *ih, const kcpuset_t *newset, kcpuset_t *oldset)
 {
-	int ret;
+	int error;
 
 	mutex_enter(&cpu_lock);
-	ret = intr_distribute_nolock(ih, newset, oldset);
+	error = intr_distribute_nolock(ih, newset, oldset);
 	mutex_exit(&cpu_lock);
 
-	return ret;
+	return error;
 }
 
 int
 intr_distribute_handler(const char *intrid, const kcpuset_t *newset,
     kcpuset_t *oldset)
 {
-	int ret;
+	int error;
 	struct intrhand *ih;
 
 	mutex_enter(&cpu_lock);
 
 	ih = intr_get_handler(intrid);
 	if (ih == NULL) {
-		mutex_exit(&cpu_lock);
-		return ENOENT;
+		error =  ENOENT;
+		goto out;
 	}
-	ret = intr_distribute_nolock(ih, newset, oldset);
+	error = intr_distribute_nolock(ih, newset, oldset);
 
+ out:
 	mutex_exit(&cpu_lock);
-
-	return ret;
+	return error;
 }
 
 int

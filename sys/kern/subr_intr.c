@@ -243,9 +243,11 @@ intr_list(void *data, int length)
 	}
 
 	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
+		char devname[INTRDEVNAMEBUF];
+
 		strncpy(illine->ill_intrid, ids[intr_idx], INTRIDBUF);
-		strncpy(illine->ill_xname, intr_get_devname(ids[intr_idx]),
-		    INTRDEVNAMEBUF);
+		intr_get_devname(ids[intr_idx], devname, sizeof(devname));
+		strncpy(illine->ill_xname, devname, INTRDEVNAMEBUF);
 
 		intr_get_assigned(ids[intr_idx], assigned);
 		for (cpu_idx = 0; cpu_idx < ncpu; cpu_idx++) {
@@ -282,12 +284,16 @@ intr_list(void *data, int length)
 static int
 intr_list_sysctl(SYSCTLFN_ARGS)
 {
-	int ret;
+	int ret, error;
 	void *buf;
 
 	if (oldlenp == NULL)
 		return EINVAL;
 
+	/*
+	 * If oldp == NULL, the sysctl(8) caller process want to get the size of
+	 * intrctl list data only.
+	 */
 	if (oldp == NULL) {
 		ret = intr_list(NULL, 0);
 		if (ret < 0)
@@ -297,6 +303,10 @@ intr_list_sysctl(SYSCTLFN_ARGS)
 		return 0;
 	}
 
+	/*
+	 * If oldp != NULL, the sysctl(8) caller process want to get both the size
+	 * and the contents of intrctl list data.
+	 */
 	if (*oldlenp == 0)
 		return ENOMEM;
 
@@ -305,10 +315,15 @@ intr_list_sysctl(SYSCTLFN_ARGS)
 		return ENOMEM;
 
 	ret = intr_list(buf, *oldlenp);
-	if (ret < 0)
-		return -ret;
+	if (ret < 0) {
+		error = -ret;
+		goto out;
+	}
+	error = copyout(buf, oldp, *oldlenp);
 
-	return copyout(buf, oldp, *oldlenp);
+ out:
+	kmem_free(buf, *oldlenp);
+	return error;
 }
 
 /*
@@ -337,7 +352,9 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 
 	ucpuset = iset->cpuset;
 	kcpuset_create(&kcpuset, true);
-	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	error = kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (error)
+		return error;
 	if (kcpuset_iszero(kcpuset)) {
 		kcpuset_destroy(kcpuset);
 		return EINVAL;
