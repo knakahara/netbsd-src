@@ -118,7 +118,7 @@ intr_shield(u_int cpu_idx, int shield)
 
 /*
  * Move all assigned interrupts from "cpu_idx" to the other cpu as possible.
- * The destination cpu is lowest cpuid of available cpus.
+ * The destination cpu is the lowest cpuid of available cpus.
  * If there are no available cpus, give up to move interrupts.
  */
 static int
@@ -133,19 +133,22 @@ intr_avert_intr(u_int cpu_idx)
 	kcpuset_set(cpuset, cpu_idx);
 
 	ii_handler = intr_construct_intrids(cpuset);
-	if (ii_handler == NULL)
-		return ENOMEM;
+	if (ii_handler == NULL) {
+		error = ENOMEM;
+		goto out;
+	}
 	nids = ii_handler->iih_nids;
 	if (nids == 0) {
-		intr_destruct_intrids(ii_handler);
-		return 0; /* nothing to do */
+		error = 0;
+		goto destruct_out;
 	}
 
 	intr_get_available(cpuset);
 	kcpuset_clear(cpuset, cpu_idx);
 	if (kcpuset_iszero(cpuset)) {
 		DPRINTF(("%s: no available cpu\n", __func__));
-		return ENOENT;
+		error = ENOENT;
+		goto destruct_out;
 	}
 
 	ids = ii_handler->iih_intrids;
@@ -155,7 +158,9 @@ intr_avert_intr(u_int cpu_idx)
 			break;
 	}
 
+ destruct_out:
 	intr_destruct_intrids(ii_handler);
+ out:
 	kcpuset_destroy(cpuset);
 	return error;
 }
@@ -171,6 +176,10 @@ intr_list_line_size(void)
 		sizeof(struct intr_list_line_cpu) * (ncpu - 1);
 }
 
+/*
+ * Return the size of interrupts list data on success.
+ * Reterun 0 on failed.
+ */
 static size_t
 intr_list_size(void)
 {
@@ -242,11 +251,10 @@ intr_list(void *data, int length)
 	nids = ii_handler->iih_nids;
 	ids = ii_handler->iih_intrids;
 	if (ilsize < sizeof(struct intr_list) + line_size * nids) {
-		intr_destruct_intrids(ii_handler);
 		DPRINTF(("%s: interrupts are added during execution.\n",
 			__func__));
 		ret = -ENOMEM;
-		goto out;
+		goto destruct_out;
 	}
 
 	for (intr_idx = 0; intr_idx < nids; intr_idx++) {
@@ -277,6 +285,7 @@ intr_list(void *data, int length)
 	il->il_linesize = line_size;
 	il->il_bufsize = ilsize;
 
+ destruct_out:
 	intr_destruct_intrids(ii_handler);
  out:
 	kcpuset_destroy(assigned);
@@ -361,14 +370,15 @@ intr_set_affinity_sysctl(SYSCTLFN_ARGS)
 	kcpuset_create(&kcpuset, true);
 	error = kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
 	if (error)
-		return error;
+		goto out;
 	if (kcpuset_iszero(kcpuset)) {
-		kcpuset_destroy(kcpuset);
-		return EINVAL;
+		error = EINVAL;
+		goto out;
 	}
 
 	error = pci_intr_distribute_handler(iset->intrid, kcpuset, NULL);
 
+ out:
 	kcpuset_destroy(kcpuset);
 	return error;
 }
@@ -400,10 +410,12 @@ intr_intr_sysctl(SYSCTLFN_ARGS)
 
 	ucpuset = iset->cpuset;
 	kcpuset_create(&kcpuset, true);
-	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	error = kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (error)
+		goto out;
 	if (kcpuset_iszero(kcpuset)) {
-		kcpuset_destroy(kcpuset);
-		return EINVAL;
+		error = EINVAL;
+		goto out;
 	}
 
 	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
@@ -412,6 +424,7 @@ intr_intr_sysctl(SYSCTLFN_ARGS)
 	error = intr_shield(cpu_idx, UNSET_NOINTR_SHIELD);
 	mutex_exit(&cpu_lock);
 
+ out:
 	kcpuset_destroy(kcpuset);
 	return error;
 }
@@ -443,10 +456,12 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 
 	ucpuset = iset->cpuset;
 	kcpuset_create(&kcpuset, true);
-	kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	error = kcpuset_copyin(ucpuset, kcpuset, iset->cpuset_size);
+	if (error)
+		goto out;
 	if (kcpuset_iszero(kcpuset)) {
-		kcpuset_destroy(kcpuset);
-		return EINVAL;
+		error = EINVAL;
+		goto out;
 	}
 
 	cpu_idx = kcpuset_ffs(kcpuset) - 1; /* support one CPU only */
@@ -455,10 +470,11 @@ intr_nointr_sysctl(SYSCTLFN_ARGS)
 	error = intr_shield(cpu_idx, SET_NOINTR_SHIELD);
 	mutex_exit(&cpu_lock);
 	if (error)
-		return error;
+		goto out;
 
 	error = intr_avert_intr(cpu_idx);
 
+ out:
 	kcpuset_destroy(kcpuset);
 	return error;
 }
