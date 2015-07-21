@@ -39,12 +39,13 @@
 
 #include <sys/types.h>
 
+typedef char intrid_t[INTRIDBUF];
 struct intrids_handler {
 	int iih_nids;
-	char iih_intrids[1][INTRIDBUF];
+	intrid_t iih_intrids[1];
 	/*
-	 * The number of the array of char[INTRIDBUF] will be overwritten by
-	 * iih_nids after intr_construct_intrids().
+	 * The number of the "iih_intrids" array will be overwritten by
+	 * "iih_nids" after intr_construct_intrids().
 	 */
 };
 

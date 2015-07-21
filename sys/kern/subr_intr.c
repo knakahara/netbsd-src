@@ -126,7 +126,7 @@ intr_avert_intr(u_int cpu_idx)
 {
 	kcpuset_t *cpuset;
 	struct intrids_handler *ii_handler;
-	char (*ids)[INTRIDBUF];
+	intrid_t *ids;
 	int error, i, nids;
 
 	kcpuset_create(&cpuset, true);
@@ -207,7 +207,7 @@ intr_list(void *data, int length)
 	size_t ilsize;
 	u_int cpu_idx;
 	int nids, intr_idx, ret, line_size;
-	char (*ids)[INTRIDBUF];
+	intrid_t *ids;
 
 	ilsize = intr_list_size();
 	if (ilsize == 0)

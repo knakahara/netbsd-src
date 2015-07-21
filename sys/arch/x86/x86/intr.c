@@ -2128,7 +2128,7 @@ intr_construct_intrids(const kcpuset_t *cpuset)
 {
 	struct intrsource *isp;
 	struct intrids_handler *ii_handler;
-	char (*ids)[INTRIDBUF];
+	intrid_t *ids;
 	int i, count;
 
 	if (kcpuset_iszero(cpuset))
@@ -2145,8 +2145,8 @@ intr_construct_intrids(const kcpuset_t *cpuset)
 	}
 	mutex_exit(&cpu_lock);
 
-	ii_handler = kmem_zalloc(sizeof(int)
-	    + sizeof(char) * INTRIDBUF * count, KM_SLEEP);
+	ii_handler = kmem_zalloc(sizeof(int) + sizeof(intrid_t) * count,
+	    KM_SLEEP);
 	if (ii_handler == NULL)
 		return NULL;
 	ii_handler->iih_nids = count;
@@ -2166,7 +2166,7 @@ intr_construct_intrids(const kcpuset_t *cpuset)
 		if (!intr_is_affinity_intrsource(isp, cpuset))
 			continue;
 
-		strncpy(ids[i], isp->is_intrid, INTRIDBUF);
+		strncpy(ids[i], isp->is_intrid, sizeof(intrid_t));
 		i++;
 	}
 	mutex_exit(&cpu_lock);
@@ -2182,7 +2182,6 @@ intr_destruct_intrids(struct intrids_handler *ii_handler)
 	if (ii_handler == NULL)
 		return;
 
-	iih_size = sizeof(int)
-		+ sizeof(char) * INTRIDBUF * ii_handler->iih_nids;
+	iih_size = sizeof(int) + sizeof(intrid_t) * ii_handler->iih_nids;
 	kmem_free(ii_handler, iih_size);
 }
