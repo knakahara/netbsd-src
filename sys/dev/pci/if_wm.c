@@ -1637,6 +1637,13 @@ wm_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
+	/* XXX Currently, Tx, Rx queue are always one. */
+	sc->sc_nrxqueues = 1;
+	sc->sc_ntxqueues = 1;
+	error = wm_alloc_txrx_queues(sc);
+	if (error)
+		return;
+
 #ifndef WM_MSI_MSIX
 	/*
 	 * Map and establish our interrupt.
@@ -1890,13 +1897,6 @@ alloc_retry:
 		    (sc->sc_flags & WM_F_BUS64) ? 64 : 32, sc->sc_bus_speed,
 		    (sc->sc_flags & WM_F_PCIX) ? "PCIX" : "PCI");
 	}
-
-	/* XXX Currently, Tx, Rx queue are always one. */
-	sc->sc_nrxqueues = 1;
-	sc->sc_ntxqueues = 1;
-	error = wm_alloc_txrx_queues(sc);
-	if (error)
-		return;
 
 	/* clear interesting stat counters */
 	CSR_READ(sc, WMREG_COLC);
