@@ -2725,7 +2725,6 @@ static void
 wm_tick(void *arg)
 {
 	struct wm_softc *sc = arg;
-	struct wm_txqueue *txq = sc->sc_txq;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 #ifndef WM_MPSAFE
 	int s;
@@ -2733,7 +2732,7 @@ wm_tick(void *arg)
 	s = splnet();
 #endif
 
-	WM_TX_LOCK(txq);
+	WM_CORE_LOCK(sc);
 
 	if (sc->sc_stopping)
 		goto out;
@@ -2766,7 +2765,7 @@ wm_tick(void *arg)
 		wm_tbi_tick(sc);
 
 out:
-	WM_TX_UNLOCK(txq);
+	WM_CORE_UNLOCK(sc);
 #ifndef WM_MPSAFE
 	splx(s);
 #endif
@@ -6752,9 +6751,8 @@ wm_rxeof(struct wm_softc *sc)
 static void
 wm_linkintr_gmii(struct wm_softc *sc, uint32_t icr)
 {
-	struct wm_txqueue *txq = sc->sc_txq;
 
-	KASSERT(WM_TX_LOCKED(txq));
+	KASSERT(WM_CORE_LOCKED(sc));
 
 	DPRINTF(WM_DEBUG_LINK, ("%s: %s:\n", device_xname(sc->sc_dev),
 		__func__));
@@ -6965,6 +6963,8 @@ static void
 wm_linkintr(struct wm_softc *sc, uint32_t icr)
 {
 
+	KASSERT(WM_CORE_LOCKED(sc));
+
 	if (sc->sc_flags & WM_F_HAS_MII)
 		wm_linkintr_gmii(sc, icr);
 	else if ((sc->sc_mediatype == WM_MEDIATYPE_SERDES)
@@ -7031,12 +7031,15 @@ wm_intr_legacy(void *arg)
 #endif
 		wm_txeof(sc);
 
+		WM_TX_UNLOCK(txq);
+		WM_CORE_LOCK(sc);
+
 		if (icr & (ICR_LSC|ICR_RXSEQ)) {
 			WM_EVCNT_INCR(&sc->sc_ev_linkintr);
 			wm_linkintr(sc, icr);
 		}
 
-		WM_TX_UNLOCK(txq);
+		WM_CORE_UNLOCK(sc);
 
 		if (icr & ICR_RXO) {
 #if defined(WM_DEBUG)
@@ -7157,7 +7160,6 @@ static int
 wm_linkintr_msix(void *arg)
 {
 	struct wm_softc *sc = arg;
-	struct wm_txqueue *txq = sc->sc_txq;
 
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: LINK: got link intr\n", device_xname(sc->sc_dev)));
@@ -7168,7 +7170,7 @@ wm_linkintr_msix(void *arg)
 		CSR_WRITE(sc, WMREG_EIMC, EITR_OTHER);
 	else
 		CSR_WRITE(sc, WMREG_EIMC, 1 << WM_MSIX_LINKINTR_IDX);
-	WM_TX_LOCK(txq);
+	WM_CORE_LOCK(sc);
 	if (sc->sc_stopping)
 		goto out;
 
@@ -7176,7 +7178,7 @@ wm_linkintr_msix(void *arg)
 	wm_linkintr(sc, ICR_LSC);
 
 out:
-	WM_TX_UNLOCK(txq);
+	WM_CORE_UNLOCK(sc);
 	
 	if (sc->sc_type == WM_T_82574)
 		CSR_WRITE(sc, WMREG_IMS, ICR_OTHER | ICR_LSC); /* 82574 only */
