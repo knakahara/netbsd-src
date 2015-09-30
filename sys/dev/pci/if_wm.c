@@ -4062,18 +4062,6 @@ wm_setup_legacy(struct wm_softc *sc)
 	return 0;
 }
 
-struct _msix_matrix {
-	const char *intrname;
-	int(*func)(void *);
-	int intridx;
-	int cpuid;
-} msix_matrix[WM_MSIX_NINTR] = {
-	{ "TX", wm_txintr_msix, WM_MSIX_TXINTR_IDX, WM_MSIX_TXINTR_CPUID },
-	{ "RX", wm_rxintr_msix, WM_MSIX_RXINTR_IDX, WM_MSIX_RXINTR_CPUID },
-	{ "LINK", wm_linkintr_msix, WM_MSIX_LINKINTR_IDX,
-	  WM_MSIX_LINKINTR_CPUID },
-};
-
 static int
 wm_setup_msix(struct wm_softc *sc)
 {
@@ -4084,6 +4072,22 @@ wm_setup_msix(struct wm_softc *sc)
 	const char *intrstr = NULL;
 	char intrbuf[PCI_INTRSTR_LEN];
 	char intr_xname[INTRDEVNAMEBUF];
+
+	struct _msix_matrix {
+		const char *intrname;
+		int(*func)(void *);
+		void *arg;
+		int intridx;
+		int cpuid;
+	} msix_matrix[WM_MSIX_NINTR] = {
+		{ "TX", wm_txintr_msix, sc->sc_txq,
+		  WM_MSIX_TXINTR_IDX, WM_MSIX_TXINTR_CPUID },
+		{ "RX", wm_rxintr_msix, sc->sc_rxq,
+		  WM_MSIX_RXINTR_IDX, WM_MSIX_RXINTR_CPUID },
+		{ "LINK", wm_linkintr_msix, sc,
+		  WM_MSIX_LINKINTR_IDX, WM_MSIX_LINKINTR_CPUID },
+	};
+
 
 	kcpuset_create(&affinity, false);
 
@@ -4103,7 +4107,7 @@ wm_setup_msix(struct wm_softc *sc)
 		    sizeof(intr_xname));
 		vih = pci_intr_establish_xname(pc,
 		    sc->sc_intrs[msix_matrix[i].intridx], IPL_NET,
-		    msix_matrix[i].func, sc, intr_xname);
+		    msix_matrix[i].func, msix_matrix[i].arg, intr_xname);
 		if (vih == NULL) {
 			aprint_error_dev(sc->sc_dev,
 			    "unable to establish MSI-X(for %s)%s%s\n",
@@ -7072,8 +7076,8 @@ wm_intr_legacy(void *arg)
 static int
 wm_txintr_msix(void *arg)
 {
-	struct wm_softc *sc = arg;
-	struct wm_txqueue *txq = sc->sc_txq;
+	struct wm_txqueue *txq = arg;
+	struct wm_softc *sc = txq->txq_sc;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	int handled = 0;
 
@@ -7121,8 +7125,8 @@ out:
 static int
 wm_rxintr_msix(void *arg)
 {
-	struct wm_softc *sc = arg;
-	struct wm_rxqueue *rxq = sc->sc_rxq;
+	struct wm_rxqueue *rxq = arg;
+	struct wm_softc *sc = rxq->rxq_sc;
 
 	DPRINTF(WM_DEBUG_TX,
 	    ("%s: RX: got Rx intr\n", device_xname(sc->sc_dev)));
