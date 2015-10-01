@@ -565,6 +565,7 @@ static uint32_t	wm_rxpbs_adjust_82580(uint32_t);
 static void	wm_reset(struct wm_softc *);
 static int	wm_add_rxbuf(struct wm_rxqueue *, int);
 static void	wm_rxdrain(struct wm_rxqueue *);
+static void	wm_init_rss(struct wm_softc *);
 static int	wm_init(struct ifnet *);
 static int	wm_init_locked(struct ifnet *);
 static void	wm_stop(struct ifnet *, int);
@@ -607,6 +608,7 @@ static void	wm_linkintr_serdes(struct wm_softc *, uint32_t);
 static void	wm_linkintr(struct wm_softc *, uint32_t);
 static int	wm_intr_legacy(void *);
 #ifdef WM_MSI_MSIX
+static void	wm_adjust_qnum(struct wm_softc *, int);
 static int	wm_setup_legacy(struct wm_softc *);
 static int	wm_setup_msix(struct wm_softc *);
 static int	wm_txintr_msix(void *);
@@ -1621,7 +1623,7 @@ wm_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-	/* XXX Currently, Tx, Rx queue are always one. */
+#ifndef WM_MSI_MSIX
 	sc->sc_ntxqueues = 1;
 	sc->sc_nrxqueues = 1;
 	error = wm_alloc_txrx_queues(sc);
@@ -1631,7 +1633,6 @@ wm_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-#ifndef WM_MSI_MSIX
 	/*
 	 * Map and establish our interrupt.
 	 */
@@ -1655,6 +1656,14 @@ wm_attach(device_t parent, device_t self, void *aux)
 	aprint_normal_dev(sc->sc_dev, "interrupting at %s\n", intrstr);
 	sc->sc_nintrs = 1;
 #else /* WM_MSI_MSIX */
+	wm_adjust_qnum(sc, pci_msix_count(pa->pa_pc, pa->pa_tag));
+	error = wm_alloc_txrx_queues(sc);
+	if (error) {
+		aprint_error_dev(sc->sc_dev, "cannot allocate queues %d\n",
+		    error);
+		return;
+	}
+
 	/* Allocation settings */
 	max_type = PCI_INTR_TYPE_MSIX;
 	counts[PCI_INTR_TYPE_MSIX] = sc->sc_ntxqueues + sc->sc_nrxqueues + 1;
@@ -4034,6 +4043,155 @@ wm_rxdrain(struct wm_rxqueue *rxq)
 	}
 }
 
+/*
+ * Adjust TX and RX queue numbers which the system actulally uses.
+ *
+ * The numbers are affected by below parameters.
+ *     - The nubmer of hardware queues
+ *     - The number of MSI-X vectors (= "nvectors" argument)
+ *     - ncpu
+ */
+static void
+wm_adjust_qnum(struct wm_softc *sc, int nvectors)
+{
+	int hw_ntxqueues, hw_nrxqueues;
+
+	if (nvectors < 3) {
+		sc->sc_ntxqueues = 1;
+		sc->sc_nrxqueues = 1;
+		return;
+	}
+
+	switch(sc->sc_type) {
+	case WM_T_82572:
+		hw_ntxqueues = 2;
+		hw_nrxqueues = 2;
+		break;
+	case WM_T_82574:
+		hw_ntxqueues = 2;
+		hw_nrxqueues = 2;
+		break;
+	case WM_T_82575:
+		hw_ntxqueues = 4;
+		hw_nrxqueues = 4;
+		break;
+	case WM_T_82576:
+		hw_ntxqueues = 16;
+		hw_nrxqueues = 16;
+		break;
+	case WM_T_82580:
+	case WM_T_I350:
+	case WM_T_I354:
+		hw_ntxqueues = 8;
+		hw_nrxqueues = 8;
+		break;
+	case WM_T_I210:
+		hw_ntxqueues = 4;
+		hw_nrxqueues = 4;
+		break;
+	case WM_T_I211:
+		hw_ntxqueues = 2;
+		hw_nrxqueues = 2;
+		break;
+		/*
+		 * XXX I don't know the queue number of below ether controllers.
+		 *     - WM_T_80003  : ?
+		 *     - WM_T_ICH8   : tx = rx = 1?
+		 *     - WM_T_ICH9   : tx = rx = 1?
+		 *     - WM_T_ICH10  : tx = rx = 1?
+		 *     - WM_T_PCH    : tx = 1? rx = 2
+		 *     - WM_T_PCH2   : tx = 1? rx = 2
+		 *     - WM_T_PCH_LPT: tx = rx = 2?
+		 */
+	default:
+		hw_ntxqueues = 1;
+		hw_nrxqueues = 1;
+		break;
+	}
+
+	/*
+	 * As queues more then MSI-X vectors cannot improve scaling, we limit
+	 * the number of queues used actually.
+	 *
+	 * XXX
+	 * Currently, we separate TX queue interrupts and RX queue interrupts.
+	 * Howerver, the number of MSI-X vectors of recent controllers (such as
+	 * I354) expects that drivers bundle a TX queue interrupt and a RX
+	 * interrupt to one interrupt. e.g. FreeBSD's igb deals interrupts in
+	 * such a way.
+	 */
+	if (nvectors < hw_ntxqueues + hw_nrxqueues + 1) {
+		sc->sc_ntxqueues = (nvectors - 1) / 2;
+		sc->sc_nrxqueues = (nvectors - 1) / 2;
+	} else {
+		sc->sc_ntxqueues = hw_ntxqueues;
+		sc->sc_nrxqueues = hw_nrxqueues;
+	}
+
+	/*
+	 * As queues more then cpus cannot improve scaling, we limit
+	 * the number of queues used actually.
+	 */
+	if (ncpu < sc->sc_ntxqueues)
+		sc->sc_ntxqueues = ncpu;
+	if (ncpu < sc->sc_nrxqueues)
+		sc->sc_nrxqueues = ncpu;
+
+	/* XXX Currently, this driver supports RX multiqueue only. */
+	sc->sc_ntxqueues = 1;
+}
+
+/*
+ * Setup registers for RSS.
+ *
+ * XXX not yet VMDq support
+ */
+static void
+wm_init_rss(struct wm_softc *sc)
+{
+	uint32_t mrqc, reta_reg;
+	int i;
+
+	for (i = 0; i < RETA_NUM_ENTRIES; i++) {
+		int qid, reta_ent;
+
+		qid  = i % sc->sc_nrxqueues;
+		switch(sc->sc_type) {
+		case WM_T_82574:
+			reta_ent = __SHIFTIN(qid,
+			    RETA_ENT_QINDEX_MASK_82574);
+			break;
+		case WM_T_82575:
+			reta_ent = __SHIFTIN(qid,
+			    RETA_ENT_QINDEX1_MASK_82575);
+			break;
+		default:
+			reta_ent = __SHIFTIN(qid, RETA_ENT_QINDEX_MASK);
+			break;
+		}
+
+		reta_reg = CSR_READ(sc, WMREG_RETA_Q(i));
+		reta_reg &= ~RETA_ENTRY_MASK_Q(i);
+		reta_reg |= __SHIFTIN(reta_ent, RETA_ENTRY_MASK_Q(i));
+		CSR_WRITE(sc, WMREG_RETA_Q(i), reta_reg);
+	}
+
+	for (i = 0; i < RSSRK_NUM_REGS; i++)
+		CSR_WRITE(sc, WMREG_RSSRK(i), (uint32_t)random());
+
+	mrqc = MRQC_ENABLE_RSS_8Q;
+
+	/* XXXX
+	 * The same as FreeBSD igb.
+	 * Why doesn't use MRQC_RSS_FIELD_IPV6_EX?
+	 */
+	mrqc |= (MRQC_RSS_FIELD_IPV4 | MRQC_RSS_FIELD_IPV4_TCP);
+	mrqc |= (MRQC_RSS_FIELD_IPV6 | MRQC_RSS_FIELD_IPV6_TCP);
+	mrqc |= (MRQC_RSS_FIELD_IPV4_UDP | MRQC_RSS_FIELD_IPV6_UDP);
+	mrqc |= (MRQC_RSS_FIELD_IPV6_UDP_EX | MRQC_RSS_FIELD_IPV6_TCP_EX);
+
+	CSR_WRITE(sc, WMREG_MRQC, mrqc);
+}
 
 #ifdef WM_MSI_MSIX
 /*
@@ -4551,6 +4709,20 @@ wm_init_locked(struct ifnet *ifp)
 			ivar = __SHIFTIN((sc->sc_link_intr_idx | IVAR_VALID),
 			    IVAR_MISC_OTHER);
 			CSR_WRITE(sc, WMREG_IVAR_MISC, ivar);
+		}
+
+		if (sc->sc_nrxqueues > 1) {
+			wm_init_rss(sc);
+
+			/*
+			** NOTE: Receive Full-Packet Checksum Offload
+			** is mutually exclusive with Multiqueue. However
+			** this is not the same as TCP/IP checksums which
+			** still work.
+			*/
+			reg = CSR_READ(sc, WMREG_RXCSUM);
+			reg |= RXCSUM_PCSD;
+			CSR_WRITE(sc, WMREG_RXCSUM, reg);
 		}
 	}
 
