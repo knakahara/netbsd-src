@@ -517,24 +517,20 @@ struct livengood_tcpip_ctxdesc {
 #define	WMREG_RDBAL(x) \
 	((x) < 4 ? (0x02800 + ((x) * 0x100)) :	\
 	    (0x0C000 + ((x) * 0x40)))
-#define	WMREG_RDBAL_2	0x0c00	/* for 82576 ... */
 
 #define	WMREG_OLD_RDBAH0 0x0114	/* Receive Descriptor Base High (ring 0) */
 #define	WMREG_RDBAH(x) \
 	((x) < 4 ? (0x02804 + ((x) * 0x100)) :	\
 	    (0x0c004 + ((x) * 0x40)))
-#define	WMREG_RDBAH_2	0x0c04	/* for 82576 ... */
 
 #define	WMREG_OLD_RDLEN0 0x0118	/* Receive Descriptor Length (ring 0) */
 #define	WMREG_RDLEN(x) \
 	((x) < 4 ? (0x02808 + ((x) * 0x100)) :  \
 	    (0x0c008 + ((x) * 0x40)))
-#define	WMREG_RDLEN_2	0x0c08	/* for 82576 ... */
 
 #define	WMREG_SRRCTL(x) \
 	((x) < 4 ? (0x0280c + ((x) * 0x100)) :	\
 	    (0x0c00c + ((x) * 0x40)))	/* additional recv control used in 82575 ... */
-#define WMREG_SRRCTL_2	0x0c0c	/* for 82576 ... */
 #define SRRCTL_BSIZEPKT_MASK		0x0000007f
 #define SRRCTL_BSIZEPKT_SHIFT		10	/* Shift _right_ */
 #define SRRCTL_BSIZEHDRSIZE_MASK	0x00000f00
@@ -552,18 +548,15 @@ struct livengood_tcpip_ctxdesc {
 #define	WMREG_RDH(x) \
 	((x) < 4 ? (0x02810 + ((x) * 0x100)) :  \
 	    (0x0C010 + ((x) * 0x40)))
-#define	WMREG_RDH_2	0x0c10	/* for 82576 ... */
 
 #define	WMREG_OLD_RDT0	0x0128	/* Receive Descriptor Tail (ring 0) */
 #define	WMREG_RDT(x) \
 	((x) < 4 ? (0x02818 + ((x) * 0x100)) :	\
 	    (0x0C018 + ((x) * 0x40)))
-#define	WMREG_RDT_2	0x0c18	/* for 82576 ... */
 
 #define	WMREG_RXDCTL(x) \
 	((x) < 4 ? (0x02828 + ((x) * 0x100)) :	\
 	    (0x0c028 + ((x) * 0x40)))	/* Receive Descriptor Control */
-#define	WMREG_RXDCTL_2	0x0c28	/* for 82576 ... */
 #define	RXDCTL_PTHRESH(x) ((x) << 0)	/* prefetch threshold */
 #define	RXDCTL_HTHRESH(x) ((x) << 8)	/* host threshold */
 #define	RXDCTL_WTHRESH(x) ((x) << 16)	/* write back threshold */
