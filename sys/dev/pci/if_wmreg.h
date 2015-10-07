@@ -878,8 +878,9 @@ struct livengood_tcpip_ctxdesc {
 #define	RXCSUM_IPOFL	(1U << 8)	/* IP checksum offload */
 #define	RXCSUM_TUOFL	(1U << 9)	/* TCP/UDP checksum offload */
 #define	RXCSUM_IPV6OFL	(1U << 10)	/* IPv6 checksum offload */
-#define RXCSUM_IPPCSE	(1U << 11)	/* IP payload checksum enable */
-#define RXCSUM_PCSD	(1U << 12)	/* packet checksum disabled */
+#define	RXCSUM_CRCOFL	(1U << 10)	/* SCTP CRC32 checksum offload */
+#define	RXCSUM_IPPCSE	(1U << 12)	/* IP payload checksum enable */
+#define	RXCSUM_PCSD	(1U << 13)	/* packet checksum disabled */
 
 #define WMREG_RLPML	0x5004	/* Rx Long Packet Max Length */
 
