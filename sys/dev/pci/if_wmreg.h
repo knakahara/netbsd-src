@@ -783,8 +783,8 @@ struct livengood_tcpip_ctxdesc {
 
 #define WMREG_MSIXBM(x)	(0x1600 + (x) * 4) /* MSI-X Allocation */
 
-#define EITR_RX_QUEUE(x)	__BIT(0+(x)) /* Rx Queue x Interrupt x=[0-4] */
-#define EITR_TX_QUEUE(x)	__BIT(8+(x)) /* Tx Queue x Interrupt x=[0-4] */
+#define EITR_RX_QUEUE(x)	__BIT(0+(x)) /* Rx Queue x Interrupt x=[0-3] */
+#define EITR_TX_QUEUE(x)	__BIT(8+(x)) /* Tx Queue x Interrupt x=[0-3] */
 #define EITR_TCP_TIMER	0x40000000 /* TCP Timer */
 #define EITR_OTHER	0x80000000 /* Interrupt Cause Active */
 
