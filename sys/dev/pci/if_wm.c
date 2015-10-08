@@ -4606,13 +4606,13 @@ wm_init_locked(struct ifnet *ifp)
 			for (i = 0; i < sc->sc_ntxqueues; i++) {
 				struct wm_txqueue *txq = &sc->sc_txq[i];
 				CSR_WRITE(sc, WMREG_MSIXBM(txq->txq_intr_idx),
-				    txq->txq_id);
+				    EITR_TX_QUEUE(txq->txq_id));
 			}
 			/* RX */
 			for (i = 0; i < sc->sc_nrxqueues; i++) {
 				struct wm_rxqueue *rxq = &sc->sc_rxq[i];
 				CSR_WRITE(sc, WMREG_MSIXBM(rxq->rxq_intr_idx),
-				    rxq->rxq_id);
+				    EITR_RX_QUEUE(rxq->rxq_id));
 			}
 			/* Link status */
 			CSR_WRITE(sc, WMREG_MSIXBM(sc->sc_link_intr_idx),
