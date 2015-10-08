@@ -948,7 +948,7 @@ struct livengood_tcpip_ctxdesc {
 #define RETA_ENT_QINDEX_MASK		__BITS(3,0) /*queue index for 82580 and newer */
 #define RETA_ENT_QINDEX0_MASK_82575	__BITS(3,2) /*queue index for pool0 */
 #define RETA_ENT_QINDEX1_MASK_82575	__BITS(7,6) /*queue index for pool1 and regular RSS */
-#define RETA_ENT_QINDEX_MASK_82574	__BIT(7) /*queue index for 82580 and newer */
+#define RETA_ENT_QINDEX_MASK_82574	__BIT(7) /*queue index for 82574 */
 
 #define WMREG_RSSRK(x)		(0x5c80 + (x) * 4) /* RSS Random Key Register */
 #define RSSRK_NUM_REGS		10
