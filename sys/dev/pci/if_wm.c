@@ -4046,6 +4046,63 @@ wm_rxdrain(struct wm_rxqueue *rxq)
 }
 
 /*
+ * Setup registers for RSS.
+ *
+ * XXX not yet VMDq support
+ */
+static void
+wm_init_rss(struct wm_softc *sc)
+{
+	uint32_t mrqc, reta_reg;
+	int i;
+
+	for (i = 0; i < RETA_NUM_ENTRIES; i++) {
+		int qid, reta_ent;
+
+		qid  = i % sc->sc_nrxqueues;
+		switch(sc->sc_type) {
+		case WM_T_82574:
+			reta_ent = __SHIFTIN(qid,
+			    RETA_ENT_QINDEX_MASK_82574);
+			break;
+		case WM_T_82575:
+			reta_ent = __SHIFTIN(qid,
+			    RETA_ENT_QINDEX1_MASK_82575);
+			break;
+		default:
+			reta_ent = __SHIFTIN(qid, RETA_ENT_QINDEX_MASK);
+			break;
+		}
+
+		reta_reg = CSR_READ(sc, WMREG_RETA_Q(i));
+		reta_reg &= ~RETA_ENTRY_MASK_Q(i);
+		reta_reg |= __SHIFTIN(reta_ent, RETA_ENTRY_MASK_Q(i));
+		CSR_WRITE(sc, WMREG_RETA_Q(i), reta_reg);
+	}
+
+	for (i = 0; i < RSSRK_NUM_REGS; i++)
+		CSR_WRITE(sc, WMREG_RSSRK(i), (uint32_t)random());
+
+	if (sc->sc_type == WM_T_82574)
+		mrqc = MRQC_ENABLE_RSS_MQ_82574;
+	else
+		mrqc = MRQC_ENABLE_RSS_MQ;
+
+	/* XXXX
+	 * The same as FreeBSD igb.
+	 * Why doesn't use MRQC_RSS_FIELD_IPV6_EX?
+	 */
+	mrqc |= (MRQC_RSS_FIELD_IPV4 | MRQC_RSS_FIELD_IPV4_TCP);
+	mrqc |= (MRQC_RSS_FIELD_IPV6 | MRQC_RSS_FIELD_IPV6_TCP);
+	mrqc |= (MRQC_RSS_FIELD_IPV4_UDP | MRQC_RSS_FIELD_IPV6_UDP);
+	mrqc |= (MRQC_RSS_FIELD_IPV6_UDP_EX | MRQC_RSS_FIELD_IPV6_TCP_EX);
+
+	CSR_WRITE(sc, WMREG_MRQC, mrqc);
+}
+
+#ifdef WM_MSI_MSIX
+
+/*
  * Adjust TX and RX queue numbers which the system actulally uses.
  *
  * The numbers are affected by below parameters.
@@ -4144,62 +4201,6 @@ wm_adjust_qnum(struct wm_softc *sc, int nvectors)
 	sc->sc_ntxqueues = 1;
 }
 
-/*
- * Setup registers for RSS.
- *
- * XXX not yet VMDq support
- */
-static void
-wm_init_rss(struct wm_softc *sc)
-{
-	uint32_t mrqc, reta_reg;
-	int i;
-
-	for (i = 0; i < RETA_NUM_ENTRIES; i++) {
-		int qid, reta_ent;
-
-		qid  = i % sc->sc_nrxqueues;
-		switch(sc->sc_type) {
-		case WM_T_82574:
-			reta_ent = __SHIFTIN(qid,
-			    RETA_ENT_QINDEX_MASK_82574);
-			break;
-		case WM_T_82575:
-			reta_ent = __SHIFTIN(qid,
-			    RETA_ENT_QINDEX1_MASK_82575);
-			break;
-		default:
-			reta_ent = __SHIFTIN(qid, RETA_ENT_QINDEX_MASK);
-			break;
-		}
-
-		reta_reg = CSR_READ(sc, WMREG_RETA_Q(i));
-		reta_reg &= ~RETA_ENTRY_MASK_Q(i);
-		reta_reg |= __SHIFTIN(reta_ent, RETA_ENTRY_MASK_Q(i));
-		CSR_WRITE(sc, WMREG_RETA_Q(i), reta_reg);
-	}
-
-	for (i = 0; i < RSSRK_NUM_REGS; i++)
-		CSR_WRITE(sc, WMREG_RSSRK(i), (uint32_t)random());
-
-	if (sc->sc_type == WM_T_82574)
-		mrqc = MRQC_ENABLE_RSS_MQ_82574;
-	else
-		mrqc = MRQC_ENABLE_RSS_MQ;
-
-	/* XXXX
-	 * The same as FreeBSD igb.
-	 * Why doesn't use MRQC_RSS_FIELD_IPV6_EX?
-	 */
-	mrqc |= (MRQC_RSS_FIELD_IPV4 | MRQC_RSS_FIELD_IPV4_TCP);
-	mrqc |= (MRQC_RSS_FIELD_IPV6 | MRQC_RSS_FIELD_IPV6_TCP);
-	mrqc |= (MRQC_RSS_FIELD_IPV4_UDP | MRQC_RSS_FIELD_IPV6_UDP);
-	mrqc |= (MRQC_RSS_FIELD_IPV6_UDP_EX | MRQC_RSS_FIELD_IPV6_TCP_EX);
-
-	CSR_WRITE(sc, WMREG_MRQC, mrqc);
-}
-
-#ifdef WM_MSI_MSIX
 /*
  * Both single interrupt MSI and INTx can use this function.
  */
