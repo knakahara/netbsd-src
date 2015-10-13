@@ -576,19 +576,19 @@ static void	wm_dump_mbuf_chain(struct wm_softc *, struct mbuf *);
 static void	wm_82547_txfifo_stall(void *);
 static int	wm_82547_txfifo_bugchk(struct wm_softc *, struct mbuf *);
 /* DMA related */
-static int	wm_alloc_tx_descs(struct wm_txqueue *);
-static void	wm_free_tx_descs(struct wm_txqueue *);
-static void	wm_init_tx_descs(struct wm_txqueue *);
-static void	wm_init_tx_regs(struct wm_txqueue *);
-static int	wm_alloc_rx_descs(struct wm_rxqueue *);
-static void	wm_free_rx_descs(struct wm_rxqueue *);
-static void	wm_init_rx_regs(struct wm_rxqueue *);
-static int	wm_alloc_tx_buffer(struct wm_txqueue *);
-static void	wm_free_tx_buffer(struct wm_txqueue *);
-static void	wm_init_tx_buffer(struct wm_txqueue *);
-static int	wm_alloc_rx_buffer(struct wm_rxqueue *);
-static void	wm_free_rx_buffer(struct wm_rxqueue *);
-static int	wm_init_rx_buffer(struct wm_rxqueue *);
+static int	wm_alloc_tx_descs(struct wm_softc *, struct wm_txqueue *);
+static void	wm_free_tx_descs(struct wm_softc *, struct wm_txqueue *);
+static void	wm_init_tx_descs(struct wm_softc *, struct wm_txqueue *);
+static void	wm_init_tx_regs(struct wm_softc *, struct wm_txqueue *);
+static int	wm_alloc_rx_descs(struct wm_softc *, struct wm_rxqueue *);
+static void	wm_free_rx_descs(struct wm_softc *, struct wm_rxqueue *);
+static void	wm_init_rx_regs(struct wm_softc *, struct wm_rxqueue *);
+static int	wm_alloc_tx_buffer(struct wm_softc *, struct wm_txqueue *);
+static void	wm_free_tx_buffer(struct wm_softc *, struct wm_txqueue *);
+static void	wm_init_tx_buffer(struct wm_softc *, struct wm_txqueue *);
+static int	wm_alloc_rx_buffer(struct wm_softc *, struct wm_rxqueue *);
+static void	wm_free_rx_buffer(struct wm_softc *, struct wm_rxqueue *);
+static int	wm_init_rx_buffer(struct wm_softc *, struct wm_rxqueue *);
 static int	wm_alloc_txrx_queues(struct wm_softc *);
 static void	wm_free_txrx_queues(struct wm_softc *);
 static int	wm_init_txrx_queues(struct wm_softc *);
@@ -5363,9 +5363,8 @@ wm_82547_txfifo_bugchk(struct wm_softc *sc, struct mbuf *m0)
 }
 
 static int
-wm_alloc_tx_descs(struct wm_txqueue *txq)
+wm_alloc_tx_descs(struct wm_softc *sc, struct wm_txqueue *txq)
 {
-	struct wm_softc *sc = txq->txq_sc;
 	int error;
 
 	/*
@@ -5431,9 +5430,8 @@ wm_alloc_tx_descs(struct wm_txqueue *txq)
 }
 
 static void
-wm_free_tx_descs(struct wm_txqueue *txq)
+wm_free_tx_descs(struct wm_softc *sc, struct wm_txqueue *txq)
 {
-	struct wm_softc *sc = txq->txq_sc;
 
 	bus_dmamap_unload(sc->sc_dmat, txq->txq_txdesc_dmamap);
 	bus_dmamap_destroy(sc->sc_dmat, txq->txq_txdesc_dmamap);
@@ -5443,9 +5441,8 @@ wm_free_tx_descs(struct wm_txqueue *txq)
 }
 
 static int
-wm_alloc_rx_descs(struct wm_rxqueue *rxq)
+wm_alloc_rx_descs(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 	int error;
 
 	/*
@@ -5504,9 +5501,8 @@ wm_alloc_rx_descs(struct wm_rxqueue *rxq)
 }
 
 static void
-wm_free_rx_descs(struct wm_rxqueue *rxq)
+wm_free_rx_descs(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 
 	bus_dmamap_unload(sc->sc_dmat, rxq->rxq_rxdesc_dmamap);
 	bus_dmamap_destroy(sc->sc_dmat, rxq->rxq_rxdesc_dmamap);
@@ -5517,9 +5513,8 @@ wm_free_rx_descs(struct wm_rxqueue *rxq)
 
 
 static int
-wm_alloc_tx_buffer(struct wm_txqueue *txq)
+wm_alloc_tx_buffer(struct wm_softc *sc, struct wm_txqueue *txq)
 {
-	struct wm_softc *sc = txq->txq_sc;
 	int i, error;
 
 	/* Create the transmit buffer DMA maps. */
@@ -5549,9 +5544,8 @@ wm_alloc_tx_buffer(struct wm_txqueue *txq)
 }
 
 static void
-wm_free_tx_buffer(struct wm_txqueue *txq)
+wm_free_tx_buffer(struct wm_softc *sc, struct wm_txqueue *txq)
 {
-	struct wm_softc *sc = txq->txq_sc;
 	int i;
 
 	for (i = 0; i < WM_TXQUEUELEN(txq); i++) {
@@ -5562,9 +5556,8 @@ wm_free_tx_buffer(struct wm_txqueue *txq)
 }
 
 static int
-wm_alloc_rx_buffer(struct wm_rxqueue *rxq)
+wm_alloc_rx_buffer(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 	int i, error;
 
 	/* Create the receive buffer DMA maps. */
@@ -5592,9 +5585,8 @@ wm_alloc_rx_buffer(struct wm_rxqueue *rxq)
 }
 
 static void
-wm_free_rx_buffer(struct wm_rxqueue *rxq)
+wm_free_rx_buffer(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 	int i;
 
 	for (i = 0; i < WM_NRXDESC; i++) {
@@ -5634,12 +5626,12 @@ wm_alloc_txrx_queues(struct wm_softc *sc)
 #else
 		txq->txq_tx_lock = NULL;
 #endif
-		error = wm_alloc_tx_descs(txq);
+		error = wm_alloc_tx_descs(sc, txq);
 		if (error)
 			break;
-		error = wm_alloc_tx_buffer(txq);
+		error = wm_alloc_tx_buffer(sc, txq);
 		if (error) {
-			wm_free_tx_descs(txq);
+			wm_free_tx_descs(sc, txq);
 			break;
 		}
 		tx_done++;
@@ -5668,13 +5660,13 @@ wm_alloc_txrx_queues(struct wm_softc *sc)
 #else
 		rxq->rxq_rx_lock = NULL;
 #endif
-		error = wm_alloc_rx_descs(rxq);
+		error = wm_alloc_rx_descs(sc, rxq);
 		if (error)
 			break;
 
-		error = wm_alloc_rx_buffer(rxq);
+		error = wm_alloc_rx_buffer(sc, rxq);
 		if (error) {
-			wm_free_rx_descs(rxq);
+			wm_free_rx_descs(sc, rxq);
 			break;
 		}
 
@@ -5688,8 +5680,8 @@ wm_alloc_txrx_queues(struct wm_softc *sc)
  fail_2:
 	for (i = 0; i < rx_done; i++) {
 		struct wm_rxqueue *rxq = &sc->sc_rxq[i];
-		wm_free_rx_buffer(rxq);
-		wm_free_rx_descs(rxq);
+		wm_free_rx_buffer(sc, rxq);
+		wm_free_rx_descs(sc, rxq);
 		if (rxq->rxq_rx_lock)
 			mutex_obj_free(rxq->rxq_rx_lock);
 	}
@@ -5698,8 +5690,8 @@ wm_alloc_txrx_queues(struct wm_softc *sc)
  fail_1:
 	for (i = 0; i < tx_done; i++) {
 		struct wm_txqueue *txq = &sc->sc_txq[i];
-		wm_free_tx_buffer(txq);
-		wm_free_tx_descs(txq);
+		wm_free_tx_buffer(sc, txq);
+		wm_free_tx_descs(sc, txq);
 		if (txq->txq_tx_lock)
 			mutex_obj_free(txq->txq_tx_lock);
 	}
@@ -5720,8 +5712,8 @@ wm_free_txrx_queues(struct wm_softc *sc)
 
 	for (i = 0; i < sc->sc_nrxqueues; i++) {
 		struct wm_rxqueue *rxq = &sc->sc_rxq[i];
-		wm_free_rx_buffer(rxq);
-		wm_free_rx_descs(rxq);
+		wm_free_rx_buffer(sc, rxq);
+		wm_free_rx_descs(sc, rxq);
 		if (rxq->rxq_rx_lock)
 			mutex_obj_free(rxq->rxq_rx_lock);
 	}
@@ -5729,8 +5721,8 @@ wm_free_txrx_queues(struct wm_softc *sc)
 
 	for (i = 0; i < sc->sc_ntxqueues; i++) {
 		struct wm_txqueue *txq = &sc->sc_txq[i];
-		wm_free_tx_buffer(txq);
-		wm_free_tx_descs(txq);
+		wm_free_tx_buffer(sc, txq);
+		wm_free_tx_descs(sc, txq);
 		if (txq->txq_tx_lock)
 			mutex_obj_free(txq->txq_tx_lock);
 	}
@@ -5738,7 +5730,7 @@ wm_free_txrx_queues(struct wm_softc *sc)
 }
 
 static void
-wm_init_tx_descs(struct wm_txqueue *txq)
+wm_init_tx_descs(struct wm_softc *sc __unused, struct wm_txqueue *txq)
 {
 
 	KASSERT(WM_TX_LOCKED(txq));
@@ -5752,9 +5744,8 @@ wm_init_tx_descs(struct wm_txqueue *txq)
 }
 
 static void
-wm_init_tx_regs(struct wm_txqueue *txq)
+wm_init_tx_regs(struct wm_softc *sc, struct wm_txqueue *txq)
 {
-	struct wm_softc *sc = txq->txq_sc;
 
 	KASSERT(WM_TX_LOCKED(txq));
 
@@ -5797,7 +5788,7 @@ wm_init_tx_regs(struct wm_txqueue *txq)
 }
 
 static void
-wm_init_tx_buffer(struct wm_txqueue *txq)
+wm_init_tx_buffer(struct wm_softc *sc __unused, struct wm_txqueue *txq)
 {
 	int i;
 
@@ -5812,9 +5803,8 @@ wm_init_tx_buffer(struct wm_txqueue *txq)
 }
 
 static void
-wm_init_tx_queue(struct wm_txqueue *txq)
+wm_init_tx_queue(struct wm_softc *sc, struct wm_txqueue *txq)
 {
-	struct wm_softc *sc = txq->txq_sc;
 
 	KASSERT(WM_TX_LOCKED(txq));
 
@@ -5828,15 +5818,14 @@ wm_init_tx_queue(struct wm_txqueue *txq)
 		txq->txq_tdt_reg = WMREG_TDT(0);
 	}
 
-	wm_init_tx_descs(txq);
-	wm_init_tx_regs(txq);
-	wm_init_tx_buffer(txq);
+	wm_init_tx_descs(sc, txq);
+	wm_init_tx_regs(sc, txq);
+	wm_init_tx_buffer(sc, txq);
 }
 
 static void
-wm_init_rx_regs(struct wm_rxqueue *rxq)
+wm_init_rx_regs(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 
 	KASSERT(WM_RX_LOCKED(rxq));
 
@@ -5888,9 +5877,8 @@ wm_init_rx_regs(struct wm_rxqueue *rxq)
 }
 
 static int
-wm_init_rx_buffer(struct wm_rxqueue *rxq)
+wm_init_rx_buffer(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 	struct wm_rxsoft *rxs;
 	int error, i;
 
@@ -5928,9 +5916,8 @@ wm_init_rx_buffer(struct wm_rxqueue *rxq)
 }
 
 static int
-wm_init_rx_queue(struct wm_rxqueue *rxq)
+wm_init_rx_queue(struct wm_softc *sc, struct wm_rxqueue *rxq)
 {
-	struct wm_softc *sc = rxq->rxq_sc;
 
 	KASSERT(WM_RX_LOCKED(rxq));
 
@@ -5944,8 +5931,8 @@ wm_init_rx_queue(struct wm_rxqueue *rxq)
 		rxq->rxq_rdt_reg = WMREG_RDT(rxq->rxq_id);
 	}
 
-	wm_init_rx_regs(rxq);
-	return wm_init_rx_buffer(rxq);
+	wm_init_rx_regs(sc, rxq);
+	return wm_init_rx_buffer(sc, rxq);
 }
 
 /*
@@ -5960,7 +5947,7 @@ wm_init_txrx_queues(struct wm_softc *sc)
 	for (i = 0; i < sc->sc_ntxqueues; i++) {
 		struct wm_txqueue *txq = &sc->sc_txq[i];
 		WM_TX_LOCK(txq);
-		wm_init_tx_queue(txq);
+		wm_init_tx_queue(sc, txq);
 		WM_TX_UNLOCK(txq);
 	}
 
@@ -5968,7 +5955,7 @@ wm_init_txrx_queues(struct wm_softc *sc)
 	for (i = 0; i < sc->sc_nrxqueues; i++) {
 		struct wm_rxqueue *rxq = &sc->sc_rxq[i];
 		WM_RX_LOCK(rxq);
-		error = wm_init_rx_queue(rxq);
+		error = wm_init_rx_queue(sc, rxq);
 		WM_RX_UNLOCK(rxq);
 		if (error)
 			break;
