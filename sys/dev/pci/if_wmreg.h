@@ -906,6 +906,7 @@ struct livengood_tcpip_ctxdesc {
 
 #define WMREG_MRQC	0x5818	/* Multiple Receive Queues Command */
 #define MRQC_DISABLE_RSS	0x00000000
+#define MRQC_ENABLE_RSS_MQ_82574	__BIT(0) /* enable RSS for 82574 */
 #define MRQC_ENABLE_RSS_MQ	__BIT(1) /* enable hardware max RSS without VMDq */
 #define MRQC_ENABLE_RSS_VMDQ	__BITS(1, 0) /* enable RSS with VMDq */
 #define MRQC_DEFQ_MASK		__BITS(5, 3)

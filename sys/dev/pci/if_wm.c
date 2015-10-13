@@ -4179,7 +4179,10 @@ wm_init_rss(struct wm_softc *sc)
 	for (i = 0; i < RSSRK_NUM_REGS; i++)
 		CSR_WRITE(sc, WMREG_RSSRK(i), (uint32_t)random());
 
-	mrqc = MRQC_ENABLE_RSS_MQ;
+	if (sc->sc_type == WM_T_82574)
+		mrqc = MRQC_ENABLE_RSS_MQ_82574;
+	else
+		mrqc = MRQC_ENABLE_RSS_MQ;
 
 	/* XXXX
 	 * The same as FreeBSD igb.
