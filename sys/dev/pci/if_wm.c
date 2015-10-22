@@ -4081,6 +4081,7 @@ static uint8_t wm_rss_key[RSS_KEYSIZE] = {
 static void
 wm_rss_getkey(uint8_t *key)
 {
+
 	memcpy(key, wm_rss_key, sizeof(wm_rss_key));
 }
 
@@ -4094,6 +4095,8 @@ wm_init_rss(struct wm_softc *sc)
 {
 	uint32_t mrqc, reta_reg, rss_key[RSSRK_NUM_REGS];
 	int i;
+
+	CTASSERT(sizeof(rss_key) == sizeof(wm_rss_key));
 
 	for (i = 0; i < RETA_NUM_ENTRIES; i++) {
 		int qid, reta_ent;
