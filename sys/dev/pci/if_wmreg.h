@@ -125,6 +125,121 @@ typedef struct wiseman_rxdesc {
 #define	WRX_VLAN_CFI	(1U << 12)	/* Canonical Form Indicator */
 #define	WRX_VLAN_PRI(x)	(((x) >> 13) & 7)/* VLAN priority field */
 
+/* advanced RX descriptor for 82575 and newer */
+typedef union nq_rxdesc {
+        struct {
+                uint64_t nrxd_paddr;	/* 63:1 Packet Buffer Address, 0 A0/NSE */
+                uint64_t nrxd_haddr;	/* 63:1 HEader Buffer Address, 0 DD */
+        } nqrx_data;
+        struct {
+                uint32_t nrxc_misc;	/*
+                                         * 31: SPH, 30:21 HDR_LEN[9:0],
+                                         * 20:19 HDR_LEN[11:10], 18:17 RSV,
+                                         * 16:4 Packet Type 3:0 RSS Type
+                                         */
+                uint32_t nrxc_rsshash;	/* RSS Hash or {Fragment Checksum, IP identification } */
+                uint32_t nrxc_err_stat;	/* 31:20 Extended Error, 19:0 Extened Status */
+                uint16_t nrxc_pktlen;	/* PKT_LEN */
+                uint16_t nrxc_vlan;	/* VLAN Tag */
+        } nqrx_ctx;
+} __packed nq_rxdesc_t;
+
+#define NQRXD_ADDR_MASK		__BITS(63,1)
+#define NQRXD_A0_MASK		__BIT(0)
+#define NQRXD_NSE_MASK		__BIT(0)
+#define NQRXD_DD_MASK		__BIT(0)
+
+/*
+ * nrxc_rsshash is used for below 2 patterns
+ *     (1) Fragment Checksum and IP identification
+ *         - Fragment Checksum is valid
+ *           when RXCSUM.PCSD cleared and RXCSUM.IPPCSE bit is set
+ *         - IP identification is valid
+ *           when RXCSUM.PCSD cleared and RXCSUM.IPPCSE bit is set
+ *     (2) RSS Hash
+ *         when RXCSUM.PCSD bit is set
+ */
+#define NQRXC_FRAG_CSUM_MASK	__BITS(31,16)
+#define NQRXC_IP_ID_MASK	__BITS(15,0)
+#define NQRXC_FRAG_CSUM(rsshash) __SHIFTOUT(rsshash,NRXC_FRAG_CSUM_MASK)
+#define NQRXC_IP_ID(rsshash)	__SHIFTOUT(rsshash,NRXC_IP_ID_MASK)
+
+/* macros for nrxc_misc */
+#define NQRXC_SPH_MASK		__BIT(31)
+#define NQRXC_HDRLEN_LOW_MASK	__BITS(30,21)
+#define NQRXC_HDRLEN_HIGH_MASK	__BITS(20,19)
+/* __BITS(18,17) is reserved */
+#define NQRXC_PKT_TYPE_MASK		__BITS(16,4)
+#define NQRXC_PKT_TYPE_VLAN_MASK 	__BIT(16)
+#define NQRXC_PKT_TYPE_ETQF_VALID_MASK	__BIT(15)
+#define NQRXC_PKT_TYPE_ETQF_INDEX_MASK	__BITS(11,4)
+#define NQRXC_PKT_TYPE_ID_MASK		__BITS(11,4)
+#define NQRXC_RSS_TYPE_MASK		__BITS(3,0)
+#define NQRXC_SPH		NQRXC_SPH_MASK
+#define NQRXC_HEADER_LEN(misc)	(__SHIFTOUT(misc,NQRXC_HDRLEN_LOW_MASK) \
+		| __SHIFTOUT(misc,NQRXC_HDRLEN_HIGH_MASK) << 10)
+#define NQRXC_PKT_TYPE(misc)	__SHIFTOUT(misc,NQRXC_PKT_TYPE_MASK)
+#define NQRXC_RSS_TYPE(misc)	__SHIFTOUT(misc,NQRXC_RSS_TYPE_MASK)
+#define NQRXC_PKT_TYPE_VLAN	NQRXC_PKT_TYPE_VLAN_MASK
+#define NQRXC_PKT_TYPE_ETQF_VALID NQRXC_PKT_TYPE_ETQF_VALID_MASK
+#define NQRXC_PKT_TYPE_ETQF_INDEX(pkttype) \
+		__SHIFTOUT(pkttype,NQRXC_PKT_TYPE_ETQF_INDEX_MASK)
+#define NQRXC_PKT_TYPE_ID(pkttype) \
+		__SHIFTOUT(pkttype,NQRXC_PKT_TYPE_ID_MASK)
+#define NQRXC_PKT_TYPE_IPV4		__BIT(0)
+#define NQRXC_PKT_TYPE_IPV4E		__BIT(1)
+#define NQRXC_PKT_TYPE_IPV6		__BIT(2)
+#define NQRXC_PKT_TYPE_IPV6E		__BIT(3)
+#define NQRXC_PKT_TYPE_TCP		__BIT(4)
+#define NQRXC_PKT_TYPE_UDP		__BIT(5)
+#define NQRXC_PKT_TYPE_SCTP		__BIT(6)
+#define NQRXC_PKT_TYPE_NFS		__BIT(7)
+#define NQRXC_RSS_TYPE_NONE		0x0 /* No hash computation done. */
+#define NQRXC_RSS_TYPE_TCP_IPV4		0x1
+#define NQRXC_RSS_TYPE_IPV4		0x2
+#define NQRXC_RSS_TYPE_TCP_IPV6		0x3
+#define NQRXC_RSS_TYPE_IPV6_EX		0x4
+#define NQRXC_RSS_TYPE_IPV6		0x5
+#define NQRXC_RSS_TYPE_TCP_IPV6_EX	0x6
+#define NQRXC_RSS_TYPE_UDP_IPV4		0x7
+#define NQRXC_RSS_TYPE_UDP_IPV6		0x8
+#define NQRXC_RSS_TYPE_UDP_IPV6_EX	0x9
+/*0xA:0xF is reserved. */
+
+#define NQRXC_ERROR_MASK	__BITS(31,20)
+#define NQRXC_STATUS_MASK	__BITS(19,0)
+#define NQRXC_ERROR(err_stat)	__SHIFTOUT(err_stat,NQRXC_ERROR_MASK)
+#define NQRXC_STATUS(err_stat)	__SHIFTOUT(err_stat,NQRXC_STATUS_MASK)
+
+#define NQRXC_ERROR_RXE		__BIT(11) /* The same as WRX_ER_RXE. */
+#define NQRXC_ERROR_IPE		__BIT(10) /* The same as WRX_ER_IPE. */
+#define NQRXC_ERROR_L4E		__BIT(9) /* L4 error indication. */
+/* 8:7 is reserved. */
+/* 6:4 is reserved. */
+#define NQRXC_ERROR_HB0		__BIT(3) /* Header Buffer Overflow. */
+/* 2:0 is reserved. */
+/* XXXX Where is WRX_ER_CE, WRX_ER_SE, WRX_ER_SEQ, WRX_ER_CXE error? */
+
+#define NQRXC_STATUS_MC		__BIT(19) /* Packet received from Manageability Controller */
+/* 18:17 is reserved */
+#define NQRXC_STATUS_TS		__BIT(16) /* Time stamped packet. */
+#define NQRXC_STATUS_TSIP	__BIT(15) /* Timestamp in packet. */
+/* 14:13 is reserved */
+#define NQRXC_STATUS_STRIPCRC	__BIT(12) /* Ethernet CRC is stripped. */
+#define NQRXC_STATUS_LLINT	__BIT(11) /* The packet caused an immediate interrupt. */
+#define NQRXC_STATUS_UDPV	__BIT(10) /* The packet contains a valid checksum field in a first fragment UDP IPv4 packet. */
+#define NQRXC_STATUS_VEXT	__BIT(9) /* First VLAN is found on a bouble VLAN packet. */
+/* 8 is reserved */
+#define NQRXC_STATUS_PIF	__BIT(7) /* The same as WRX_ST_PIF. */
+#define NQRXC_STATUS_IPCS	__BIT(6) /* The same as WRX_ST_IPCS. */
+#define NQRXC_STATUS_L4I	__BIT(5) /* L4 integrity check was done. */
+#define NQRXC_STATUS_UDPCS	__BIT(4) /* UDP checksum or IP payload checksum. */
+					 /* XXXX in I210 spec, this bit is the same as WRX_ST_BPDU(is "???" comment) */
+#define NQRXC_STATUS_VP		__BIT(3) /* The same as WRX_ST_VP. */
+/* 2 is reserved */
+#define NQRXC_STATUS_EOP	__BIT(1) /* The same as WRX_ST_EOP. */
+#define NQRXC_STATUS_DD		__BIT(0) /* The same as WRX_ST_DD. */
+
 /*
  * The Wiseman transmit descriptor.
  *
