@@ -221,7 +221,9 @@ typedef union nq_rxdesc {
 /* XXXX Where is WRX_ER_CE, WRX_ER_SE, WRX_ER_SEQ, WRX_ER_CXE error? */
 
 #define NQRXC_STATUS_MC		__BIT(19) /* Packet received from Manageability Controller */
-/* 18:17 is reserved */
+					  /* XXXX "MBC" in i350 spec */
+#define NQRXC_STATUS_LB		__BIT(18) /* Sent by a local virtual machine (VM to VM swaitch indication). */
+/* 17 is reserved */
 #define NQRXC_STATUS_TS		__BIT(16) /* Time stamped packet. */
 #define NQRXC_STATUS_TSIP	__BIT(15) /* Timestamp in packet. */
 /* 14:13 is reserved */
