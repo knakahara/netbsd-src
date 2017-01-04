@@ -364,7 +364,7 @@ struct wm_rxqueue {
 	struct wm_rxsoft rxq_soft[WM_NRXDESC];
 
 	/* RX control data structures. */
-	int rxq_ndesc;			/* must be a power of two */ /*not used yet */
+	int rxq_ndesc;			/* must be a power of two */
 	size_t rxq_descsize;		/* a rx descriptor size */
 	rxdescs_t *rxq_descs_u;
 	bus_dmamap_t rxq_desc_dmamap;	/* control data DMA map */
@@ -7464,8 +7464,8 @@ wm_rxeof(struct wm_rxqueue *rxq)
 	int count = 0;
 	uint32_t status, errors;
 	uint16_t vlantag;
-        uint32_t rsshash __debugused;
-        uint8_t rsstype  __debugused;
+	uint32_t rsshash __debugused;
+	uint8_t rsstype  __debugused;
 
 	KASSERT(mutex_owned(rxq->rxq_lock));
 

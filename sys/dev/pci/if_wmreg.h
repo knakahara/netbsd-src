@@ -222,7 +222,7 @@ typedef union nq_rxdesc {
 
 #define NQRXC_STATUS_MC		__BIT(19) /* Packet received from Manageability Controller */
 					  /* XXXX "MBC" in i350 spec */
-#define NQRXC_STATUS_LB		__BIT(18) /* Sent by a local virtual machine (VM to VM swaitch indication). */
+#define NQRXC_STATUS_LB		__BIT(18) /* Sent by a local virtual machine (VM to VM switch indication). */
 /* 17 is reserved */
 #define NQRXC_STATUS_TS		__BIT(16) /* Time stamped packet. */
 #define NQRXC_STATUS_TSIP	__BIT(15) /* Timestamp in packet. */
