@@ -7426,8 +7426,76 @@ wm_txeof(struct wm_softc *sc, struct wm_txqueue *txq)
 	return processed;
 }
 
+static inline uint32_t
+wm_rxdesc_get_status(struct wm_rxqueue *rxq, int idx)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+		return NQRXC_STATUS(rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_err_stat);
+	else
+		return rxq->rxq_descs[idx].wrx_status;
+}
+
+static inline uint32_t
+wm_rxdesc_get_errors(struct wm_rxqueue *rxq, int idx)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+		return NQRXC_ERROR(rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_err_stat);
+	else
+		return rxq->rxq_descs[idx].wrx_errors;
+}
+
+static inline uint16_t
+wm_rxdesc_get_vlantag(struct wm_rxqueue *rxq, int idx)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+		return rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_vlan;
+	else
+		return rxq->rxq_descs[idx].wrx_special;
+}
+
+static inline int
+wm_rxdesc_get_pktlen(struct wm_rxqueue *rxq, int idx)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+		return rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_pktlen;
+	else
+		return rxq->rxq_descs[idx].wrx_len;
+}
+
+#ifdef WM_DEBUG
+static inline uint32_t
+wm_rxdesc_get_rsshash(struct wm_rxqueue *rxq, int idx)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+		return rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_rsshash;
+	else
+		return 0;
+}
+
+static inline uint8_t
+wm_rxdesc_get_rsstype(struct wm_rxqueue *rxq, int idx)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+		return NQRXC_RSS_TYPE(rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_misc);
+	else
+		return 0;
+}
+#endif /* WM_DEBUG */
+
 static inline bool
-wm_is_set_rxdesc_status(struct wm_softc *sc, uint32_t status,
+wm_rxdesc_is_set_status(struct wm_softc *sc, uint32_t status,
     uint32_t legacy_bit, uint32_t nq_bit)
 {
 
@@ -7438,7 +7506,7 @@ wm_is_set_rxdesc_status(struct wm_softc *sc, uint32_t status,
 }
 
 static inline bool
-wm_is_set_rxdesc_error(struct wm_softc *sc, uint32_t error,
+wm_rxdesc_is_set_error(struct wm_softc *sc, uint32_t error,
     uint32_t legacy_bit, uint32_t nq_bit)
 {
 
@@ -7446,6 +7514,119 @@ wm_is_set_rxdesc_error(struct wm_softc *sc, uint32_t error,
 		return (error & nq_bit) != 0;
 	else
 		return (error & legacy_bit) != 0;
+}
+
+static inline bool
+wm_rxdesc_is_eop(struct wm_rxqueue *rxq, uint32_t status)
+{
+
+	if (wm_rxdesc_is_set_status(rxq->rxq_sc, status,
+		WRX_ST_EOP, NQRXC_STATUS_EOP))
+		return true;
+	else
+		return false;
+}
+
+static inline bool
+wm_rxdesc_has_errors(struct wm_rxqueue *rxq, uint32_t errors)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	/* XXXX missing error bit for newqueue? */
+	if (wm_rxdesc_is_set_error(sc, errors,
+		WRX_ER_CE|WRX_ER_SE|WRX_ER_SEQ|WRX_ER_CXE|WRX_ER_RXE,
+		NQRXC_ERROR_RXE)) {
+		if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_SE, 0))
+			log(LOG_WARNING, "%s: symbol error\n",
+			    device_xname(sc->sc_dev));
+		else if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_SEQ, 0))
+			log(LOG_WARNING, "%s: receive sequence error\n",
+			    device_xname(sc->sc_dev));
+		else if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_CE, 0))
+			log(LOG_WARNING, "%s: CRC error\n",
+			    device_xname(sc->sc_dev));
+		return true;
+	}
+
+	return false;
+}
+
+static inline bool
+wm_rxdesc_dd(struct wm_rxqueue *rxq, int idx, uint32_t status)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if ((status & NQRXC_STATUS_DD) == 0) {
+		/* We have processed all of the receive descriptors. */
+		if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
+#if 0
+			{
+				uint32_t misc = rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_misc;
+				printf("XXXX %s: misc=%x\n", __func__, misc);
+				printf("XXXX %s: status=%x\n", __func__, status);
+			}
+#endif
+			struct wm_rxsoft *rxs = &rxq->rxq_soft[idx];
+
+			rxq->rxq_nq_descs[idx].nqrx_data.nrxd_paddr =
+				htole64(rxs->rxs_dmamap->dm_segs[0].ds_addr
+				    + sc->sc_align_tweak);
+		}
+
+		wm_cdrxsync(rxq, idx, BUS_DMASYNC_PREREAD);
+		return false;
+	}
+
+	return true;
+}
+
+static inline bool
+wm_rxdesc_input_vlantag(struct wm_rxqueue *rxq, uint32_t status, uint16_t vlantag,
+    struct mbuf *m)
+{
+	struct ifnet *ifp = &rxq->rxq_sc->sc_ethercom.ec_if;
+
+	if (wm_rxdesc_is_set_status(rxq->rxq_sc, status,
+		WRX_ST_VP, NQRXC_STATUS_VP)) {
+		VLAN_INPUT_TAG(ifp, m, le16toh(vlantag), return false);
+	}
+
+	return true;
+}
+
+static inline void
+wm_rxdesc_ensure_checksum(struct wm_rxqueue *rxq, uint32_t status,
+    uint32_t errors, struct mbuf *m)
+{
+	struct wm_softc *sc = rxq->rxq_sc;
+
+	if (!wm_rxdesc_is_set_status(sc, status, WRX_ST_IXSM, 0)) {
+		if (wm_rxdesc_is_set_status(sc, status,
+			WRX_ST_IPCS, NQRXC_STATUS_IPCS)) {
+			WM_Q_EVCNT_INCR(rxq, rxipsum);
+			m->m_pkthdr.csum_flags |= M_CSUM_IPv4;
+			if (wm_rxdesc_is_set_error(sc, errors,
+				WRX_ER_IPE, NQRXC_ERROR_IPE))
+				m->m_pkthdr.csum_flags |=
+					M_CSUM_IPv4_BAD;
+		}
+		if (wm_rxdesc_is_set_status(sc, status,
+			WRX_ST_TCPCS, NQRXC_STATUS_L4I)) {
+			/*
+			 * Note: we don't know if this was TCP or UDP,
+			 * so we just set both bits, and expect the
+			 * upper layers to deal.
+			 */
+			WM_Q_EVCNT_INCR(rxq, rxtusum);
+			m->m_pkthdr.csum_flags |=
+				M_CSUM_TCPv4 | M_CSUM_UDPv4 |
+				M_CSUM_TCPv6 | M_CSUM_UDPv6;
+			if (wm_rxdesc_is_set_error(sc, errors,
+				WRX_ER_TCPE, NQRXC_ERROR_L4E))
+				m->m_pkthdr.csum_flags |=
+					M_CSUM_TCP_UDP_BAD;
+		}
+	}
 }
 
 /*
@@ -7477,48 +7658,17 @@ wm_rxeof(struct wm_rxqueue *rxq)
 		    device_xname(sc->sc_dev), i));
 		wm_cdrxsync(rxq, i,BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
 
-		if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
-			status = NQRXC_STATUS(rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_err_stat);
-			errors = NQRXC_ERROR(rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_err_stat);
-			len = le16toh(rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_pktlen);
-			vlantag = le16toh(rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_vlan);
-                        rsshash = rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_rsshash;
-                        rsstype = NQRXC_RSS_TYPE(rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_misc);
-#if 0
-			{
-				uint32_t misc = rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_misc;
-				printf("XXXX %s: rsshash=%x\n", __func__, rxq->rxq_nq_descs[i].nqrx_ctx.nrxc_rsshash);
-				printf("XXXX %s: misc=%x\n", __func__, misc);
-				printf("XXXX %s: vlantag=%x\n", __func__, vlantag);
-				printf("XXXX %s: len=%x\n", __func__, len);
-				printf("XXXX %s: status=%x\n", __func__, status);
-				printf("XXXX %s: errors=%x\n", __func__, errors);
-			}
+		status = wm_rxdesc_get_status(rxq, i);
+		errors = wm_rxdesc_get_errors(rxq, i);
+		len = le16toh(wm_rxdesc_get_pktlen(rxq, i));
+		vlantag = wm_rxdesc_get_vlantag(rxq, i);
+#ifdef WM_DEBUG
+		rsshash = wm_rxdesc_get_rsshash(rxq, i);
+		rsstype = wm_rxdesc_get_rsstype(rxq, i);
 #endif
 
-			if ((status & NQRXC_STATUS_DD) == 0) {
-				/* We have processed all of the receive descriptors. */
-				rxq->rxq_nq_descs[i].nqrx_data.nrxd_paddr =
-					htole64(rxs->rxs_dmamap->dm_segs[0].ds_addr
-					    + sc->sc_align_tweak);
-
-				wm_cdrxsync(rxq, i, BUS_DMASYNC_PREREAD);
-				break;
-			}
-		} else {
-			status = rxq->rxq_descs[i].wrx_status;
-			errors = rxq->rxq_descs[i].wrx_errors;
-			len = le16toh(rxq->rxq_descs[i].wrx_len);
-			vlantag = rxq->rxq_descs[i].wrx_special;
-                        rsshash = 0;
-                        rsstype = 0;
-
-			if ((status & WRX_ST_DD) == 0) {
-				/* We have processed all of the receive descriptors. */
-				wm_cdrxsync(rxq, i, BUS_DMASYNC_PREREAD);
-				break;
-			}
-		}
+		if (!wm_rxdesc_dd(rxq, i, status))
+			break;
 
 		count++;
 		if (__predict_false(rxq->rxq_discard)) {
@@ -7526,8 +7676,7 @@ wm_rxeof(struct wm_rxqueue *rxq)
 			    ("%s: RX: discarding contents of descriptor %d\n",
 			    device_xname(sc->sc_dev), i));
 			wm_init_rxdesc(rxq, i);
-			if (wm_is_set_rxdesc_status(sc, status,
-				WRX_ST_EOP, NQRXC_STATUS_EOP)) {
+			if (wm_rxdesc_is_eop(rxq, status)) {
 				/* Reset our state. */
 				DPRINTF(WM_DEBUG_RX,
 				    ("%s: RX: resetting rxdiscard -> 0\n",
@@ -7556,8 +7705,7 @@ wm_rxeof(struct wm_rxqueue *rxq)
 			bus_dmamap_sync(sc->sc_dmat, rxs->rxs_dmamap, 0,
 			    rxs->rxs_dmamap->dm_mapsize, BUS_DMASYNC_PREREAD);
 			wm_init_rxdesc(rxq, i);
-			if (!wm_is_set_rxdesc_status(sc, status, WRX_ST_EOP,
-				NQRXC_STATUS_EOP))
+			if (!wm_rxdesc_is_eop(rxq, status))
 				rxq->rxq_discard = 1;
 			if (rxq->rxq_head != NULL)
 				m_freem(rxq->rxq_head);
@@ -7576,8 +7724,7 @@ wm_rxeof(struct wm_rxqueue *rxq)
 		    device_xname(sc->sc_dev), m->m_data, len));
 
 		/* If this is not the end of the packet, keep looking. */
-		if (!wm_is_set_rxdesc_status(sc, status, WRX_ST_EOP,
-			NQRXC_STATUS_EOP)) {
+		if (!wm_rxdesc_is_eop(rxq, status)) {
 			WM_RXCHAIN_LINK(rxq, m);
 			DPRINTF(WM_DEBUG_RX,
 			    ("%s: RX: not yet EOP, rxlen -> %d\n",
@@ -7620,19 +7767,7 @@ wm_rxeof(struct wm_rxqueue *rxq)
 		    device_xname(sc->sc_dev), len));
 
 		/* If an error occurred, update stats and drop the packet. */
-		/* XXXX missing error bit for newqueue? */
-		if (wm_is_set_rxdesc_error(sc, errors,
-			WRX_ER_CE|WRX_ER_SE|WRX_ER_SEQ|WRX_ER_CXE|WRX_ER_RXE,
-			NQRXC_ERROR_RXE)) {
-			if (wm_is_set_rxdesc_error(sc, errors, WRX_ER_SE, 0))
-				log(LOG_WARNING, "%s: symbol error\n",
-				    device_xname(sc->sc_dev));
-			else if (wm_is_set_rxdesc_error(sc, errors, WRX_ER_SEQ, 0))
-				log(LOG_WARNING, "%s: receive sequence error\n",
-				    device_xname(sc->sc_dev));
-			else if (wm_is_set_rxdesc_error(sc, errors, WRX_ER_CE, 0))
-				log(LOG_WARNING, "%s: CRC error\n",
-				    device_xname(sc->sc_dev));
+		if (wm_rxdesc_has_errors(rxq, errors)) {
 			m_freem(m);
 			continue;
 		}
@@ -7645,7 +7780,7 @@ wm_rxeof(struct wm_rxqueue *rxq)
                  * should be save rsshash and rsstype to this mbuf.
                  */
                 DPRINTF(WM_DEBUG_RX,
-                    ("%s: RX: RSS type=%x, RSS hash=%x\n",
+                    ("%s: RX: RSS type=%" PRIu8 ", RSS hash=%" PRIu32 "\n",
                         device_xname(sc->sc_dev), rsstype, rsshash));
 
 		/*
@@ -7653,39 +7788,11 @@ wm_rxeof(struct wm_rxqueue *rxq)
 		 * for us.  Associate the tag with the packet.
 		 */
 		/* XXXX should check for i350 and i354 */
-		if (wm_is_set_rxdesc_status(sc, status,
-			WRX_ST_VP, NQRXC_STATUS_VP)) {
-			VLAN_INPUT_TAG(ifp, m, le16toh(vlantag), continue);
-		}
+		if (!wm_rxdesc_input_vlantag(rxq, status, vlantag, m))
+			continue;
 
 		/* Set up checksum info for this packet. */
-		if (!wm_is_set_rxdesc_status(sc, status, WRX_ST_IXSM, 0)) {
-			if (wm_is_set_rxdesc_status(sc, status,
-				WRX_ST_IPCS, NQRXC_STATUS_IPCS)) {
-				WM_Q_EVCNT_INCR(rxq, rxipsum);
-				m->m_pkthdr.csum_flags |= M_CSUM_IPv4;
-				if (wm_is_set_rxdesc_error(sc, errors,
-					WRX_ER_IPE, NQRXC_ERROR_IPE))
-					m->m_pkthdr.csum_flags |=
-					    M_CSUM_IPv4_BAD;
-			}
-			if (wm_is_set_rxdesc_status(sc, status,
-				WRX_ST_TCPCS, NQRXC_STATUS_L4I)) {
-				/*
-				 * Note: we don't know if this was TCP or UDP,
-				 * so we just set both bits, and expect the
-				 * upper layers to deal.
-				 */
-				WM_Q_EVCNT_INCR(rxq, rxtusum);
-				m->m_pkthdr.csum_flags |=
-				    M_CSUM_TCPv4 | M_CSUM_UDPv4 |
-				    M_CSUM_TCPv6 | M_CSUM_UDPv6;
-				if (wm_is_set_rxdesc_error(sc, errors,
-					WRX_ER_TCPE, NQRXC_ERROR_L4E))
-					m->m_pkthdr.csum_flags |=
-					    M_CSUM_TCP_UDP_BAD;
-			}
-		}
+		wm_rxdesc_ensure_checksum(rxq, status, errors, m);
 
 		mutex_exit(rxq->rxq_lock);
 
