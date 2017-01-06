@@ -218,6 +218,7 @@ typedef union txdescs {
 typedef union rxdescs {
 	wiseman_rxdesc_t sctxu_rxdescs[WM_NRXDESC];
 	nq_rxdesc_t      sctxu_nq_rxdescs[WM_NRXDESC];
+	ext_rxdesc_t      sctxu_ext_rxdescs[WM_NRXDESC];
 } rxdescs_t;
 
 #define	WM_CDTXOFF(txq, x)	((txq)->txq_descsize * (x))
@@ -373,6 +374,7 @@ struct wm_rxqueue {
 #define	rxq_desc_dma	rxq_desc_dmamap->dm_segs[0].ds_addr
 #define	rxq_descs	rxq_descs_u->sctxu_rxdescs
 #define	rxq_nq_descs	rxq_descs_u->sctxu_nq_rxdescs
+#define	rxq_ext_descs	rxq_descs_u->sctxu_ext_rxdescs
 
 	bus_addr_t rxq_rdt_reg;		/* offset of RDT register */
 
@@ -1550,7 +1552,12 @@ wm_init_rxdesc(struct wm_rxqueue *rxq, int start)
 	 */
 	m->m_data = m->m_ext.ext_buf + sc->sc_align_tweak;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
+	if (sc->sc_type == WM_T_82574) {
+		ext_rxdesc_t *rxd = &rxq->rxq_ext_descs[start];
+		rxd->erx_data.erxd_addr =
+			htole64(rxs->rxs_dmamap->dm_segs[0].ds_addr + sc->sc_align_tweak);
+		rxd->erx_data.erxd_dd = 0;
+	} else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0) {
 		nq_rxdesc_t *rxd = &rxq->rxq_nq_descs[start];
 
 		rxd->nqrx_data.nrxd_paddr =
@@ -5575,7 +5582,9 @@ wm_alloc_rx_descs(struct wm_softc *sc, struct wm_rxqueue *rxq)
 	 * both sets within the same 4G segment.
 	 */
 	rxq->rxq_ndesc = WM_NRXDESC;
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		rxq->rxq_descsize = sizeof(ext_rxdesc_t);
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		rxq->rxq_descsize = sizeof(nq_rxdesc_t);
 	else
 		rxq->rxq_descsize = sizeof(wiseman_rxdesc_t);
@@ -7431,7 +7440,9 @@ wm_rxdesc_get_status(struct wm_rxqueue *rxq, int idx)
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return EXTRXC_STATUS(rxq->rxq_ext_descs[idx].erx_ctx.erxc_err_stat);
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return NQRXC_STATUS(rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_err_stat);
 	else
 		return rxq->rxq_descs[idx].wrx_status;
@@ -7442,7 +7453,9 @@ wm_rxdesc_get_errors(struct wm_rxqueue *rxq, int idx)
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return EXTRXC_ERROR(rxq->rxq_ext_descs[idx].erx_ctx.erxc_err_stat);
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return NQRXC_ERROR(rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_err_stat);
 	else
 		return rxq->rxq_descs[idx].wrx_errors;
@@ -7453,7 +7466,9 @@ wm_rxdesc_get_vlantag(struct wm_rxqueue *rxq, int idx)
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return rxq->rxq_ext_descs[idx].erx_ctx.erxc_vlan;
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_vlan;
 	else
 		return rxq->rxq_descs[idx].wrx_special;
@@ -7464,7 +7479,9 @@ wm_rxdesc_get_pktlen(struct wm_rxqueue *rxq, int idx)
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return rxq->rxq_ext_descs[idx].erx_ctx.erxc_pktlen;
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_pktlen;
 	else
 		return rxq->rxq_descs[idx].wrx_len;
@@ -7476,7 +7493,9 @@ wm_rxdesc_get_rsshash(struct wm_rxqueue *rxq, int idx)
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return rxq->rxq_ext_descs[idx].erx_ctx.erxc_rsshash;
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_rsshash;
 	else
 		return 0;
@@ -7487,7 +7506,9 @@ wm_rxdesc_get_rsstype(struct wm_rxqueue *rxq, int idx)
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return EXTRXC_RSS_TYPE(rxq->rxq_ext_descs[idx].erx_ctx.erxc_mrq);
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return NQRXC_RSS_TYPE(rxq->rxq_nq_descs[idx].nqrx_ctx.nrxc_misc);
 	else
 		return 0;
@@ -7496,10 +7517,12 @@ wm_rxdesc_get_rsstype(struct wm_rxqueue *rxq, int idx)
 
 static inline bool
 wm_rxdesc_is_set_status(struct wm_softc *sc, uint32_t status,
-    uint32_t legacy_bit, uint32_t nq_bit)
+    uint32_t legacy_bit, uint32_t nq_bit, uint32_t ext_bit)
 {
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return (status & ext_bit) != 0;
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return (status & nq_bit) != 0;
 	else
 		return (status & legacy_bit) != 0;
@@ -7507,10 +7530,12 @@ wm_rxdesc_is_set_status(struct wm_softc *sc, uint32_t status,
 
 static inline bool
 wm_rxdesc_is_set_error(struct wm_softc *sc, uint32_t error,
-    uint32_t legacy_bit, uint32_t nq_bit)
+    uint32_t legacy_bit, uint32_t nq_bit, uint32_t ext_bit)
 {
 
-	if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
+	if (sc->sc_type == WM_T_82574)
+		return (error & ext_bit) != 0;
+	else if ((sc->sc_flags & WM_F_NEWQUEUE) != 0)
 		return (error & nq_bit) != 0;
 	else
 		return (error & legacy_bit) != 0;
@@ -7521,7 +7546,7 @@ wm_rxdesc_is_eop(struct wm_rxqueue *rxq, uint32_t status)
 {
 
 	if (wm_rxdesc_is_set_status(rxq->rxq_sc, status,
-		WRX_ST_EOP, NQRXC_STATUS_EOP))
+		WRX_ST_EOP, NQRXC_STATUS_EOP, EXTRXC_STATUS_EOP))
 		return true;
 	else
 		return false;
@@ -7535,14 +7560,15 @@ wm_rxdesc_has_errors(struct wm_rxqueue *rxq, uint32_t errors)
 	/* XXXX missing error bit for newqueue? */
 	if (wm_rxdesc_is_set_error(sc, errors,
 		WRX_ER_CE|WRX_ER_SE|WRX_ER_SEQ|WRX_ER_CXE|WRX_ER_RXE,
-		NQRXC_ERROR_RXE)) {
-		if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_SE, 0))
+		NQRXC_ERROR_RXE,
+		EXTRXC_ERROR_CE|EXTRXC_ERROR_SE|EXTRXC_ERROR_SEQ|EXTRXC_ERROR_CXE|EXTRXC_ERROR_RXE)) {
+		if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_SE, 0, EXTRXC_ERROR_SE))
 			log(LOG_WARNING, "%s: symbol error\n",
 			    device_xname(sc->sc_dev));
-		else if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_SEQ, 0))
+		else if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_SEQ, 0, EXTRXC_ERROR_SEQ))
 			log(LOG_WARNING, "%s: receive sequence error\n",
 			    device_xname(sc->sc_dev));
-		else if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_CE, 0))
+		else if (wm_rxdesc_is_set_error(sc, errors, WRX_ER_CE, 0, EXTRXC_ERROR_CE))
 			log(LOG_WARNING, "%s: CRC error\n",
 			    device_xname(sc->sc_dev));
 		return true;
@@ -7587,7 +7613,7 @@ wm_rxdesc_input_vlantag(struct wm_rxqueue *rxq, uint32_t status, uint16_t vlanta
 	struct ifnet *ifp = &rxq->rxq_sc->sc_ethercom.ec_if;
 
 	if (wm_rxdesc_is_set_status(rxq->rxq_sc, status,
-		WRX_ST_VP, NQRXC_STATUS_VP)) {
+		WRX_ST_VP, NQRXC_STATUS_VP, EXTRXC_STATUS_VP)) {
 		VLAN_INPUT_TAG(ifp, m, le16toh(vlantag), return false);
 	}
 
@@ -7600,18 +7626,18 @@ wm_rxdesc_ensure_checksum(struct wm_rxqueue *rxq, uint32_t status,
 {
 	struct wm_softc *sc = rxq->rxq_sc;
 
-	if (!wm_rxdesc_is_set_status(sc, status, WRX_ST_IXSM, 0)) {
+	if (!wm_rxdesc_is_set_status(sc, status, WRX_ST_IXSM, 0, 0)) {
 		if (wm_rxdesc_is_set_status(sc, status,
-			WRX_ST_IPCS, NQRXC_STATUS_IPCS)) {
+			WRX_ST_IPCS, NQRXC_STATUS_IPCS, EXTRXC_STATUS_IPCS)) {
 			WM_Q_EVCNT_INCR(rxq, rxipsum);
 			m->m_pkthdr.csum_flags |= M_CSUM_IPv4;
 			if (wm_rxdesc_is_set_error(sc, errors,
-				WRX_ER_IPE, NQRXC_ERROR_IPE))
+				WRX_ER_IPE, NQRXC_ERROR_IPE, EXTRXC_ERROR_IPE))
 				m->m_pkthdr.csum_flags |=
 					M_CSUM_IPv4_BAD;
 		}
 		if (wm_rxdesc_is_set_status(sc, status,
-			WRX_ST_TCPCS, NQRXC_STATUS_L4I)) {
+			WRX_ST_TCPCS, NQRXC_STATUS_L4I, EXTRXC_STATUS_TCPCS)) {
 			/*
 			 * Note: we don't know if this was TCP or UDP,
 			 * so we just set both bits, and expect the
@@ -7622,7 +7648,7 @@ wm_rxdesc_ensure_checksum(struct wm_rxqueue *rxq, uint32_t status,
 				M_CSUM_TCPv4 | M_CSUM_UDPv4 |
 				M_CSUM_TCPv6 | M_CSUM_UDPv6;
 			if (wm_rxdesc_is_set_error(sc, errors,
-				WRX_ER_TCPE, NQRXC_ERROR_L4E))
+				WRX_ER_TCPE, NQRXC_ERROR_L4E, EXTRXC_ERROR_TCPE))
 				m->m_pkthdr.csum_flags |=
 					M_CSUM_TCP_UDP_BAD;
 		}
