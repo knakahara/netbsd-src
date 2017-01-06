@@ -125,6 +125,88 @@ typedef struct wiseman_rxdesc {
 #define	WRX_VLAN_CFI	(1U << 12)	/* Canonical Form Indicator */
 #define	WRX_VLAN_PRI(x)	(((x) >> 13) & 7)/* VLAN priority field */
 
+/* extended RX descriptor for 82574 */
+typedef union ext_rxdesc {
+        struct {
+                uint64_t erxd_addr;	/* Packet Buffer Address */
+                uint64_t erxd_dd;	/* 63:1 reserved, 0 DD */
+        } erx_data;
+        struct {
+                uint32_t erxc_mrq;	/*
+                                         * 31:13 reserved
+                                         * 12:8 Rx queue associated with the packet
+                                         * 7:4 reserved 3:0 RSS Type
+                                         */
+                uint32_t erxc_rsshash;	/* RSS Hash or {Fragment Checksum, IP identification } */
+                uint32_t erxc_err_stat;	/* 31:20 Extended Error, 19:0 Extened Status */
+                uint16_t erxc_pktlen;	/* PKT_LEN */
+                uint16_t erxc_vlan;	/* VLAN Tag */
+        } erx_ctx;
+} __packed ext_rxdesc_t;
+
+#define EXTRXD_DD_MASK		__BIT(0)
+
+/*
+ * erxc_rsshash is used for below 2 patterns
+ *     (1) Fragment Checksum and IP identification
+ *         - Fragment Checksum is valid
+ *           when RXCSUM.PCSD cleared and RXCSUM.IPPCSE bit is set
+ *         - IP identification is valid
+ *           when RXCSUM.PCSD cleared and RXCSUM.IPPCSE bit is set
+ *     (2) RSS Hash
+ *         when RXCSUM.PCSD bit is set
+ */
+#define EXTRXC_FRAG_CSUM_MASK	__BITS(31,16)
+#define EXTRXC_IP_ID_MASK	__BITS(15,0)
+#define EXTRXC_FRAG_CSUM(rsshash) __SHIFTOUT(rsshash,ERXC_FRAG_CSUM_MASK)
+#define EXTRXC_IP_ID(rsshash)	__SHIFTOUT(rsshash,ERXC_IP_ID_MASK)
+
+/* macros for nrxc_mrq */
+/* __BITS(31,13) is reserved */
+#define EXTRXC_QUEUE_MASK		__BITS(12,8)
+/* __BITS(7,4) is reserved */
+#define EXTRXC_RSS_TYPE_MASK		__BITS(3,0)
+#define EXTRXC_QUEUE(mrq)	__SHIFTOUT(mrq,EXTRXC_QUEUE_MASK)
+#define EXTRXC_RSS_TYPE(mrq)	__SHIFTOUT(mrq,EXTRXC_RSS_TYPE_MASK)
+#define EXTRXC_RSS_TYPE_NONE		0x0 /* No hash computation done. */
+#define EXTRXC_RSS_TYPE_TCP_IPV4	0x1
+#define EXTRXC_RSS_TYPE_IPV4		0x2
+#define EXTRXC_RSS_TYPE_TCP_IPV6	0x3
+#define EXTRXC_RSS_TYPE_IPV6_EX		0x4
+#define EXTRXC_RSS_TYPE_IPV6		0x5
+/*0x6:0xF is reserved. */
+
+#define EXTRXC_ERROR_MASK	__BITS(31,20)
+#define EXTRXC_STATUS_MASK	__BITS(19,0)
+#define EXTRXC_ERROR(err_stat)	__SHIFTOUT(err_stat,EXTRXC_ERROR_MASK)
+#define EXTRXC_STATUS(err_stat)	__SHIFTOUT(err_stat,EXTRXC_STATUS_MASK)
+
+#define EXTRXC_ERROR_RXE	__BIT(11) /* The same as WRX_ER_RXE. */
+#define EXTRXC_ERROR_IPE	__BIT(10) /* The same as WRX_ER_IPE. */
+#define EXTRXC_ERROR_TCPE	__BIT(9) /* The same as WRX_ER_TCPE. */
+#define EXTRXC_ERROR_CXE	__BIT(8) /* The same as WRX_ER_CXE. */
+/* 7 is reserved. */
+#define EXTRXC_ERROR_SEQ	__BIT(6) /* The same as WRX_ER_SEQ. */
+#define EXTRXC_ERROR_SE		__BIT(5) /* The same as WRX_ER_SE. */
+#define EXTRXC_ERROR_CE		__BIT(4) /* The same as WRX_ER_CE. */
+/* 3:0 is reserved. */
+
+#define EXTRXC_STATUS_PKTTYPE_MASK	__BITS(19,16)
+#define EXTRXC_STATUS_PKTTYPE(status)	__SHIFTOUT(status,EXTRXC_STATUS_PKTTYPE_MASK)
+#define EXTRXC_STATUS_ACK		__BIT(15) /* ACK packet indication. */
+/* 14:11 is reserved. */
+#define EXTRXC_STATUS_UDPV		__BIT(10) /* Valid UDP XSUM. */
+#define EXTRXC_STATUS_IPIDV		__BIT(9) /* IP identification valid. */
+#define EXTRXC_STATUS_TST		__BIT(9) /* Time stamp taken. */
+/* 7 is reserved. */
+#define EXTRXC_STATUS_IPCS		__BIT(6) /* The same as WRX_ST_IPCS. */
+#define EXTRXC_STATUS_TCPCS		__BIT(4) /* The same as WRX_ST_TCPCS. */
+#define EXTRXC_STATUS_UDPCS		__BIT(4) /* UDP checksum calculated on packet. */
+#define EXTRXC_STATUS_VP		__BIT(3) /* The same as WRX_ST_VP. */
+/* 2 is reserved. */
+#define EXTRXC_STATUS_EOP		__BIT(1) /* The same as WRX_ST_EOP. */
+#define EXTRXC_STATUS_DD		__BIT(0) /* The same as WRX_ST_DD. */
+
 /* advanced RX descriptor for 82575 and newer */
 typedef union nq_rxdesc {
         struct {
